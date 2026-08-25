@@ -1,0 +1,729 @@
+# BINJ — High-Level Design (Working Notes)
+
+Living document from the HLD walkthrough. Captures components, traced request flows, decisions made, and things still open. See [PRD.md](PRD.md) for product scope and [imdb-data-analysis.md](imdb-data-analysis.md) for the IMDb dataset analysis.
+
+---
+
+## 1. Components (boxes)
+
+- **React frontend** (client) — never talks to TMDB or holds any credentials
+- **Node.js backend** — the only thing that talks to Firestore/TMDB directly; never trusts the frontend (see §10)
+- **Firestore** — users, following/followers, watchlists, watched history, ratings, reviews, events, chat, and the movie catalog itself (`movies` collection)
+- **TMDB API** — external, movie enrichment (synopsis, poster, backdrop, cast/crew, TMDB rating)
+- **Cache** — sits in front of Firestore's `movies` collection to avoid repeated reads/TMDB calls
+- **Firebase Authentication** — frontend talks to it directly for sign-up/login (see §13); backend only ever verifies the resulting token, never handles credentials itself
+- **BigQuery** — demoted to **analytics-only**, off the live request path (see §5b)
+- **Gemini / Google AI Studio** — not yet traced
+- **Google Maps Platform** — not yet traced
+- **Firebase Realtime Database** — used specifically for live presence ("who's watching now"), not general app data; see §15
+- **Real-time layer for chat/event rooms** — Firestore listeners; see §16
+- **Firebase Cloud Messaging (FCM)** — push notifications; see §17
+- **Vertex AI Search (Media vertical)** — movie search/discovery index, bulk-seeded from TMDB, separate from the per-movie detail cache in §2; Firestore word-prefix indexing kept as a documented fallback; see §18
+
+---
+
+## 2. Flow: Movie Details (view a specific, already-identified movie)
+
+```
+User → Frontend → Backend → Cache
+                              ├── HIT → Return
+                              └── MISS → Firestore(movies)
+                                          ├── HIT → Return
+                                          └── MISS → TMDB API (movie details + TMDB rating)
+                                                       → write to Firestore(movies)
+                                                       → populate cache
+                                                       → Return
+```
+
+**Decisions:**
+- Movie catalog ("BINJ Movie DB") lives in Firestore, same database as everything else — no reason yet to split it out.
+- Frontend never calls TMDB directly; credentials stay backend-only.
+- **BigQuery/IMDb dropped from this flow.** The IMDb rating in BigQuery is stale (the public dataset isn't kept current), and TMDB's API doesn't expose IMDb's actual rating (only an `imdb_id` for cross-referencing) — so "refresh IMDb rating from BigQuery" was never actually going to produce a fresher number, just a differently-stale one. **TMDB's own rating (`vote_average`) replaces "IMDb rating" as the third-party rating shown in the product.** This also means §16.3 of the PRD ("IMDb: 8.7/10 vs BINJ: 4.6/5") needs relabeling to "TMDB rating vs BINJ rating" — noted, not yet applied to PRD.md.
+- BigQuery is repurposed as an **analytics-only** system, fed by a separate (not yet designed) pipeline from Firestore — disconnected from this live flow.
+- **This flow is specifically "fetch full details for a movie the user already selected"** — not the same thing as *finding* that movie in the first place. Originally conflated with search; corrected in §18, which now owns discovery. This flow triggers only once a specific movie is opened (from a search result, a recommendation, etc.), and is where the full TMDB detail fetch + IMDb-rating-at-ingestion-time actually happens.
+
+---
+
+## 3. Flow: Watchlist / Rate (write path)
+
+```
+User clicks "Add to Watchlist"
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Firebase Auth token (required for writes and user-specific reads; public search/browse does not require it)
+        ↓
+Backend verifies the movie actually exists in Firestore(movies) — never trusts a frontend-supplied ID
+        ↓
+Backend writes users/{uid}/watchlist/{movieId} to Firestore
+        ↓
+Return success → Frontend updates UI
+```
+
+**Decisions:**
+- Auth is checked only where it's actually needed (writes, user-specific reads) — not on every request.
+- **Cross-cutting principle:** the backend is a separate, untrusted-input system relative to the frontend. Every write, and every read that returns user-specific or gated data, is validated and re-checked server-side (referenced IDs, ownership, permissions) regardless of what the frontend sends. Applies beyond this one flow — ratings, event joins, follow requests, chat messages, etc.
+
+---
+
+## 4. Flow: Follow / Follow Requests
+
+```
+User B has a setting: followRequiresApproval (default: off — matches Instagram's default-open follow)
+
+User A clicks "Follow" on B's profile
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Auth token (write path)
+        ↓
+Backend checks B's CURRENT followRequiresApproval setting server-side — never trusts a frontend claim about which branch applies
+        ↓
+Branch:
+  - Not required → write users/{A}/following/{B} + users/{B}/followers/{A} directly
+  - Required     → write users/{B}/followRequests/{A} (pending) → B reviews later
+        ↓
+Return status → Frontend
+```
+
+**Decision:** per-user setting, off by default. When on, a follow becomes a pending request until B approves or denies it.
+
+B approving/denying reuses the exact same "pending request → owner approves → becomes real relationship" shape already used for event join requests (§7) — the third time this pattern has shown up (watchlist ownership check, event join approval, now follow approval), reinforcing that it's a genuinely reusable shape rather than one-off logic.
+
+### Unfollow
+
+```
+User A unfollows User B
+        ↓
+Backend verifies Auth token
+        ↓
+Backend deletes users/{A}/following/{B} and users/{B}/followers/{A}
+```
+
+Simple mirror of Follow, no new decisions needed. §5a's "people who watched" query reads the *current* following list live, so it naturally stops including B the moment the relationship is deleted — no separate cleanup. Re-following later goes through the normal Follow flow again, including approval if B has that setting on.
+
+---
+
+## 5. Flow: Social Discovery
+
+Split into two sub-features with different shapes.
+
+### 5a. "People who watched this movie" (following-only, privacy-aware)
+
+**Decision (confirmed with PM):** the follow model is **one-directional, Instagram-style** — following someone does not imply they follow you back. Modeled as `users/{uid}/following/{followedUid}` (and a mirrored `followers` subcollection for fast reverse lookups, e.g. follower counts). See §4 for how a follow relationship is created.
+
+```
+User views movie page
+        ↓
+Backend fetches the caller's `following` list (bounded — who this user follows, not all BINJ users)
+        ↓
+For each followed user:
+    - check users/{uid}/watched/{movieId} exists
+    - check the entry's own visibility isn't overridden to private (per-entry privacy)
+    - check that user's list-level privacy setting allows their watched list to be visible at all
+        ↓
+Return: followed users who watched it AND both visibility checks pass
+```
+
+**Decision:** only people the *caller* follows are shown — never a global "everyone who watched this" list, and not people who follow the caller but aren't followed back (that would surface activity from people whose content the user never opted into seeing). A user's privacy setting can hide their watched-list visibility even from people who follow them.
+
+**Decision — per-entry privacy override:** even when a user's watched list is public by default, individual entries can be marked private, hidden from everyone (including followers) and visible only to the owner. Modeled as `users/{uid}/watched/{movieId}.visibility: "public" | "private"`, checked in addition to the list-level toggle. Motivating case: a user watched something they don't want anyone to know about, even though their list is otherwise public. Possible future nicety (not required now): default this to private automatically for titles flagged `is_adult` in the movie catalog, reducing manual toggling.
+
+**Why this shape, not a collection-group query or a reverse index on the movie:** both of those return everyone globally who watched the movie, which then has to be filtered down to "is this person someone I follow" — wasteful when a user follows a handful of people out of a much larger user base. Instead, the backend **fans out from the caller's own (bounded) `following` list** and checks each one directly. This scales with "how many people you follow," not "how many users BINJ has."
+
+### 5b. "People with similar movie taste"
+
+Fundamentally different from 5a — not a lookup, a cross-user comparison (your entire watch/rating history vs. everyone else's). Firestore is built for fast small lookups, not "compare everything against everything," so this needs a batch job, not a live query.
+
+```
+(scheduled — a cron job, once a day)
+Firestore (watched-list + genres data)
+        ↓  export/stream
+BigQuery — compute taste-similarity scores between users
+        ↓
+Write "top N similar users" back into Firestore, per user
+        ↓
+(live) User opens app → Backend reads precomputed matches from Firestore → Return
+```
+
+**Decision:** runs as a daily cron job (not recomputed per request). This is also where BigQuery's "analytics-only" role from §2 actually gets used.
+
+**Decision (confirmed with PM):** similarity is based on **overlap of watched movies + shared genres**.
+
+---
+
+## 6. Flow: Recommendations (content-based)
+
+Different shape from §5b again — that compared **users to users**; this compares **movies to movies** for one user at a time.
+
+```
+User opens Recommendations
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Auth token (user-specific read)
+        ↓
+Backend reads the user's highly-rated/watched movies from Firestore → derives preferred genres
+        ↓
+Has a preference signal?
+  ├── YES → query Firestore(movies) for titles matching those genres (array-contains-any),
+  │         excluding anything already watched/watchlisted, sorted by TMDB rating
+  │
+  └── NO (cold start — new user, no history yet) → fall back to trending/popular titles
+        (sorted by TMDB rating/vote count), same exclusion rules
+        ↓
+Return top N → Frontend
+```
+
+**Decision:** start with **live, request-time computation** for the prototype — no new component, just a Firestore query plus backend filtering logic. Computed fresh each time (no caching yet; fine at prototype scale).
+
+**Decision — cold start:** users with no watch/rating history get a trending/popular fallback rather than an empty screen. Not an edge case to handle later — every new user hits this branch on first use, so it's part of the flow from day one.
+
+**Noted for later (per your instruction):** switch to a **precomputed/batch approach**, same shape as §5b, once the algorithm needs to be more sophisticated — in particular, the `review_embedded` vectors surfaced in [docs/imdb-data-analysis.md](imdb-data-analysis.md) could enable real semantic "more like this" similarity, but that needs vector-similarity capability Firestore doesn't have natively, so it's a deliberate future upgrade, not part of the MVP.
+
+**Carried over from the IMDb analysis:** unlike the raw IMDb data (where `genres` was a comma-separated string needing parsing), TMDB returns genres as a proper list — so Firestore movie records built from the on-demand TMDB ingestion (§2) store `genres` as a real array from the start, which is what makes the `array-contains-any` query above straightforward.
+
+---
+
+## 7. Flow: Events / Watch Parties
+
+### Create Event
+
+```
+User fills "Create Event" (movie, optional custom title, date/time, online/in-person, location?, public/private, participant limit, approval required?)
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Firebase Auth token (write path)
+        ↓
+Backend verifies the movie exists in Firestore(movies) — same referential check as watchlist
+        ↓
+If visibility = private → backend auto-generates a joinCode
+        ↓
+Backend writes events/{eventId}
+    { hostId, movieId, title?, datetime, mode, location?, visibility, participantLimit,
+      requiresApproval, joinCode?, invitedUserIds? }
+        ↓
+Host auto-joins → write events/{eventId}/participants/{hostId}
+        ↓
+Return success → Frontend shows event page
+```
+
+**Decision — `movieId` vs `title`:** these are not the same field. `movieId` references the movie catalog record (source of truth for the movie's real name, poster, etc.); `title` is an *optional custom label* the host can set for the event itself (e.g. "Tamil Thriller Night"). If left blank, the frontend just displays the movie's own title — nothing gets duplicated/stored twice.
+
+**Decision — private event discovery, two entry points into one join flow:** rather than picking one access model, private events support both, layered rather than exclusive:
+- **Link/code (always-on for private events):** every private event gets an auto-generated `joinCode`; anyone with the link can look the event up and request to join.
+- **Direct invite (optional, host-added on top):** host can additionally add specific `invitedUserIds`; those users see the event in their own "invited to" list without needing the link.
+
+Both entry points feed into the exact same downstream Join Event logic below — supporting both isn't double the work, it's two ways to *reach* the same join flow.
+
+### Join Event
+
+```
+User reaches the event (via link/code lookup, an "invited to" listing, or public browse)
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Auth token, verifies event exists, checks participant count < limit
+        ↓
+Branch on the event's own settings (never trust a frontend claim about which branch applies):
+  - No approval required → write events/{eventId}/participants/{uid} directly
+  - Approval required     → write events/{eventId}/joinRequests/{uid} (pending) → host reviews later
+        ↓
+Return status → Frontend
+```
+
+Host approving/denying a pending request reuses the same rule from §3: the backend must verify the caller is actually the event's `hostId` before letting them approve anyone — the "never trust the frontend, re-check ownership server-side" principle, applied again rather than reinvented.
+
+---
+
+## 8. Flow: Streaming Availability
+
+```
+User views "where to watch" on a movie page
+        ↓
+Frontend → Backend
+        ↓
+Backend checks Firestore(movies/{movieId}).streamingProviders + its own lastFetched timestamp
+        ↓
+Fresh enough (within a streaming-specific TTL, shorter than the rest of the movie doc)?
+  ├── YES → return cached data
+  └── NO  → TMDB /movie/{id}/watch/providers (filtered to region)
+              → write refreshed streamingProviders + new lastFetched timestamp into Firestore(movies/{movieId})
+              → return
+```
+
+**Decision — resolves the open item from PRD §28 ("streaming availability data source"):** TMDB's `watch/providers` endpoint, already available through the TMDB component from §2 — no new vendor, no new credentials.
+
+**Decision — separate refresh cycle from the rest of the movie doc:** streaming catalogs rotate far more often than poster/synopsis/cast, so `streamingProviders` gets its own (shorter) staleness check rather than reusing §2's "fetch once, cache" pattern. Showing a platform a title left months ago is a more visible, more embarrassing failure than a slightly stale cast list.
+
+**Decision — single hardcoded region for the prototype:** India, matching the PRD's own example (Netflix, Prime Video, JioHotstar, Airtel Xstream). Real region detection (user location/profile-based) deferred — noted for later, not needed for MVP.
+
+---
+
+## 9. Flow: Location-Based Discovery
+
+```
+User opens "Nearby Events"
+        ↓
+Frontend gets the user's current position (browser Geolocation API, permission-gated)
+        ↓
+Frontend → Backend: { lat, lng, radius, filters? }
+        ↓
+Backend runs a geohash-range query over Firestore(events)
+        ↓
+Filter to only PUBLIC events, or private events the caller was invited to / has the join code for
+        ↓
+Return matching events, sorted by distance
+```
+
+**Decision — Firestore has no native radius/proximity query.** Events get a geohash field (e.g. via a small library such as GeoFirestore); "nearby" queries run as geohash-prefix range queries, an approximation of a bounding box. A new technique, not a new component — still Firestore.
+
+**Decision — nearby-search must compose with existing event visibility (§7), not bypass it.** A naive geo-radius query would leak a private event's existence and location to any nearby stranger. Nearby results are filtered to public events, or private events the caller can already see (invited, or holds the join code) — the same visibility rules as everywhere else, applied again rather than reinvented.
+
+**Decision — Google Maps' API key is frontend-safe, unlike TMDB's.** Maps' JS API key is designed for client-side embedding, secured via domain/referrer restrictions in Google Cloud Console rather than secrecy — so the frontend calling Maps directly (event-address geocoding at creation time, rendering the map/pins) doesn't violate the "credentials stay backend-only" principle from §2; that principle was specifically about secret keys like TMDB's, not every third-party key.
+
+**Decision — scoped to events only for now.** "Nearby people" is parked as a separate, harder feature (see §11) — it runs directly into the location-privacy requirement already in PRD §30.7 (no precise location shown to other users without explicit consent), which needs a much coarser design (city-level, not GPS-precise) than event-location discovery does.
+
+---
+
+## 10. Cross-cutting principles (apply everywhere, not just one flow)
+
+- Frontend never holds TMDB credentials or talks to TMDB/BigQuery directly.
+- Backend treats every frontend request as untrusted: re-validates referenced IDs, ownership, and permissions server-side, always — including which settings/branches apply (e.g. a user's own `followRequiresApproval` value), never a frontend claim about them.
+- Auth is checked on writes and user-specific reads; public browse/search does not require it.
+- Comparing data *across* users (e.g. taste similarity, §5b) is a scheduled batch job feeding Firestore with precomputed results, not a live per-request computation. Comparing a single user's preferences *against the movie catalog* (content-based recommendations, §6) is cheap enough to compute live for now, with a batch/embedding-based upgrade path noted for later.
+- Optional/derived display fields (e.g. an event's `title`) are not duplicated from their source of truth (e.g. the movie's own title) unless they're a genuine override — avoids stale copies.
+- The "pending request → owner approves/denies → becomes real" shape is a reusable pattern, not one-off logic: watchlist ownership checks, event join approval, and follow-request approval (§4, §7) all use it.
+
+---
+
+## 11. Parked / TBD (not blocking current work)
+
+- **Real Teleparty-style playback sync (play/pause/seek across streaming platforms) — Phase 2, explicitly out of scope for the Pachamama prototype.** Presence (§15) is the actual MVP scope; everything below is planning-only for a later phase.
+
+  **Confirmed no official API/SDK path exists** for a third-party consumer app — Netflix/Prime/etc. partner SDKs are for certified hardware/device manufacturers embedding the platform on their own devices, not for apps like BINJ. Not a pricing-tier problem; structurally unavailable regardless of paid-platform status.
+
+  **Confirmed mechanism (via direct observation of how Rave works):** an app-owned embedded browser engine — `WebView` on Android, `WebView2`/CEF on Windows, `WKWebView` on iOS — loads the streaming platform's *real* site, the user authenticates directly with the platform (confirmed via real Netflix OTP login), and the app injects synchronization logic into that same embedded player's DOM. This only works inside a native app; **BINJ's current React web app cannot do this** — a website can't embed and control another website's content the way an app-owned WebView can (cross-origin/iframe restrictions block it). This means Phase 2 isn't a feature addition, it's a second product: a native Android/Windows (and optionally iOS) app.
+
+  **Real blockers, independent of container (WebView vs. WebView2/CEF):**
+  - DRM provisioning per platform (Widevine on Android/Windows, FairPlay on iOS — notably harder/less documented) — can cap quality or block playback entirely if misconfigured.
+  - Per-platform player reverse-engineering, maintained indefinitely — every platform is a separate, fragile, undocumented integration that can silently break on any UI update.
+  - Adversarial, not static — platforms actively invest in detecting/blocking this pattern; not a build-once investment.
+  - ToS violation, with real legal exposure (DRM-circumvention-adjacent, e.g. DMCA §1201-style anti-circumvention concerns depending on jurisdiction) — compounds if BINJ becomes a paid/commercial platform.
+  - Doesn't fit the Sep 7 Pachamama submission regardless of the above — comparable in scope to building a second product.
+
+  **Possible scope reduction if pursued later:** Android + Windows only, drop iOS — removes the hardest DRM case (FairPlay/WKWebView) without solving the rest.
+- **Region detection for Streaming Availability (§8)** — beyond the hardcoded India default. Not yet designed.
+- **"Nearby people" discovery (§9)** — parked as a separate, harder feature from nearby events. Needs a coarser, privacy-conscious location model (city-level, not GPS-precise) per PRD §30.7, rather than the event-location approach in §9.
+- **"Movies none of us have watched" filter** — new feature idea, captured here so it isn't lost. Given a chosen set of people, find movies none of them have watched — solves the real "have you seen this already?" round-robin problem when a group is picking something to watch together. Architecturally this is the *same* building block as §5a (per-user `watched` subcollection + fan-out over a bounded set of people, now known to be a `following`-based set), just walked movies-first instead of people-first. Not yet designed in detail.
+- **How data flows into BigQuery for analytics** (§2, §5b) — Firestore export vs. event streaming (e.g. Pub/Sub). Not yet designed.
+- **Switch Recommendations (§6) to a precomputed/embedding-based approach** — noted for later, not needed for the prototype.
+- **Gemini flows** — not yet traced. (Google Maps is now partially traced — geocoding and map rendering per §9 — but no Gemini-powered feature has been walked through yet.)
+- **Event notifications** (e.g. host notified of a new join request) — surfaced in §7, not yet designed.
+- **Anonymous reviews/ratings — decided.** Opt-in **per review/rating** (a per-submission user choice, not a global account-wide setting). When chosen: the author's display name is hidden **consistently on every surface where that specific review/rating renders** (movie page, search, even the poster's own profile reviews list) — not selectively shown in one place and revealed in another. The backend still stores the real `authorId` for moderation/repeat-offender detection (PRD §30's enforcement ladder still works). The rating still contributes normally to the movie's aggregate BINJ score — anonymity hides *who* posted it, not the rating itself. Scoped deliberately to **not** reach into §5a's "people who watched this movie" — that's governed by the separate watched-list privacy settings, since "I watched this" and "here's my anonymous opinion" are different disclosures; a user wanting both hidden uses both mechanisms (they're independent, composable). Not yet traced as its own flow — the "submit rating/review" flow itself (of which anonymity is now one property) is still a candidate for a future walkthrough session.
+
+---
+
+## 12. Open Questions for PM
+
+None currently open. Resolved so far:
+
+- ~~Connections model~~ → **one-directional, Instagram-style follow** (§5a).
+- ~~Taste-similarity math~~ → **overlap of watched movies + shared genres** (§5b).
+
+New questions get added here as they come up.
+
+---
+
+## 13. Flow: User Onboarding / Sign-up
+
+*Numbered last because it was traced last in this conversation — but chronologically, this happens before every other flow above. Every "Backend verifies Firebase Auth token" step throughout this document assumes onboarding already happened.*
+
+```
+User signs up (email/password, or Google/social sign-in)
+        ↓
+Frontend ↔ Firebase Authentication — directly, not through our backend
+        ↓
+Firebase Auth creates the identity, returns an ID token to the frontend
+        ↓
+Frontend → Backend (first authenticated request, carrying the ID token)
+        ↓
+Backend verifies the token, checks: does users/{uid} already exist in Firestore?
+  ├── YES → existing user, this is just a normal login — proceed
+  └── NO  → first time → backend creates users/{uid}
+              { displayName, email, createdAt, privacy defaults: listVisible=true, followRequiresApproval=false }
+              → return "new user" flag
+        ↓
+If new user → frontend walks through optional onboarding (e.g. pick a few favorite genres)
+```
+
+**Decision — Firebase Auth is frontend-safe, same pattern as Google Maps (§9).** The frontend SDK talks to Firebase Auth directly for sign-up/login — collecting passwords, handling social-login handshakes — none of that touches our backend. The backend's only job is verifying the resulting ID token on every subsequent request, consistent with the existing "never trust the frontend" principle (§10): verification still happens server-side every time, credential *collection* just isn't our backend's responsibility.
+
+**Decision — profile creation reuses the exact lazy-creation pattern from §2.** Rather than a separate Cloud Function triggered on Auth sign-up (a new component), the `users/{uid}` profile document gets created on the backend's first authenticated request after signup — same "create on first need" shape as movie ingestion in §2, just applied to users instead of movies. No new infrastructure needed.
+
+**Noted for later:** an optional "pick favorite genres" onboarding step directly improves §6's cold-start fallback — not required for MVP (trending fallback already covers zero-signal users), but cheap and worth doing if there's time, since it makes recommendations better from day one instead of only after enough activity accumulates.
+
+---
+
+## 14. Flow: Moderators / Enforcement
+
+Introduces something genuinely new: every flow so far has been "an authenticated user acts on their *own* data" or "within visibility rules." This is the first flow that's **role-based** — a privileged user acting on *someone else's* content or account.
+
+Splits into two parts.
+
+### 14a. Reporting (any user, straightforward)
+
+```
+User clicks "Report" on a message/review/event/user/community/chat room
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Auth token (write path)
+        ↓
+Backend writes reports/{reportId}
+    { reporterId, targetType, targetId, category, reason, status: "pending", createdAt }
+        ↓
+Return success → Frontend confirms
+```
+
+Nothing new architecturally — same write pattern as everything else in §3/§4/§7.
+
+### 14b. Moderator review & enforcement (new: role-based authorization)
+
+```
+Moderator opens the report queue
+        ↓
+Backend verifies Auth token AND verifies the caller actually holds a moderator/admin role
+     — a genuinely new kind of check: not "is this the caller's own data" (§3's pattern),
+       but "does this account have elevated privileges at all"
+        ↓
+Backend returns pending reports (scoped to what this moderator is allowed to see)
+        ↓
+Moderator chooses an action: warning | remove content | temporary restriction | temporary/permanent suspension
+        ↓
+Backend re-verifies the role server-side before executing — never trusts a frontend claim of "I'm a moderator"
+        ↓
+Backend executes:
+  - warning              → write to users/{targetUid}/moderationLog, notify user
+  - remove content       → delete/flag the target content doc
+  - restrict/suspend     → write users/{targetUid}.status = "restricted"|"suspended" (+ expiry if temporary)
+        ↓
+Return success
+```
+
+**Decision — role lives in Firebase custom claims, not a Firestore field.** Firebase Auth supports attaching custom claims (like a role) directly to a user's ID token/JWT. The backend reads the role straight off the already-verified token — no extra Firestore lookup needed on every privileged check, unlike a `users/{uid}.role` field, which would cost a read every time.
+
+**Decision — scope to platform-level moderation only for now, defer community-moderator delegation.** PRD §30 describes two tiers: platform-level enforcement (warnings, suspensions — clearly needs a global admin role) and *community moderators* scoped to a specific community/forum. The latter ties directly to the Forums/Communities feature, which the PRD already marks as P2/deferred (§22) — building a granular per-community moderator-delegation system now would be designing privilege scoping for a feature that isn't being built yet. Event hosts already have a lightweight, scoped form of moderation for their own event (approve/deny join requests, §7) — that already covers "who moderates a single watch event" without needing this broader role system. Full community-moderator delegation stays parked until Forums moves off P2.
+
+### 14c. Assigning the moderator/admin role itself
+
+```
+Bootstrapping the very first admin(s)
+        ↓
+Manual, out-of-band — a one-off script or Firebase Console action, run directly by the BINJ team
+        ↓
+(not an in-app flow — cannot be, by construction: see decision below)
+
+Promoting anyone after that
+        ↓
+Existing admin selects a user, chooses a role to grant
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Auth token AND verifies the CALLER already holds admin role (their own custom claim)
+        ↓
+Backend calls Firebase Admin SDK: setCustomUserClaims(targetUid, { role })
+        ↓
+Return success
+```
+
+**Decision — first admin is seeded manually; everyone after that is promoted in-app by an existing admin.** Custom claims can only be set via the Firebase Admin SDK, which requires privileged backend/GCP access — no user, including an admin acting through the app UI, can grant a role through a normal request without *something* already having that access first. This first-admin bootstrap problem is universal to any role-based system, so it's solved outside the app rather than designed around. Once at least one admin exists, promotion reuses the exact "backend re-verifies the caller's own privilege before executing" pattern from §14b — applied to granting roles instead of enforcement actions. No new mechanism needed.
+
+---
+
+## 15. Flow: Watch Party — Presence ("who's live")
+
+Investigated first whether real Teleparty-style playback sync (play/pause/seek across everyone's own streaming platform) was achievable via official partnership, given BINJ may become a paid platform. **Resolved: not feasible, and not a money problem.** Netflix, Prime Video, and JioHotstar have no public API for third-party remote playback control — their partner SDKs exist for a different purpose (device manufacturers embedding the streaming app on hardware, not external apps controlling an existing session), DRM license terms actively restrict this kind of external control, and it works against their competitive incentives (none of them wants a cross-platform "watch party" layer sitting on top of their own experience). The strongest evidence: Teleparty, Scener, and Metastream — the actual companies doing this today — all rely on unofficial browser extensions rather than official APIs, at any funding level. If this is pursued later, the only proven path is the same one they use: **a browser extension, planned as its own separate future project**, not a phase of the current backend — noted in §11.
+
+For now, scope is **presence only** — no playback control, no synchronization, just live "who's currently here."
+
+```
+User opens an event's chat room
+        ↓
+Frontend connects to Firebase Realtime Database directly — frontend-safe, same pattern as
+        Firebase Auth (§13) and Google Maps (§9): the credential/connection itself isn't secret,
+        the backend still owns anything privileged
+        ↓
+Frontend writes presence/{eventId}/{uid} = { online: true, joinedAt }
+        ↓
+RTDB's onDisconnect() hook auto-marks the user offline the instant their connection drops —
+        network loss, tab closed, app killed — no backend polling or heartbeat needed
+        ↓
+Other participants subscribe to presence/{eventId} in real-time
+        ↓
+UI shows "X people watching now"
+```
+
+**Decision — Firebase Realtime Database, not Firestore, for presence.** Firestore has no built-in disconnect detection; RTDB's `onDisconnect()` is Firebase's own documented pattern specifically for this, even in apps (like BINJ) that use Firestore for everything else. Small, low-overhead addition to the same Firebase project — not a new vendor.
+
+---
+
+## 16. Flow: Event Chat Rooms
+
+Resolves the "real-time layer for chat" question parked all the way back in §1/§11.
+
+**Decision — Firestore listeners (`onSnapshot`), not a WebSocket layer.** Firestore has a built-in subscription feature: the frontend subscribes directly to a document/collection, and Firestore itself pushes updates to every subscribed client automatically whenever the data changes — no polling, no custom server, nothing new to build or operate. A WebSocket layer would mean BINJ's own backend holding a persistent connection per client and manually relaying messages — real infrastructure, in exchange for control BINJ doesn't need here. Chat is the textbook case Firestore listeners were built for, so no new component is needed — just a Firestore capability not yet used elsewhere in this HLD.
+
+**Revised decision — one room per Event, not per Movie, and ephemeral by default.** Superseded the original "shared room per movie" design. Modeled as its own entity, `Room`, distinct from `Event` (not folded into it) because a room can outlive the event that created it (see persistence, below) and later become associated with more than one event — a genuine one-to-many over time, not a fixed 1:1.
+
+```
+rooms/{roomId} { type: "ephemeral" | "persistent", originEventId, memberIds[], createdAt }
+rooms/{roomId}/messages/{messageId} { authorId, text, createdAt }
+events/{eventId}.roomId → the room this event's chat happens in
+```
+
+**Lifecycle — ephemeral rooms (default), same shape as a Google Meet call's chat:**
+
+```
+Event starts, first participant joins
+        ↓
+Room becomes active (backend creates rooms/{roomId} lazily on first join —
+        same "create on first need" pattern as movie ingestion §2, user profile §13)
+        ↓
+Participants chat while the room has anyone present (tracked via §15's presence, reused directly —
+        no separate "is this room active" state needed)
+        ↓
+Presence for this room hits zero
+        ↓
+Grace-period timer starts (a few minutes) — avoids deleting a live conversation over a
+        momentary mass-disconnect (network blip, everyone's video call drops for a second)
+        ↓
+Timer expires, presence still zero → room + its messages are deleted
+        ↓
+EXCEPT: any message that was reported (§14a) before deletion is preserved —
+        soft-deleted per §21, kept specifically for moderator review, everything
+        else in the room is gone. Otherwise a bad actor could say something
+        abusive and just wait out the room closing to dodge any consequence.
+```
+
+**New mechanism — the grace-period timer needs something HLD hasn't used yet:** a delayed check, not an instant reaction. A Cloud Function reacts to presence (§15, RTDB) hitting zero for a room and schedules a Cloud Task (or equivalent delayed job) to re-check presence after the grace period and delete if still empty. Worth naming as new infrastructure, same way FCM (§17) and Vertex AI Search (§18) were flagged as new components when they first appeared.
+
+**Decision — persistence toggle: host only, settable anytime (not just at event creation).** The host can flip a room from ephemeral to `persistent` at any point — before, during, or after the event — not a decision forced upfront. A persistent room never runs the deletion timer above; it becomes a standing group chat for its members, independent of any single event's lifecycle (Teams-style, per your framing).
+
+**Decision — a persistent room can spawn new events.** From a persistent room, the host or any member can create a new Event (§7's Create Event flow, unchanged) with the room's current `memberIds` pre-filled as invitees. The new event links back to the *same* `roomId` rather than getting a fresh room — this is the mechanism by which one room ends up associated with multiple events over time.
+
+```
+Send a message
+        ↓
+Frontend → Backend
+        ↓
+Backend verifies Auth token, verifies the caller is a member of this room (event participant,
+        or persistent-room member), verifies the caller's account isn't restricted/suspended
+        (reuses §14b's moderation state)
+        ↓
+Backend writes rooms/{roomId}/messages/{messageId} { authorId, text, createdAt }
+```
+
+```
+Receive messages (real-time)
+        ↓
+Frontend subscribes directly to Firestore: rooms/{roomId}/messages (onSnapshot)
+        ↓
+Firestore pushes new messages to every subscribed client automatically — no backend involved in delivery
+```
+
+**Decision — writes still go through the backend, but reads now bypass it entirely.** This is the first flow in this HLD where the frontend talks straight to Firestore for the read path, since that's the whole point of `onSnapshot`. That means the usual "backend re-validates every read" principle (§10) can't apply here — there's no backend in the read path. Enforcement instead lives in **Firestore Security Rules**, Firestore's own declarative access-control layer evaluated by Firestore itself, not backend code: reads restricted to the room's own `memberIds`, writes restricted to the backend's own service account only (forcing every write through the validated backend path above). New mechanism, worth naming — the first place authorization lives outside the backend.
+
+**Not a coincidence:** messages use Firestore listeners, presence (§15) uses Realtime Database — two different real-time needs, two different Firebase tools, matching Firebase's own recommended split rather than forcing one tool to do both jobs.
+
+Reporting a message or the room itself reuses §14a unchanged — no new design needed, beyond the "reported messages survive ephemeral deletion" carve-out above.
+
+**Not yet decided — flagged, not blocking:** whether a persistent room's `memberIds` can be managed directly (add/remove someone from the standing chat without going through an event), independent of any event's participant list. Default assumption for now: membership only grows via "schedule a new event from this room," nothing more granular yet.
+
+---
+
+## 17. Flow: Notifications
+
+Cross-cutting — not a single trigger, but an addition to several existing flows.
+
+```
+Some event happens (e.g. B receives a follow request from A, per §4)
+        ↓
+Backend, as part of that SAME request, additionally writes:
+    users/{B}/notifications/{id} { type, fromUserId, read: false, createdAt }
+        ↓
+Delivery — three independent channels, in parallel:
+  - In-app feed: frontend subscribes to users/{uid}/notifications via Firestore onSnapshot
+                 → same pattern as §16's chat listener, applied to notifications instead of
+                    messages. No new mechanism.
+  - Push: backend checks B's stored FCM device token(s), calls Firebase Cloud Messaging
+                 → new component (FCM); device-token registration needs adding to
+                    onboarding (§13) or settings
+  - Email: only if users/{B}.notificationPrefs.emailEnabled != false
+                 → e.g. via Firebase's "Trigger Email" extension (write to a mail-queue
+                    collection, the extension sends it) — same "write to Firestore, let a
+                    Firebase-native mechanism handle the side effect" style as movie
+                    ingestion (§2)
+```
+
+**Decision — confirmed triggers (more to be added as they come up):** follow requests (§4), event join requests/approvals (§7), moderator actions taken against you (§14b).
+
+**Decision — delivery channels:** push, in-app feed, and email, all three. Email has a per-user opt-out (`notificationPrefs.emailEnabled`); push/in-app could get the same treatment later if needed, not required now.
+
+**Decision — in-app feed costs nothing new**, reusing §16's Firestore-listener pattern exactly. Push is the only genuinely new component (FCM).
+
+---
+
+## 18. Flow: Search (movie discovery)
+
+Corrects a gap surfaced during design: §2's on-demand ingestion only pulls a movie into Firestore once someone already knows about it and opens its page — but if search only looked at what's already in Firestore, nothing new could ever be *found* in the first place. That's circular, and it means even popular, obvious titles could trigger a live TMDB call during search simply because nobody had searched for them yet — not acceptable, since search must never depend on TMDB live.
+
+**Decision — search-index population is bulk/scheduled, fully decoupled from §2's per-user, per-movie detail ingestion.** A batch job (not triggered by any individual search) pulls a broad slice of TMDB's catalog and indexes it upfront and on a recurring schedule. Search then always hits BINJ's own pre-populated index — never TMDB, live, ever. §2 still exists, but now does only what it was always meant for: fetching the *full* detail record (synopsis, cast, streaming providers, IMDb rating at ingestion time) once a specific movie is actually opened — discoverability and full-detail-caching are two separate concerns, not one conflated flow.
+
+```
+User types a search query
+        ↓
+Frontend → Backend
+        ↓
+Backend queries the search index (typo-tolerant, fast)
+        ↓
+Return matching movies (title, poster, year — enough for a results list)
+        ↓
+User selects a result → triggers §2's detail-ingestion flow for that specific movie
+```
+
+**Decision — Vertex AI Search (Media vertical) as the primary search index**, not Algolia/Typesense/Meilisearch. None of those three are Google products (Algolia: independent SaaS company; Typesense/Meilisearch: independent open-source projects/companies) — running on GCP infrastructure via a marketplace listing isn't the same as being a Google product. Vertex AI Search is a genuine Google Cloud product built for exactly this (fast, typo-tolerant search over your own data), with a Media vertical specifically aimed at content-catalog search. Given BINJ's Google-first mandate ("Google product unless no equivalent exists"), this is the correct first candidate — a Google equivalent exists, so reaching for a non-Google search service isn't justified.
+
+**Caveat, not yet verified:** exact current Vertex AI Search pricing (typically per query volume and/or data indexed; enterprise-tier search products have sometimes carried minimum commitments beyond simple pay-as-you-go) hasn't been confirmed. $300 in available GCP credit removes cost as a blocker for *testing* this, but should be treated as "enough to find out," not a guarantee it comfortably covers the whole prototype — worth checking the pricing calculator or provisioning a small test index before fully committing.
+
+**Fallback if Vertex AI Search proves too costly/complex for the remaining timeline: Firestore word-prefix indexing.** Same bulk-seeding idea, stored directly in Firestore's `movies` collection instead of a dedicated search product — each title indexed as an array of word-level prefixes (e.g. "Avengers" → `["a","av","ave",...,"avengers"]`), queried via `array-contains`. Weaker typo tolerance than a real search engine, but genuinely free and needs zero new products — still fully Google-native since it's just Firestore.
+
+---
+
+## 19. Flow: Block / Mute
+
+Two related but different things:
+
+- **Block:** severe, symmetric in effect. If A blocks B, *neither* can see or interact with the other — even though only A initiated it. Deliberately the opposite of follow (follow's effects are one-directional by design; block's effects are two-directional by design, even though the *action* is one person's choice).
+- **Mute:** lighter, asymmetric. "Hide their content from my view" only — B is unaffected, doesn't know, can still see/interact with A normally.
+
+```
+User A blocks User B
+        ↓
+Backend writes users/{A}/blocked/{B}
+        ↓
+Backend also severs any existing follow relationship, both directions
+        ↓
+Return success
+```
+
+**Decision — block becomes a new cross-cutting check**, not a one-off flow — applied wherever visibility/interaction is already checked: §5a excludes blocked users in both directions; §16 filters a blocked user's messages from your own client view in shared event/room chats. Other surfaces (e.g. §7 events) apply the same general check without needing individual flow-by-flow redesign.
+
+**Decision — mute uses the identical mechanism** (`users/{uid}/muted/{mutedUid}`) but only ever affects the muter's own view — no severance of any relationship, no bidirectional effect.
+
+---
+
+## 20. Flow: Submit / Edit / Delete a Rating & Review
+
+**Decision — one review per movie per user, enforced structurally.** The review doc is keyed by the author's own ID, not a random review ID: `movies/{movieId}/reviews/{authorId}`, not `movies/{movieId}/reviews/{reviewId}`. A user physically can't have two documents at the same path, so this gets "one per movie" for free — and it means submit and edit collapse into the **same operation**: writing to that path either creates it (first time) or overwrites it (editing), no separate create-vs-update logic, no "find my existing review" query — the path is deterministic from the caller's own ID.
+
+**Decision — the aggregate update needs a transaction, not a blind increment.** A first-time review should add to both `sum` and `count`; an edit should only adjust `sum` by the *difference* between old and new rating, leaving `count` unchanged. A naive "always add the new rating" would silently inflate the average every time someone edits their score. So the write reads the existing review first (if any), computes the correct delta, and writes both the review and the adjusted aggregate together, atomically.
+
+```
+Submit or edit a rating/review (same operation)
+        ↓
+Backend verifies Auth token, verifies the movie exists (§2), verifies the caller's account
+        isn't restricted/suspended (§14b's moderation state)
+        ↓
+Firestore transaction:
+    - read movies/{movieId}/reviews/{callerUid} (may or may not exist)
+    - first time  → sum += rating, count += 1
+    - editing     → sum += (newRating − oldRating), count unchanged
+    - write movies/{movieId}/reviews/{callerUid} { rating, reviewText?, isAnonymous, updatedAt }
+    - write adjusted sum/count to movies/{movieId}
+```
+
+```
+Delete a rating/review
+        ↓
+Backend verifies caller owns movies/{movieId}/reviews/{callerUid} — trivial, the doc ID is
+        the caller's own uid, no ownership lookup needed
+        ↓
+Firestore transaction: read existing rating → sum -= rating, count -= 1 → soft-delete (§21)
+```
+
+Anonymity (§11) is just one field on this same document, exactly as originally planned. The displayed BINJ average (§16.3 in the PRD) is always just `sum / count` — cheap to read regardless of review count.
+
+---
+
+## 21. Flow: Edit / Delete — general pattern for other content
+
+Applies to content that *doesn't* have §20's "one per movie per user" constraint — chat messages, events, and similar: reviews use the deterministic-ID trick above; everything else uses an ownership field checked against the caller.
+
+```
+User edits or deletes their own content (message, event, etc.)
+        ↓
+Backend verifies Auth token, verifies the caller is the content's own author — reuses the
+        same ownership-check pattern as watchlist/event-host checks
+        ↓
+Edit:   update fields + set editedAt (so the UI can show "(edited)")
+Delete: see decision below
+```
+
+**Decision — delete is author-initiated OR moderator-initiated, same mechanism, different authorization check.** §14b already defined "remove content" as a moderator enforcement action — rather than a second separate deletion path, moderator-delete and self-delete hit the same backend logic, gated by *either* "caller is the author" *or* "caller holds the moderator role" (§14's custom-claims check).
+
+**Decision — soft delete, not hard delete, as the general policy — not just for reviews.** A `deleted: true` flag (content hidden from normal display/queries, doc stays in Firestore) rather than actually removing the document. Reasoning generalizes beyond reviews: per PRD §30's moderation/audit requirements, a repeat offender's removed content needs to still be reviewable after takedown — a hard delete would make that impossible. Applies uniformly to reviews (§20), messages (§16), and events (§7).
+
+---
+
+## 22. Flow: Review Moderation Strikes & Movie-Specific Ban
+
+New enforcement mechanism, distinct from §14b's account-wide `restricted`/`suspended` — this one is scoped to **one user, one movie**, not the whole account.
+
+**Rule:** a user may repost a review for a movie after a moderator removes it, up to 2 more times. If a moderator removes it a 3rd time for that same movie, the user is banned from posting a review for *that specific movie* for 30 days. Any removal counts toward the strike total, regardless of whether the resubmitted content differs from what was removed.
+
+```
+Moderator removes a review (§14b enforcement action, applied here)
+        ↓
+Backend verifies moderator role (§14)
+        ↓
+Firestore transaction:
+    - soft-delete the review (§21) — deleted: true
+    - increment movies/{movieId}/reviews/{authorId}.modRemovalCount
+    - reverse the review's contribution to the movie's aggregate rating (§20) — a removed
+      review shouldn't count toward the displayed BINJ average
+        ↓
+If modRemovalCount reaches 3 → write users/{authorId}/reviewBans/{movieId} = { bannedUntil: now + 30 days }
+```
+
+```
+User submits/edits a review for a movie — §20's flow, gains one more check up front
+        ↓
+Backend checks users/{authorId}/reviewBans/{movieId}:
+    - exists, bannedUntil > now  → reject, tell them when the ban lifts
+    - exists, bannedUntil <= now → ban has lapsed: proceed, AND reset modRemovalCount to 0
+      as part of this same write — a lazy, on-demand reset rather than a scheduled job,
+      consistent with how "reset/refresh" is handled everywhere else in this HLD (movie
+      ingestion in §2, presence in §15, etc.)
+    - doesn't exist               → proceed normally
+```
+
+**Decision — dispute path, resolved by an admin, not any moderator.**
+
+```
+User disputes a removal of their own review
+        ↓
+Backend verifies caller is the review's own author
+        ↓
+Backend writes moderationDisputes/{disputeId} { reviewRef, authorId, moderatorId, status: pending }
+        ↓
+An ADMIN reviews it (not just any moderator)
+        ↓
+Uphold   → nothing changes, removal and strike stand
+Overturn → un-soft-delete the review, decrement modRemovalCount, restore its contribution
+           to the movie's aggregate rating, and reverse any ban that was issued because
+           of this specific strike
+```
+
+Letting the same privilege tier that removed the content also review whether the removal was fair has an obvious conflict-of-interest problem — the reviewer needs to sit at a higher/separate level of authority than whoever took the original action.

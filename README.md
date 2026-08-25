@@ -1,103 +1,190 @@
-# BINJ 🎬
+# BINJ — Patchamomma 2026
 
-BINJ is a social movie platform designed to help people discover movies, connect with people who share their interests, and turn watching movies into a shared social experience.
+## Project Overview
 
-## 🎯 Vision
+BINJ is a social movie platform designed to help people discover movies, connect with people who share their movie interests, and turn watching movies into a shared social experience.
 
-Instead of simply asking:
-
-> "What movie should I watch?"
-
-BINJ aims to answer:
+The core idea is:
 
 > **"I want to watch this movie. Who else wants to watch it with me?"**
 
-The platform combines movie discovery, personalized recommendations, social connections, watch events, location-based discovery, and movie communities.
+BINJ combines movie discovery, personalized recommendations, social connections, watch events, location-based discovery, and movie discussion.
 
-## ✨ Planned Features
+---
 
-### 🎬 Movie Discovery
+## Planned Features
+
+### 1. Movie Discovery
 - Search movies and series
 - Movie information
-- Ratings and likes
+- Ratings
+- Likes
 - Reviews
-- Genres
-- Languages
-- Regions
+- Genre selection
+- Language selection
+- Region selection
 - Watched list
 - Watchlist
-- Personalized recommendations
+- Recommendations
 
-### 📺 Streaming Availability
-- Find which streaming platforms have a movie available
-- Explore where a movie can be watched
+### 2. Streaming Availability
+- Show which streaming platforms a movie is available on.
 
-### 👤 User Profiles
-- Movie preferences and activity
+### 3. User Profiles
+- User profile
+- Movie activity
 - Watched movies
 - Watchlist
 - Ratings and reviews
-- Social connections
-- Privacy and security preferences
+- Privacy/security preferences
 
-### 👥 People Discovery
+### 4. People Discovery
 - See people who watched a particular movie
 - Discover people with similar movie tastes
-- Use shared movie interests as a basis for social connections
+- Use shared movie interests for social discovery
 
-### 🎟️ Events & Watch Parties
-- Create public or private events
-- Online or in-person events
+### 5. Events / Watch Parties
+- Public events
+- Private events
 - Recurring events
+- Online events
+- In-person events
 - Find people interested in watching the same movie
 
-### 💻 Watch Together
-- Future support for synchronized movie watching
-- Teleparty-style viewing experience
+### 6. Watch Together
+- Future Teleparty-style synchronized viewing
+- This is not a core MVP requirement and should not block the prototype.
 
-### 💬 Persistent Movie Rooms
+### 7. Persistent Movie Rooms
 - Movie-specific chat rooms
-- Discuss a movie before watching
-- Interact while watching
+- Discussion before watching
+- Interaction while watching
 - Continue discussions after the movie ends
 
-### 🗺️ Location-Based Discovery
+### 8. Multiple Streaming Platforms
+- Future possibility of integrating multiple streaming services
+- Example: Airtel Xstream
+- One-login/multiple-platform access is considered a future integration and is not part of the core MVP.
+
+### 9. Location-Based Discovery
 Discover movies, people, and events based on:
 - Movie
 - Director
 - Genre
 - Location
 - Time
-- Virtual / in-person
+- Virtual/in-person
 - Nearby events
 
-### 🧵 Communities & Forums
+### 10. Forums / Communities
 - User-created communities
 - Subreddit-style discussions
 - Community moderators
-- Topic-specific movie communities
+- Movie/topic-specific communities
 
-## 🧠 Recommendation & Social Discovery
+---
 
-BINJ aims to combine movie metadata with user-generated activity to create meaningful recommendations and social discovery.
+# Technology Stack
 
-For example:
+## Frontend
 
-> "People with similar movie tastes watched these movies."
+- React
+- TypeScript
+- Vite
+- Firebase SDK
+- Google Maps integration
 
-or:
+## Backend
 
-> "4 people near you are interested in watching this movie tonight."
+- Node.js
+- TypeScript
+- Express/Fastify
+- Cloud Run
 
-The long-term goal is to build a relationship between the **movie graph** and the **social graph**.
+## Database & Data
 
-## 📊 Data
+### BigQuery
+Used for:
+- IMDb dataset
+- Movie data analysis
+- Analytics
+- Recommendation data
+- User/movie behavioural analysis
 
-The initial prototype will explore the **IMDb dataset available through Google BigQuery** as the movie-data foundation.
+### Firestore
+Used for application data such as:
+- Users
+- Profiles
+- Watchlists
+- Watched movies
+- Ratings
+- Reviews
+- Events
+- Social relationships
+- Chat rooms
+- Messages
 
-IMDb data will potentially provide information such as movie metadata, genres, ratings, people, and relationships between movies and contributors.
+### Firebase Authentication
+Used for:
+- User registration
+- Login
+- Authentication
+- Identity management
 
-BINJ will generate its own application data, including:
+### Cloud Storage / Firebase Storage
+Potentially used for:
+- Profile pictures
+- Event images
+- Community images
+- Other user-generated media
+
+---
+
+# Google Cloud Services
+
+The project will prioritize Google technologies as part of Patchamomma 2026.
+
+### Core Services
+
+- **Google BigQuery** — IMDb data, analytics and recommendation analysis
+- **Firebase / Firestore** — application database and user-generated data
+- **Firebase Authentication** — authentication
+- **Cloud Run** — backend/API deployment
+- **Gemini / Google AI Studio** — AI-powered functionality
+- **Google Maps Platform** — location-based discovery
+
+### Potential Services
+
+These will only be introduced if they provide real value to BINJ:
+
+- **Pub/Sub** — asynchronous events and background processing
+- **Looker / Looker Studio** — analytics and project insights
+- **Vertex AI** — advanced ML/recommendation capabilities
+- **ADK (Agent Development Kit)** — agentic AI functionality
+- **MCP Toolbox for Databases** — allowing AI agents to interact with databases safely
+
+We will avoid adding Google Cloud services simply for the sake of using more services.
+
+---
+
+# Data Strategy
+
+## IMDb Dataset
+
+The initial prototype will explore the IMDb dataset available through Google BigQuery.
+
+The first priority is to analyze the actual dataset and determine:
+
+- What movie information is available
+- Which BINJ features it can support
+- Which relationships exist between titles, people, genres, ratings, etc.
+- What data is missing
+- What additional public datasets may be required
+- What data can reasonably be generated synthetically
+
+## BINJ-Generated Data
+
+BINJ will generate its own application/social data, including:
 
 - User profiles
 - Watch history
@@ -106,45 +193,300 @@ BINJ will generate its own application data, including:
 - Ratings
 - Reviews
 - Events
+- Event participation
 - Social connections
 - Discussions
 - User preferences
 
-The IMDb dataset will first be audited to determine exactly which BINJ features it can support and what additional or synthetic data may be required.
+The IMDb dataset does not need to provide all of this.
 
-## ☁️ Technology
-
-The project is being developed as part of **Pachamama 2026** with a focus on Google technologies and data-driven functionality.
-
-Potential technologies include:
-
-- Google Cloud
-- BigQuery
-- Gemini / Google AI Studio
-- Firebase / Firestore
-- Cloud Run
-- Google Cloud analytics and data services
-
-The final technology stack will be determined after the data feasibility analysis and MVP scope are finalized.
-
-## 🚧 Project Status
-
-BINJ is currently in the **prototype/build phase**.
-
-### Current priorities
-
-1. Analyze the IMDb dataset
-2. Determine whether the available data supports the planned features
-3. Identify missing data requirements
-4. Define the MVP
-5. Design the data architecture
-6. Build the prototype
-7. Demonstrate the recommendation and social-discovery capabilities
-
-## 🏆 Pachamama 2026
-
-BINJ is being developed as an entry for **Pachamama 2026**, a Google innovation challenge focused on building real-world, data-driven solutions using Google technologies.
+The goal is to use IMDb as the **movie-data foundation** while BINJ generates the social and behavioural data.
 
 ---
 
-**BINJ — Find your movie. Find your people. 🍿**
+# Recommendation Strategy
+
+BINJ will eventually combine movie metadata and user behaviour.
+
+### Content-based recommendations
+
+Potential signals:
+
+- Genre
+- Language
+- Region
+- Director
+- Actors
+- Movie characteristics
+- Ratings
+- Similar movies
+
+### Social / behavioural recommendations
+
+Potential signals generated by BINJ:
+
+- Watched movies
+- Ratings
+- Likes
+- Reviews
+- Watchlist
+- Event participation
+- Similar user behaviour
+
+The exact recommendation approach will be decided after the IMDb data analysis.
+
+---
+
+# Development Methodology — TDD
+
+BINJ will be developed using **Test-Driven Development (TDD)**.
+
+For each feature:
+
+1. Define expected behaviour
+2. Write the test
+3. Run the test and confirm it fails
+4. Implement the minimum required functionality
+5. Run the test and make it pass
+6. Refactor
+7. Add/maintain relevant integration and regression tests
+
+## Testing Layers
+
+### Unit Tests
+For:
+- Business logic
+- Validation
+- Recommendation calculations
+- Data transformations
+- Utility functions
+
+### Integration Tests
+For:
+- API + database interactions
+- Authentication
+- Firestore operations
+- BigQuery interactions
+- External service integrations
+
+### Frontend Tests
+For:
+- React components
+- User interactions
+- Important UI states
+
+### E2E Tests
+
+Critical user journeys such as:
+
+**Movie discovery flow**
+
+Login → Search movie → View movie → Add to watchlist
+
+**Social/watch-party flow**
+
+Login → Find movie → Find interested people → Create/join event → Enter movie room
+
+### Final Regression Testing
+
+The complete test suite will be run before major checkpoints and final submission.
+
+Testing is part of development throughout the project rather than a separate task at the end.
+
+---
+
+# Project Milestones
+
+## Milestone 1 — Data & Product Foundation
+
+**Target: August 23, 2026**
+
+### Scope
+
+- Analyze IMDb dataset
+- Map IMDb data against BINJ features
+- Identify missing data
+- Identify required public/synthetic/BINJ-generated data
+- Finalize MVP scope
+- Finalize architecture
+- Finalize Google Cloud services
+- Define database entities
+- Establish TDD/testing strategy
+
+### Definition of Done
+
+We can clearly answer:
+
+> **What are we building, what data powers it, and how are we going to build it?**
+
+---
+
+## Milestone 2 — Platform Foundation
+
+**Target: August 26, 2026**
+
+### Scope
+
+- Set up React + TypeScript frontend
+- Set up Node.js + TypeScript backend
+- Set up Firebase project
+- Set up Firebase Authentication
+- Set up Firestore
+- Set up BigQuery
+- Connect IMDb data
+- Set up Cloud Run
+- Establish CI/test environment
+- Create initial application/backend integration
+
+### Definition of Done
+
+A user can open BINJ, authenticate, and the frontend, backend, database and Google Cloud infrastructure communicate successfully.
+
+---
+
+## Milestone 3 — Core Movie Experience
+
+**Target: August 30, 2026**
+
+### Scope
+
+Build the primary movie experience:
+
+- Movie search
+- Movie details
+- Genres/languages/regions
+- Ratings
+- Likes
+- Reviews
+- Watched list
+- Watchlist
+- Initial recommendation system
+
+All features are developed using TDD.
+
+### Definition of Done
+
+A user can:
+
+> Login → Search for a movie → View its details → Add it to watched/watchlist → Rate/review it → Receive recommendations.
+
+This should provide the main movie-platform experience.
+
+---
+
+## Milestone 4 — Social Movie Experience
+
+**Target: September 4, 2026**
+
+### Scope
+
+Turn BINJ from a movie platform into a social movie platform.
+
+Core social functionality:
+
+- User profiles
+- People who watched a movie
+- Similar movie taste discovery
+- Watch events
+- Public/private events
+- Online/in-person events
+- Location-based discovery
+- Movie rooms/chat
+- Persistent discussions
+- Gemini-powered functionality where useful
+
+### Definition of Done
+
+A user can:
+
+> Find a movie → Discover people interested in it → Create/join a watch event → Find people online/nearby → Enter a movie room → Continue discussing the movie afterwards.
+
+Advanced features such as Teleparty synchronization, complex forums, and streaming-service authentication should not block this milestone.
+
+---
+
+## Milestone 5 — Final Testing, Polish & Submission
+
+**Target: September 7, 2026**
+
+### Scope
+
+- Complete unit tests
+- Integration tests
+- E2E tests
+- Regression testing
+- Edge-case testing
+- Security checks
+- Performance checks
+- Bug fixing
+- UI/UX polish
+- Cloud deployment
+- Analytics/insights
+- Documentation
+- README
+- Architecture documentation
+- Demo preparation
+- Patchamomma submission
+
+### Internal Deadline
+
+**September 5:** Feature complete
+
+**September 6:** Stabilization, testing and final polish
+
+**September 7:** Submission
+
+### Definition of Done
+
+BINJ works end-to-end, the critical flows are tested, the prototype is deployed and presentable, and the project is ready for Patchamomma submission.
+
+---
+
+# Patchamomma 2026 Timeline
+
+| Date | Milestone |
+|---|---|
+| **Aug 15** | Build Phase Started |
+| **Aug 20** | First Checkpoint |
+| **Aug 23** | Data & Product Foundation |
+| **Aug 26** | Platform Foundation |
+| **Aug 28** | Second Patchamomma Checkpoint |
+| **Aug 30** | Core Movie Experience |
+| **Sep 4** | Social Movie Experience |
+| **Sep 5** | Final Feature Completion / Final Checkpoint |
+| **Sep 6** | Stabilization & Final Polish |
+| **Sep 7** | Submission Lock |
+| **Sep 10** | Results |
+| **Sep 24** | Finale |
+
+---
+
+# MVP Principle
+
+BINJ has a broad long-term feature set, but the prototype will prioritize a coherent end-to-end experience rather than attempting to fully implement every planned feature.
+
+The core experience is:
+
+> **Discover a movie → Discover people → Decide to watch → Watch together → Discuss afterwards.**
+
+Features such as Teleparty synchronization, one-login access to multiple streaming services, and a full Reddit-style community system are considered future/advanced functionality and should not jeopardize the core prototype.
+
+---
+
+# Project Success Criteria
+
+BINJ should demonstrate:
+
+1. A meaningful movie-data foundation using BigQuery/IMDb.
+2. A working social movie experience rather than only a movie database.
+3. Data-driven recommendations or social discovery.
+4. Meaningful use of Google Cloud/Gemini technologies.
+5. A functional end-to-end prototype.
+6. TDD-backed core functionality.
+7. A clear demonstration of how BINJ can scale beyond the prototype.
+
+---
+
+## BINJ
+
+**Find your movie. Find your people. 🍿**
