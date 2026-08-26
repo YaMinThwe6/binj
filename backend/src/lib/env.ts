@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  PORT: z.string().default("8080"),
+  PORT: z.string().default("6501"),
   TMDB_READ_ACCESS_TOKEN: z.string().min(1, "TMDB_READ_ACCESS_TOKEN is required"),
   TMDB_API_KEY: z.string().min(1).optional(),
   FIREBASE_PROJECT_ID: z.string().min(1).optional(),
