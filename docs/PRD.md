@@ -3,8 +3,8 @@
 **Project:** BINJ  
 **Program:** Pachamama 2026  
 **Status:** Prototype / Build Phase  
-**Document Status:** Updated — HLD walkthrough decisions incorporated (streaming availability, follow/social model, recommendations, watch-party scope, movie rooms, location discovery, search, notifications, block/mute). See [docs/hld.md](hld.md) for the full technical design and flow-level detail behind these decisions.  
-**Last Updated:** 2026-08-23
+**Document Status:** Updated — HLD walkthrough decisions incorporated (streaming availability, follow/social model, recommendations, watch-party scope, movie rooms, location discovery, search, notifications, block/mute); AI-assisted content moderation and future monetization added. See [docs/hld.md](hld.md) for the full technical design and flow-level detail behind these decisions.  
+**Last Updated:** 2026-08-26
 
 ---
 
@@ -801,6 +801,7 @@ The prototype should prioritize a coherent end-to-end experience.
 - Block / mute
 - Moderator reporting & platform-level enforcement (role via Firebase custom claims; community-moderator delegation deferred with Forums below)
 - Gemini-powered functionality
+- Context-aware AI content moderation (§30.8) — Gemini-based triage layer flagging likely violations; human enforcement ladder (§30.6) unchanged
 
 ## P2 — Future / Advanced
 - Teleparty-style synchronized playback — investigated and documented (§12); confirmed to require a **separate native app**, not a backend feature
@@ -809,6 +810,7 @@ The prototype should prioritize a coherent end-to-end experience.
 - Complex streaming integrations
 - "Nearby people" discovery
 - "Movies none of us have watched" filter (new idea, not yet designed in detail — see [docs/hld.md](hld.md) §11)
+- Monetization — Google Ads integration as a future revenue layer, must not compromise privacy/safety/core experience (§31)
 
 P2 features must not delay the core BINJ prototype.
 
@@ -1093,9 +1095,21 @@ BINJ should minimize unnecessary exposure of personal information.
 
 Location-based features should use privacy-conscious defaults and should not expose a user's precise location to other users unless explicitly intended and consented to.
 
-The exact moderation architecture, automated content detection, age requirements, and escalation process are **TBD** and should be finalized before the social/chat functionality is launched.
+The exact moderation architecture, age requirements, and escalation process are **TBD** and should be finalized before the social/chat functionality is launched. Automated content detection is addressed in §30.8, below.
 
-## 30.8 Product Design Principle
+## 30.8 AI-Assisted Content Moderation
+
+Resolves part of §30.7's "automated content detection" TBD.
+
+BINJ should support **context-aware** content moderation — detecting vulgarity, sexual solicitation, harassment, and other behaviour prohibited under §30.2, while distinguishing that from **legitimate discussion of mature or sexual themes within a movie itself** (e.g. discussing a film's sexual-assault subplot, a director's explicit content, or a controversial scene). §30.2 already draws this distinction in prose; here it needs to be something a moderation system can actually apply, not just a human-readable guideline.
+
+**Decision (P1):** if plain keyword/pattern-based detection proves insufficient to make that distinction reliably, BINJ will use an AI engine — an AI Agent — as the moderation layer. Context-aware judgment (is this message *about* a movie's content, or an actual solicitation happening in the room) is exactly the kind of task a keyword filter can't do but an LLM-based classifier can. Candidate approach: Gemini (already a confirmed BINJ technology, §19), applied to flagged/reported content and possibly to live message screening, rather than introducing a separate third-party AI vendor.
+
+**Relationship to human moderation (§30.6):** AI-assisted detection is a **triage/flagging layer**, not a replacement for the human enforcement ladder already defined in §30.6 (warning → removal → restriction → suspension). Automated detection surfaces likely violations — e.g. auto-flagging into the report queue at higher priority, or auto-hiding content pending review for high-confidence cases — but a human moderator still makes the enforcement decision, consistent with [docs/hld.md](hld.md) §14b/§22, which already assume every enforcement action is moderator- or admin-initiated, not fully automated.
+
+Exact detection scope (real-time message screening vs. report-triggered analysis only), false-positive handling, and whether Gemini or a separate AI Agent framework is used remain implementation details for the build phase — this section commits to the product requirement (context-aware moderation must exist), not the exact model/pipeline.
+
+## 30.9 Product Design Principle
 
 BINJ should encourage:
 
@@ -1106,6 +1120,21 @@ It should not encourage:
 > **"Find people for sexual or romantic interactions."**
 
 Social discovery, matching, events, chat, and forums should therefore remain anchored to the movie experience.
+
+---
+
+# 31. Monetization (Future)
+
+BINJ's MVP and Pachamama submission are not monetization-focused — this section records a future direction, not a build requirement for the prototype.
+
+**Decision — Google Ads integration is a candidate future monetization mechanism.** Consistent with BINJ's Google-first technology mandate (§19), Google Ads (e.g. AdSense/Ad Manager) is the natural first candidate over a non-Google ad network, if/when BINJ pursues monetization.
+
+**Constraint — advertising is a separate layer, not woven into the core product:**
+- Must not compromise user privacy — no ad-driven data sharing beyond what BINJ's own privacy model (§8, §30.7) already allows.
+- Must not compromise user safety — ad content is still subject to §30's moderation/safety standards.
+- Must not compromise the core movie/social experience — the product BINJ demonstrates for Pachamama (§3, §23) should not be shaped around ad placement.
+
+Out of scope for the prototype (see §22 P2) — recorded here so it isn't lost, not because it's scheduled.
 
 ---
 
