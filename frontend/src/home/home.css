@@ -1,0 +1,357 @@
+.home {
+  background: #0e0d10;
+  color: #f3f1ed;
+  min-height: 100vh;
+  font-family: 'Manrope', sans-serif;
+  padding-bottom: 80px;
+}
+
+.home-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #201e24;
+}
+
+.home .brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: #00c896;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.home .bell {
+  position: relative;
+  background: #17161a;
+  border: 1px solid #201e24;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #f3f1ed;
+}
+
+.home .badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #00c896;
+  color: #0e0d10;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 50%;
+  min-width: 16px;
+  padding: 1px;
+  text-align: center;
+}
+
+.home .avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 200, 150, 0.16);
+  border: 1px solid rgba(0, 200, 150, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #00c896;
+}
+
+.greeting-hero {
+  margin: 16px 20px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid #232028;
+  background: linear-gradient(120deg, #1b1720 0%, #100e12 60%, #0a090b 100%);
+}
+
+.greeting-hero blockquote {
+  margin: 0 0 14px;
+  font-family: 'Bodoni Moda', serif;
+  font-size: 18px;
+  color: #fff;
+  line-height: 1.4;
+}
+
+.greeting-hero cite {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #8b8794;
+  font-style: normal;
+}
+
+.greeting-hero .welcome-back {
+  color: #00c896;
+  font-weight: 700;
+  font-size: 13px;
+  margin: 0;
+}
+
+.home-section {
+  margin: 24px 0;
+  padding: 0 20px;
+}
+
+.home-section h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.card-row {
+  list-style: none;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 0 0 4px;
+  margin: 0;
+}
+
+.movie-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 128px;
+}
+
+.movie-card .match-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(14, 13, 16, 0.7);
+  border: 1px solid rgba(0, 200, 150, 0.5);
+  color: #00c896;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.quick-add-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(14, 13, 16, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f3f1ed;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.quick-add-popover {
+  position: absolute;
+  top: 34px;
+  right: 6px;
+  z-index: 2;
+  background: #1a1820;
+  border: 1px solid #2a2730;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+.quick-add-popover button {
+  background: none;
+  border: none;
+  color: #f3f1ed;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 9px 12px;
+  text-align: left;
+}
+
+.quick-add-popover button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.movie-card .movie-title,
+.activity-card .movie-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-top: 96px;
+}
+
+.activity-card .movie-title {
+  margin-top: 4px;
+}
+
+.movie-card .movie-meta,
+.activity-card .movie-meta {
+  font-size: 10.5px;
+  color: #8b8794;
+  margin-top: 2px;
+}
+
+.movie-card .movie-rating {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #f3f1ed;
+  margin-top: 2px;
+}
+
+.added-badge {
+  font-size: 10px;
+  color: #00c896;
+  margin-top: 2px;
+}
+
+.person-card {
+  flex: 0 0 auto;
+  width: 118px;
+  padding: 16px 12px;
+  border-radius: 14px;
+  background: #161319;
+  border: 1px solid #232028;
+  text-align: center;
+}
+
+.person-card .avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(124, 140, 166, 0.14);
+  border: 1px solid rgba(124, 140, 166, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #9babc4;
+  margin: 0 auto;
+}
+
+.person-card .person-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.person-card .match-score {
+  font-size: 10.5px;
+  color: #00c896;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.person-card button {
+  margin-top: 10px;
+  width: 100%;
+  padding: 6px;
+  border-radius: 9px;
+  background: transparent;
+  border: 1px solid #00c896;
+  color: #00c896;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.event-card {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #161319;
+  border: 1px solid #232028;
+}
+
+.mode-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 200, 150, 0.14);
+  color: #00c896;
+  width: 100%;
+}
+
+.event-title {
+  font-size: 13px;
+  font-weight: 700;
+  flex: 1 1 100%;
+}
+
+.event-meta {
+  font-size: 10.5px;
+  color: #8b8794;
+}
+
+.event-card button {
+  margin-left: auto;
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: #00c896;
+  border: none;
+  color: #0e0d10;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.event-card button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.activity-card {
+  flex: 0 0 auto;
+  width: 132px;
+}
+
+.activity-card .activity-who {
+  font-size: 10.5px;
+  color: #c9c5d1;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 8px;
+  background: #0e0d10;
+  border-top: 1px solid #201e24;
+}
+
+.bottom-nav .nav-item {
+  background: none;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b8794;
+}
+
+.bottom-nav .nav-item.active {
+  color: #00c896;
+  font-weight: 700;
+}
+
+.bottom-nav .nav-item.disabled {
+  opacity: 0.4;
+}

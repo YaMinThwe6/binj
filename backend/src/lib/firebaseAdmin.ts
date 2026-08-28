@@ -1,9 +1,11 @@
 import { initializeApp, cert, getApps, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getAuth, type Auth } from "firebase-admin/auth";
 import { env, firebaseConfigured } from "./env.js";
 
 let app: App | null = null;
 let db: Firestore | null = null;
+let auth: Auth | null = null;
 
 if (firebaseConfigured) {
   app = getApps()[0] ?? initializeApp({
@@ -11,6 +13,7 @@ if (firebaseConfigured) {
     projectId: env.FIREBASE_PROJECT_ID
   });
   db = getFirestore(app);
+  auth = getAuth(app);
 } else {
   console.warn(
     "[firebaseAdmin] FIREBASE_PROJECT_ID / GOOGLE_APPLICATION_CREDENTIALS not set — " +
@@ -18,5 +21,5 @@ if (firebaseConfigured) {
   );
 }
 
-export { db };
+export { db, auth };
 export const isFirebaseConfigured = () => firebaseConfigured;

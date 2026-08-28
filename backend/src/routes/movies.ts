@@ -17,17 +17,37 @@ moviesRouter.get("/movies/:movieId", async (req, res) => {
     }
 
     const movie: TmdbMovie = await fetchMovieDetails(movieId);
+    const { credits, ...movieDoc } = movie;
 
     if (db) {
       await db.collection("movies").doc(movieId).set({
-        ...movie,
+        ...movieDoc,
         binjRating: { sum: 0, count: 0 },
         streamingLastFetched: new Date(),
         lastFetched: new Date()
       });
+
+      // Upsert people/{personId} for everyone credited on this movie — lazy
+      // "create on first need" ingestion, same as the movie itself (schema.md §1).
+      const batch = db.batch();
+      for (const person of credits) {
+        const ref = db.collection("people").doc(person.personId);
+        batch.set(
+          ref,
+          {
+            name: person.name,
+            photo: person.photo,
+            knownForDepartment: person.knownForDepartment,
+            popularity: person.popularity,
+            lastFetched: new Date()
+          },
+          { merge: true }
+        );
+      }
+      if (credits.length > 0) await batch.commit();
     }
 
-    return res.json(movie);
+    return res.json(movieDoc);
   } catch (err) {
     console.error(`[GET /movies/${movieId}]`, err);
     return res.status(502).json({

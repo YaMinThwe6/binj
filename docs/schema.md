@@ -14,14 +14,33 @@ Translates [data-model.md](data-model.md)'s entities into exact Firestore collec
 ```
 users/{uid}
   displayName: string
+  username: string | null                // set during onboarding §13 step 3; null until then. Lowercase, reserved via usernames/{username} below
   email: string
+  photoURL: string | null                // from the OAuth provider at signup (§13); user-uploaded avatar overrides it later
   createdAt: timestamp
   listVisible: boolean
   followRequiresApproval: boolean
   status: "active" | "restricted" | "suspended"
   statusExpiresAt: timestamp | null      // only set for temporary restrict/suspend
   notificationPrefs: { emailEnabled: boolean }
+  themePreference: "dark" | "light" | "system"   // default "dark"
+  accentTheme: "emerald" | "cyan" | "purple" | "pink" | "amber" | "red"   // default "emerald" — CTA + BINJ rating color; TMDB rating stays fixed neutral white
   favoriteGenres: array<string> | null   // optional onboarding step, §13
+  preferredLanguages: array<string> | null   // optional onboarding step, §13 — ISO 639-1 codes (e.g. ["en","ta","ko"]), region/language of cinema watched, not dubbing
+  onboardingComplete: boolean             // default false — set true once the onboarding wizard finishes or is skipped past its last step, §13. Distinct from any single step's optionality: a user can skip every optional step and still be "done" with onboarding
+```
+
+```
+usernames/{username}                     // doc ID = the username itself, lowercase — deterministic, structural uniqueness (this doc's mere existence IS the reservation, same ID-strategy convention as §20/§22)
+  uid: string                            // who holds it
+```
+
+```
+authCodes/{email}                        // doc ID = email — deterministic, one active code per email (§13 Email+OTP branch)
+  codeHash: string                       // sha256 of the 6-digit code; never store the raw code
+  expiresAt: timestamp                   // short-lived, ~10 minutes
+  attempts: number                       // failed-verify counter; locks out after a small cap to blunt brute-forcing a 6-digit space
+  createdAt: timestamp
 ```
 
 ```
@@ -30,17 +49,31 @@ movies/{movieId}                         // doc ID = TMDB id, as string
   year: number
   runtime: number | null
   genres: array<string>
+  originalLanguage: string               // TMDB original_language, ISO 639-1 (e.g. "en", "ta", "ko") — onboarding §13's language-preference step and Home's watched-candidate filtering key off this
   synopsis: string | null
   poster: string | null                  // TMDB image path
-  cast: array<{ name: string, character: string }>
-  crew: array<{ name: string, role: string }>
+  cast: array<{ personId: string, name: string, character: string, photo: string | null }>
+  crew: array<{ personId: string, name: string, role: string, photo: string | null }>
   isAdult: boolean
   voteAverage: number                    // TMDB rating
+  voteCount: number                      // TMDB vote count, shown alongside the rating for credibility
+  trailerKey: string | null              // YouTube video id (official trailer, YouTube-hosted, preferred)
   binjRating: { sum: number, count: number }
+  likeCount: number                      // maintained the same way as binjRating.count, no averaging needed
   streamingProviders: array<{ name: string, type: "subscription"|"rent"|"buy", logo: string }>
   streamingLastFetched: timestamp | null
   lastFetched: timestamp | null          // full-detail fetch marker, §2
 ```
+
+```
+people/{personId}                        // doc ID = TMDB person id, as string — same on-demand ingestion pattern as movies (§2)
+  name: string
+  photo: string | null                   // TMDB profile_path
+  knownForDepartment: string | null       // TMDB known_for_department, e.g. "Acting", "Directing"
+  popularity: number                     // TMDB popularity — used to rank onboarding's celebrity suggestions
+  lastFetched: timestamp
+```
+Upserted lazily whenever a movie carrying them in its cast/crew gets ingested (§2's ingestion path) — not a separate fetch trigger. A cheap `set({..., merge:true})` per credited person, same "create on first need" shape as everything else in §2/§13.
 
 ---
 
@@ -55,6 +88,11 @@ users/{uid}/watchlist/{movieId}          // doc ID = movieId
 users/{uid}/watched/{movieId}            // doc ID = movieId
   watchedAt: timestamp | null
   visibility: "public" | "private"
+```
+
+```
+users/{uid}/likes/{movieId}              // doc ID = movieId — existence = liked, no fields needed beyond createdAt
+  createdAt: timestamp
 ```
 
 ```
@@ -94,6 +132,18 @@ users/{uid}/muted/{mutedUid}
   createdAt: timestamp
 
 users/{uid}/tasteMatches/{matchedUid}    // batch-written, §5b
+
+activity/{activityId}                    // auto-ID, top-level (not a subcollection — same reasoning as
+  uid: string                            // events/reports: needs an "in" query across many users' entries,
+  type: "watched" | "watchlist_added"    // which a collection-group query can't express without a denormalized
+  movieId: string                        // uid field anyway). Written by watchlist/watched PUT (userMovies.ts),
+  createdAt: timestamp                   // skipped for a watched entry marked visibility:"private" (§5a's
+                                          // per-entry override applies here too). Read by GET /home/activity
+                                          // (api-contracts.md §7b), fanned out from the caller's own `following`
+                                          // list — "rated"/"reviewed" types join once Reviews (§20) exists.
+
+users/{uid}/followedCelebrities/{personId}   // doc ID = personId — following a person (§13's onboarding suggestion step, ahead of the full celebrity-page feature)
+  followedAt: timestamp
   score: number
   computedAt: timestamp
 ```
@@ -197,8 +247,11 @@ Firestore auto-indexes every single field; composite indexes are only needed whe
 | Collection | Index | Powers |
 |---|---|---|
 | `movies` | `genres` (array-contains-any) + `voteAverage` (desc) | §6 content-based recommendations |
+| `movies` | `originalLanguage` (asc, `in`) + `voteAverage` (desc) | §13 onboarding's Watched-step candidates, language-only branch |
 | `events` | `visibility` (asc) + `geohash` (asc) | §9 nearby-events range query, filtered to public |
-| `events` | `visibility` (asc) + `datetime` (asc) | Public event browse/upcoming list (implied by §7, not yet an explicit flow — flagging since the schema wants it either way) |
+| `events` | `visibility` (asc) + `datetime` (asc) | `GET /events/upcoming` (api-contracts.md §8) — Home's "Upcoming watch events" |
+| `events` | `movieId` (asc) + `visibility` (asc) + `datetime` (asc) | "Watch parties for this movie" — the movie detail screen's events entry point, replacing the old per-movie room concept (§16). Not yet queried (movie detail page isn't built) but declared now for when it is |
+| `activity` | `uid` (`in`) + `createdAt` (desc) | `GET /home/activity` (api-contracts.md §7b) — "Friends are watching", fanned out across the caller's `following` list |
 | `reports` | `status` (asc) + `createdAt` (desc) | §14b moderator queue |
 | `users/{uid}/notifications` | `read` (asc) + `createdAt` (desc) | §17 in-app feed, unread-first |
 

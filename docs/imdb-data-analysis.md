@@ -1,6 +1,6 @@
 # IMDb Data Analysis (Milestone 1)
 
-Analysis of the IMDb dataset available via `bigquery-public-data.imdb`, based on `data/imdb_schema.json` and the sample JSON pulls in `data/`. See [README.md](../README.md) for the full BINJ feature list and [CLAUDE.md](../CLAUDE.md) for the project's data strategy.
+Analysis of the IMDb dataset available via `bigquery-public-data.imdb`, based on `data/imdb_schema.json` and the sample JSON pulls in `data/`. See [README.md](../README.md) for the full BINJ feature list and tech stack, and [docs/hld.md](hld.md) for how this IMDb/BigQuery foundation relates to BINJ's own Firestore-backed application data.
 
 **Caveat on method:** this analysis was done from small sample files (10–50 rows per table), not live BigQuery queries — no `bq`/`gcloud` access was available. Structural findings (which columns exist, what a populated row looks like) are reliable. Null-rate/coverage claims are *observations from samples only* and are flagged as such below; they should be confirmed with real aggregate queries before being treated as fact. Suggested queries are included per table so this can be closed out directly in BigQuery.
 
@@ -51,7 +51,7 @@ If these turn out to be genuinely sparse dataset-wide (not just sample bias), fa
 | Genre selection | Yes | `title_basics.genres` (comma-separated, needs parsing) |
 | Language / Region selection | Column exists, coverage unverified | `title_akas.language`, `.region` — see null-rate caveat above |
 | Cast & crew, character names | Yes | `title_principals` (category, characters), `title_crew` (directors; writers sparse in sample), `name_basics` (person details) |
-| Likes, Reviews, Watched list, Watchlist | No — by design | Entirely BINJ-generated, lives in Firestore per [CLAUDE.md](../CLAUDE.md) Data strategy |
+| Likes, Reviews, Watched list, Watchlist | No — by design | Entirely BINJ-generated, lives in Firestore — see [docs/hld.md](hld.md)'s data strategy |
 | Personalized recommendations (content-based) | Partial | Genre/cast/crew/rating signals from `title_basics`/`title_principals`/`title_ratings`; `reviews.review_embedded` vectors usable for content-similarity, but not tied to BINJ users |
 | Streaming Availability | **No** | No table in this schema has platform/provider data — see §3 |
 | User Profiles, Privacy prefs | No — by design | Firestore |

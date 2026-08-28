@@ -102,6 +102,8 @@ Backend deletes users/{A}/following/{B} and users/{B}/followers/{A}
 
 Simple mirror of Follow, no new decisions needed. §5a's "people who watched" query reads the *current* following list live, so it naturally stops including B the moment the relationship is deleted — no separate cleanup. Re-following later goes through the normal Follow flow again, including approval if B has that setting on.
 
+**Implementation note (added once this was actually built):** modeled as `PUT`/`DELETE /users/:uid/follow`, not `POST` — matches the idempotent "set this relationship" shape every other write endpoint in this API already uses (watchlist, watched, followedCelebrities). Both branches are idempotent by construction: re-following someone already followed, or re-requesting an already-pending follow, is a no-op success rather than a duplicate write or a duplicate notification. Block/Mute (§19) aren't built yet — this covers Follow/Unfollow/approve/deny only, live in `backend/src/routes/follow.ts`.
+
 ---
 
 ## 5. Flow: Social Discovery
@@ -150,6 +152,8 @@ Write "top N similar users" back into Firestore, per user
 
 **Decision (confirmed with PM):** similarity is based on **overlap of watched movies + shared genres**.
 
+**Implementation note (added once this was actually built):** the BigQuery hop is a scale optimization — at real BINJ scale (comparing many users pairwise) Firestore genuinely can't do that cheaply, which is why the design routes through BigQuery. But with a handful of test users during early development, that comparison is trivial directly against Firestore, and standing up actual Cloud Scheduler + a BigQuery export pipeline for zero practical benefit at this volume isn't worth the setup cost yet. `backend/scripts/computeTasteMatches.ts` implements the exact same algorithm (watched-movie overlap + shared genres) directly against Firestore, runnable on demand for now; the read side (`GET /users/me/tasteMatches` below) is unaffected either way since it only ever reads the precomputed `tasteMatches` subcollection, regardless of what wrote it. Swapping in the real cron + BigQuery pipeline once there's enough users to matter is an infrastructure change, not an algorithm or API change.
+
 ---
 
 ## 6. Flow: Recommendations (content-based)
@@ -178,6 +182,10 @@ Return top N → Frontend
 **Decision:** start with **live, request-time computation** for the prototype — no new component, just a Firestore query plus backend filtering logic. Computed fresh each time (no caching yet; fine at prototype scale).
 
 **Decision — cold start:** users with no watch/rating history get a trending/popular fallback rather than an empty screen. Not an edge case to handle later — every new user hits this branch on first use, so it's part of the flow from day one.
+
+**Implementation note (added once this was actually built):** "highly-rated/watched movies" above assumed Reviews (§20) would exist by the time this shipped; they don't yet, so the genre-preference signal is derived from watched-history frequency alone for now, with the onboarding `favoriteGenres` (§13) used as a secondary signal only when there's no watch history at all — trending is the final fallback when neither exists. Once Reviews ships, folding rating weight into the genre-frequency count is the natural upgrade, not a redesign. Each returned item also carries a `matchScore` (0-100, Home's "% match" badge) — a heuristic (70% preferred-genre coverage, 30% the movie's own rating), `null` for the trending fallback since there's no preference to score against; see api-contracts.md §6.
+
+**Implementation note — Home's greeting + activity feed (mockup-driven, not previously a numbered flow here):** the Home screen's quote hero (§13's "Watched → first Home greeting") and its "Friends are watching" section are real endpoints, `GET /home/greeting` and `GET /home/activity` — see api-contracts.md §7b for the request/response shapes and schema.md for the new `activity` collection. The greeting prefers a quote from a small curated set (`backend/src/data/movieQuotes.ts`, tagged by real TMDB movie id) when it matches something the caller watched, falling back to a random pick from the same set otherwise. The activity feed reuses §5a's exact fan-out shape (bounded by the caller's own `following` list, never global) reading a new top-level `activity` collection that `watchlist`/`watched` writes append to.
 
 **Noted for later (per your instruction):** switch to a **precomputed/batch approach**, same shape as §5b, once the algorithm needs to be more sophisticated — in particular, the `review_embedded` vectors surfaced in [docs/imdb-data-analysis.md](imdb-data-analysis.md) could enable real semantic "more like this" similarity, but that needs vector-similarity capability Firestore doesn't have natively, so it's a deliberate future upgrade, not part of the MVP.
 
@@ -234,6 +242,8 @@ Return status → Frontend
 ```
 
 Host approving/denying a pending request reuses the same rule from §3: the backend must verify the caller is actually the event's `hostId` before letting them approve anyone — the "never trust the frontend, re-check ownership server-side" principle, applied again rather than reinvented.
+
+**Implementation note (added once this was actually built):** `participantCount` is maintained as a counter field on the event doc (transactionally incremented/decremented alongside each `participants` write), the same pattern already used for `movies.likeCount` — avoids an N-doc read on every join/capacity check. Every event also gets a `rooms/{roomId}` doc created alongside it (schema.md §4) so §16's chat feature has something real to attach to later, even though the chat UI itself isn't built yet. Not yet implemented: joinCode-based lookup for private events (join currently needs the eventId directly), `GET /events/nearby` (§9), and edit/delete (§21) — `backend/src/routes/events.ts` covers create, the public upcoming list, and the full join/approve/deny cycle.
 
 ---
 
@@ -321,6 +331,7 @@ Return matching events, sorted by distance
 - **Switch Recommendations (§6) to a precomputed/embedding-based approach** — noted for later, not needed for the prototype.
 - **Gemini flows** — not yet traced. (Google Maps is now partially traced — geocoding and map rendering per §9 — but no Gemini-powered feature has been walked through yet.)
 - **Event notifications** (e.g. host notified of a new join request) — surfaced in §7, not yet designed.
+- **Passkey (WebAuthn) sign-in** — future addition alongside OAuth (§13). Firebase Auth has no native passkey provider yet; adding this later means either a third-party Firebase Extension or a custom WebAuthn ceremony + Admin SDK custom-token minting. Not designed in detail — revisit once core product is stable.
 - **Anonymous reviews/ratings — decided.** Opt-in **per review/rating** (a per-submission user choice, not a global account-wide setting). When chosen: the author's display name is hidden **consistently on every surface where that specific review/rating renders** (movie page, search, even the poster's own profile reviews list) — not selectively shown in one place and revealed in another. The backend still stores the real `authorId` for moderation/repeat-offender detection (PRD §30's enforcement ladder still works). The rating still contributes normally to the movie's aggregate BINJ score — anonymity hides *who* posted it, not the rating itself. Scoped deliberately to **not** reach into §5a's "people who watched this movie" — that's governed by the separate watched-list privacy settings, since "I watched this" and "here's my anonymous opinion" are different disclosures; a user wanting both hidden uses both mechanisms (they're independent, composable). Not yet traced as its own flow — the "submit rating/review" flow itself (of which anonymity is now one property) is still a candidate for a future walkthrough session.
 
 ---
@@ -341,26 +352,54 @@ New questions get added here as they come up.
 *Numbered last because it was traced last in this conversation — but chronologically, this happens before every other flow above. Every "Backend verifies Firebase Auth token" step throughout this document assumes onboarding already happened.*
 
 ```
-User signs up (email/password, or Google/social sign-in)
+User signs up — Google OAuth, Microsoft OAuth, or Email + OTP (passwordless — no email/password option)
         ↓
-Frontend ↔ Firebase Authentication — directly, not through our backend
+Google/Microsoft branch:
+  Frontend ↔ Firebase Authentication directly, not through our backend
         ↓
-Firebase Auth creates the identity, returns an ID token to the frontend
+  Firebase Auth creates the identity, returns an ID token to the frontend
+        ↓
+Email + OTP branch (for users without a Google/Microsoft account):
+  Frontend → Backend: { email } → backend generates a 6-digit code, stores
+    { codeHash, expiresAt } keyed by email, sends it via the same "Trigger
+    Email" pattern as §17's notification emails
+        ↓
+  User enters the code → Frontend → Backend verifies codeHash + not expired
+        ↓
+  Backend calls Admin SDK: creates/looks up the Firebase Auth user for that
+    email, mints a custom token via createCustomToken(), returns it
+        ↓
+  Frontend signs in to Firebase Auth using the custom token → same ID token
+    result as the OAuth branch, converging back into the flow below
         ↓
 Frontend → Backend (first authenticated request, carrying the ID token)
         ↓
 Backend verifies the token, checks: does users/{uid} already exist in Firestore?
   ├── YES → existing user, this is just a normal login — proceed
   └── NO  → first time → backend creates users/{uid}
-              { displayName, email, createdAt, privacy defaults: listVisible=true, followRequiresApproval=false }
-              → return "new user" flag
+              { displayName, username: null, email, createdAt, onboardingComplete: false,
+                privacy defaults: listVisible=true, followRequiresApproval=false }
+              → return isNewUser: true (false on every subsequent call)
         ↓
-If new user → frontend walks through optional onboarding (e.g. pick a few favorite genres)
+Frontend shows onboarding whenever isNewUser OR !onboardingComplete (catches both
+"just signed up" and "signed up before, closed the app mid-wizard") — walks through:
+    Username (checked live against GET /users/username-available; not optional,
+      no Skip) → Favorite genres → Preferred languages → Movies watched (candidates
+      filtered by the genres/languages just chosen) → Celebrities to follow
+      (suggested from cast/crew of the movies just marked watched) → PATCH
+      /users/me { onboardingComplete: true } → done
 ```
 
-**Decision — Firebase Auth is frontend-safe, same pattern as Google Maps (§9).** The frontend SDK talks to Firebase Auth directly for sign-up/login — collecting passwords, handling social-login handshakes — none of that touches our backend. The backend's only job is verifying the resulting ID token on every subsequent request, consistent with the existing "never trust the frontend" principle (§10): verification still happens server-side every time, credential *collection* just isn't our backend's responsibility.
+**Decision — passwordless, three sign-in paths: Google, Microsoft, Email+OTP; passkey still deferred.** BINJ never collects or stores a password. Google and Microsoft OAuth both use Firebase Auth's built-in providers (Microsoft via its OIDC/Azure AD provider) — zero extra backend work, same as the original Google-only decision. **Email + OTP is a genuine new integration, not a config toggle** — Firebase Auth's own passwordless option is "email link" (click a link in your inbox), not a typed numeric code, so a typed-OTP flow needs custom backend logic: generate the code, store a hash + expiry (not the raw code), email it via the existing Trigger-Email pattern (§17), verify server-side, then mint a Firebase custom token via the Admin SDK to hand the client a normal Firebase session. Still genuinely passwordless — no password is ever collected or stored, only a short-lived one-time code — so this doesn't reopen the passwordless decision, it just adds a third path to it. Apple Sign-In was considered and explicitly deferred in favor of Microsoft. Passkeys (WebAuthn) remain deferred — **Firebase Auth has no native passkey provider** as of mid-2026, so adding one means either a third-party Firebase Extension layering the WebAuthn ceremony on top, or a fully custom implementation (run the WebAuthn ceremony ourselves, verify it, mint a custom token the same way the OTP path does). Parked as P2 (§11).
+
+**Decision — Firebase Auth is frontend-safe, same pattern as Google Maps (§9).** The frontend SDK talks to Firebase Auth directly for sign-up/login — handling the OAuth handshake — none of that touches our backend. The backend's only job is verifying the resulting ID token on every subsequent request, consistent with the existing "never trust the frontend" principle (§10): verification still happens server-side every time, credential *collection* just isn't our backend's responsibility.
 
 **Decision — profile creation reuses the exact lazy-creation pattern from §2.** Rather than a separate Cloud Function triggered on Auth sign-up (a new component), the `users/{uid}` profile document gets created on the backend's first authenticated request after signup — same "create on first need" shape as movie ingestion in §2, just applied to users instead of movies. No new infrastructure needed.
+
+**Decision — revised optional-onboarding sequence (2026-08-27), replacing an earlier draft that ended on a Watchlist step.** The Watchlist step is dropped entirely — watchlist stays a real feature (§3), just not something onboarding collects; a brand-new user with an empty watchlist isn't a problem worth an onboarding step to solve, unlike watch *history*, which §6's recommendations genuinely need. In its place: a **preferred-languages** step (which regional/language cinema the user watches — Tamil, Korean, English, etc. — not a dubbing preference; keyed to TMDB's `original_language` per movie, §2, so it needs no BINJ-owned language taxonomy) and a **celebrities-to-follow** step, both chained off the same signal as the existing genres/watched steps:
+- **Genres → Languages → Watched:** the Watched step's candidate movie grid is filtered by the genres and languages just chosen (`GET /onboarding/watched-candidates`), rather than showing the same generic trending grid to everyone — someone who just said "Tamil, not really into Telugu" should see Tamil titles to mark as watched, not a wall of Hollywood blockbusters.
+- **Watched → Celebrities to follow:** once the user has marked some real movies watched, their cast/crew become suggested celebrities to follow (`GET /onboarding/celebrity-suggestions`) — a lighter-weight "follow" relationship (schema.md's `followedCelebrities`) than the full celebrity-page feature (still deferred, not designed here), but the relationship itself is real and gives that later feature a running start.
+- **Watched → first Home greeting:** the movies marked watched during onboarding also seed which quote gets picked for the very first Home greeting (§6's sibling feature, the movie-dialogue greeting) — a brand-new user's first Home visit is already personalized rather than a random pick from the full quote pool.
 
 **Noted for later:** an optional "pick favorite genres" onboarding step directly improves §6's cold-start fallback — not required for MVP (trending fallback already covers zero-signal users), but cheap and worth doing if there's time, since it makes recommendations better from day one instead of only after enough activity accumulates.
 

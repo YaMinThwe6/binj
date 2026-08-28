@@ -134,6 +134,8 @@ Movie detail pages should provide rich information such as:
 
 TMDB is the confirmed source for this rich, user-facing information (synopsis, poster, backdrop, genres, cast, crew, release info). IMDb/BigQuery is not used for posters or synopsis — see §16.
 
+**Decision — trailer playback redirects to YouTube, no embedded player.** TMDB's `videos` endpoint returns a YouTube video id (`trailerKey`) for the official trailer; the play button opens `youtube.com/watch?v={trailerKey}` in a new tab (web) / the system browser or YouTube app if installed (mobile), rather than an embedded in-app player. Simpler, no video-player component to build or maintain, and YouTube's own links already resolve into its native app automatically where installed — no custom deep-link handling needed on BINJ's side. The user stays on BINJ underneath (new tab/external app), so returning to the movie page after watching is a simple back/switch, not a lost place in the flow.
+
 ---
 
 # 7. Streaming Availability
@@ -186,6 +188,10 @@ Users should also have privacy/security preferences.
 - Users can **block** another user (severs any existing follow relationship both directions; neither can see or interact with the other afterward) or **mute** one (lighter — hides their content from the muter's view only, no effect on the muted user).
 
 **Decision — account creation:** handled by Firebase Authentication directly (frontend talks to it, not the backend); a BINJ profile document is created automatically on first login after sign-up, with the privacy defaults above. Onboarding may optionally ask for a few favorite genres to bootstrap recommendations, but this isn't required — new users without any signal get a trending/popular fallback instead.
+
+**Decision — passwordless, three sign-in paths.** BINJ never collects or stores a password. Sign-in is: **Google OAuth, Microsoft OAuth** (both native Firebase Authentication providers, zero extra backend work), and **Email + OTP** for users without either account — a typed one-time code sent to their email, verified server-side, never a password. The OTP path is a real new integration (Firebase's own passwordless option is a click-through email link, not a typed code — see [docs/hld.md](hld.md) §13 for the custom generate/hash/verify/custom-token flow it needs), not just a config change. Apple Sign-In was considered and deferred in favor of Microsoft. Passkey (WebAuthn) sign-in remains deferred — Firebase Authentication has no native passkey provider as of mid-2026, so adding it means a real new integration (a third-party Firebase Extension or a custom WebAuthn implementation).
+
+**Decision — accent theme is user-selectable, locked down.** BINJ's UI uses a glowing accent color (dark base, one color carrying the CTA/rating/highlight moments) rather than a flat/muted palette — it should feel energetic, not corporate. **Six accent options ship at launch, chosen and finalized by the user: emerald (default), cyan, purple, pink, amber, red** — a per-user setting (`accentTheme`), same shape as `themePreference` above. Pink was deliberately lightened (`#FF7AC2`, not a deeper rose) after review found it too close to red at a glance — the two need to stay visually distinct as separate theme choices. **TMDB's rating is always a fixed neutral white/gray**, never themed — only the BINJ rating *number*, the primary CTA, and a handful of other explicitly-chosen elements (the "Watch Together" action, Write a review / Create a watch party / Join buttons, the Home nav highlight) carry the selected accent, so theming stays deliberate rather than spreading to every colored pixel on screen. **One deliberate exception: every star icon (BINJ's rating star, review-card stars) is a fixed gold (`#FFC107`), not themed** — ratings get the universal "gold star" convention users already recognize from every other rating surface (App Store, Play Store, Amazon, etc.), while the number next to it still carries BINJ's chosen brand color. This was an explicit call weighed against the earlier decision to avoid IMDb's specific brand color (`#F5C518`) — a small gold star icon is a near-universal UI convention that predates and outlives any one app's branding, unlike making gold BINJ's actual primary/dominant color the way it is IMDb's. See the design canvas referenced from this project for the full exploration history (flat colors, magenta, chartreuse, cyan-as-primary) and why each was rejected before landing here.
 
 ---
 
@@ -787,7 +793,7 @@ The prototype should prioritize a coherent end-to-end experience.
 - Watched list (with per-entry privacy override)
 - Watchlist
 - Recommendations (content-based, live, with cold-start trending fallback)
-- User profiles (onboarding via Firebase Auth + auto-created profile)
+- User profiles (onboarding via Firebase Auth + auto-created profile; passwordless OAuth/social sign-in only — §8)
 - People discovery (one-directional follow, precomputed taste-matching)
 - Watch events (dual private-access: join link + optional direct invite)
 - Streaming availability (TMDB `watch/providers`, hardcoded to India for the prototype)
@@ -811,6 +817,7 @@ The prototype should prioritize a coherent end-to-end experience.
 - "Nearby people" discovery
 - "Movies none of us have watched" filter (new idea, not yet designed in detail — see [docs/hld.md](hld.md) §11)
 - Monetization — Google Ads integration as a future revenue layer, must not compromise privacy/safety/core experience (§31)
+- Passkey (WebAuthn) sign-in, alongside OAuth — deferred since Firebase Authentication has no native passkey provider yet (§8, [docs/hld.md](hld.md) §11)
 
 P2 features must not delay the core BINJ prototype.
 

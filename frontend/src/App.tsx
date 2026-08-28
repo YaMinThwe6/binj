@@ -1,87 +1,71 @@
-import { useState } from 'react'
-import { searchMovies, getMovie, type MovieSummary, type MovieDetail } from './lib/api'
+import { useEffect, useState } from 'react'
+import { getMe, type Me } from './lib/api'
+import { useAuth } from './lib/AuthContext'
+import { Login } from './Login'
+import { OnboardingWizard } from './onboarding/OnboardingWizard'
+import { Home } from './home/Home'
+import { MovieSearch } from './MovieSearch'
 import './App.css'
 
 function App() {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<MovieSummary[]>([])
-  const [selected, setSelected] = useState<MovieDetail | null>(null)
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const { user, loading: authLoading, signOutUser } = useAuth()
+  const [me, setMe] = useState<Me | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [view, setView] = useState<'home' | 'search'>('home')
 
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    if (!query.trim()) return
-    setStatus('loading')
-    setSelected(null)
-    try {
-      const { items } = await searchMovies(query.trim())
-      setResults(items)
-      setStatus('idle')
-    } catch (err) {
-      setStatus('error')
-      setErrorMessage(err instanceof Error ? err.message : 'Search failed')
+  useEffect(() => {
+    if (!user) {
+      setMe(null)
+      return
     }
+    getMe()
+      .then(setMe)
+      .catch((err) => setErrorMessage(err instanceof Error ? err.message : 'Failed to load profile'))
+  }, [user])
+
+  if (authLoading) {
+    return (
+      <main className="app">
+        <p>Loading…</p>
+      </main>
+    )
   }
 
-  async function handleSelect(movieId: string) {
-    setStatus('loading')
-    try {
-      const movie = await getMovie(movieId)
-      setSelected(movie)
-      setStatus('idle')
-    } catch (err) {
-      setStatus('error')
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to load movie')
-    }
+  if (!user) {
+    return <Login />
   }
 
-  return (
-    <main className="app">
-      <h1>BINJ</h1>
+  if (me && (me.isNewUser || !me.onboardingComplete)) {
+    return (
+      <OnboardingWizard
+        initialDisplayName={me.displayName || user.displayName || ''}
+        email={me.email || user.email || ''}
+        onComplete={() => setMe({ ...me, onboardingComplete: true })}
+      />
+    )
+  }
 
-      <form onSubmit={handleSearch} className="search-form">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search for a movie…"
-          aria-label="Search for a movie"
-        />
-        <button type="submit">Search</button>
-      </form>
+  if (errorMessage && !me) {
+    return (
+      <main className="app">
+        <p role="alert">{errorMessage}</p>
+      </main>
+    )
+  }
 
-      {status === 'loading' && <p>Loading…</p>}
-      {status === 'error' && <p role="alert">{errorMessage}</p>}
+  if (!me) {
+    return (
+      <main className="app">
+        <p>Loading…</p>
+      </main>
+    )
+  }
 
-      {selected ? (
-        <article className="movie-detail">
-          <button type="button" onClick={() => setSelected(null)}>
-            ← Back to results
-          </button>
-          <h2>
-            {selected.title} {selected.year ? `(${selected.year})` : ''}
-          </h2>
-          <p>{selected.synopsis}</p>
-          <p>Genres: {selected.genres.join(', ')}</p>
-          <p>TMDB rating: {selected.voteAverage.toFixed(1)}</p>
-          {selected.cast.length > 0 && (
-            <p>Cast: {selected.cast.slice(0, 5).map((c) => c.name).join(', ')}</p>
-          )}
-        </article>
-      ) : (
-        <ul className="results">
-          {results.map((movie) => (
-            <li key={movie.movieId}>
-              <button type="button" onClick={() => handleSelect(movie.movieId)}>
-                {movie.title} {movie.year ? `(${movie.year})` : ''}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
-  )
+  if (view === 'search') {
+    return <MovieSearch onBack={() => setView('home')} />
+  }
+
+  return <Home me={me} onSignOut={() => void signOutUser()} onNavigateSearch={() => setView('search')} />
 }
 
 export default App
