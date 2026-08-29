@@ -152,3 +152,79 @@ describe("GET /onboarding/celebrity-suggestions", () => {
     expect(res.body.data.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
   });
 });
+
+describe("GET /movies/:movieId/watchedBy", () => {
+  it("401s without a token", async () => {
+    const app = createApp();
+    const res = await request(app).get("/movies/movie-1/watchedBy");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns an empty list when the caller follows no one", async () => {
+    const app = createApp();
+    const res = await request(app).get("/movies/movie-1/watchedBy").set("Authorization", "Bearer good");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("only includes followed users who watched the movie, with displayName and watchedAt", async () => {
+    const watchedAt = new Date("2026-01-05T10:00:00.000Z");
+    store.set("users/uid-1/following/uid-2", { createdAt: new Date() });
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    store.set("users/uid-2/watched/movie-1", { watchedAt, visibility: "public" });
+
+    const app = createApp();
+    const res = await request(app).get("/movies/movie-1/watchedBy").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([{ uid: "uid-2", displayName: "Rohan", watchedAt: watchedAt.toISOString() }]);
+  });
+
+  it("excludes a followed user who hasn't watched this movie", async () => {
+    store.set("users/uid-1/following/uid-2", { createdAt: new Date() });
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    // no watched/movie-1 doc for uid-2
+
+    const app = createApp();
+    const res = await request(app).get("/movies/movie-1/watchedBy").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("excludes a user who watched it but isn't followed by the caller", async () => {
+    store.set("users/uid-3", { displayName: "Stranger", listVisible: true });
+    store.set("users/uid-3/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    // uid-1 does not follow uid-3
+
+    const app = createApp();
+    const res = await request(app).get("/movies/movie-1/watchedBy").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("excludes a followed user whose list-level watched-list visibility is off", async () => {
+    store.set("users/uid-1/following/uid-2", { createdAt: new Date() });
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: false });
+    store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+
+    const app = createApp();
+    const res = await request(app).get("/movies/movie-1/watchedBy").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("excludes a followed user's entry marked private, even though their list is otherwise public", async () => {
+    store.set("users/uid-1/following/uid-2", { createdAt: new Date() });
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "private" });
+
+    const app = createApp();
+    const res = await request(app).get("/movies/movie-1/watchedBy").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+});

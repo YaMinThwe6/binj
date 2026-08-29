@@ -15,6 +15,7 @@ import {
   type MovieStatus,
   type Review
 } from '../services/movieApi'
+import { WatchedByFriends } from './WatchedByFriends'
 
 interface Props {
   movieId: string
@@ -175,6 +176,8 @@ export function MovieDetail({ movieId, onBack }: Props) {
           Like
         </button>
       </div>
+
+      <WatchedByFriends movieId={movieId} />
 
       {movie.streamingProviders.length > 0 && (
         <section>

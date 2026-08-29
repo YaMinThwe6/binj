@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../lib/api'
-export type { MovieSummary, MovieDetail, MovieStatus, Review, MyReview } from '@binj/shared-types'
-import type { MovieSummary, MovieDetail, MovieStatus, Review, MyReview } from '@binj/shared-types'
+export type { MovieSummary, MovieDetail, MovieStatus, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
+import type { MovieSummary, MovieDetail, MovieStatus, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
 
 export function searchMovies(query: string): Promise<{ items: MovieSummary[] }> {
   return apiFetch(`/search/movies?q=${encodeURIComponent(query)}`)
@@ -52,4 +52,8 @@ export function markWatched(movieId: string): Promise<void> {
 
 export function unmarkWatched(movieId: string): Promise<void> {
   return apiFetch(`/users/me/watched/${encodeURIComponent(movieId)}`, { method: 'DELETE', auth: true })
+}
+
+export function getMovieWatchedBy(movieId: string): Promise<{ items: WatchedByEntry[]; nextCursor: string | null }> {
+  return apiFetch(`/movies/${encodeURIComponent(movieId)}/watchedBy`, { auth: true })
 }

@@ -5,7 +5,8 @@ import {
   getTasteMatches,
   putFollowedCelebrity,
   deleteFollowedCelebrity,
-  getFollowedCelebrities
+  getFollowedCelebrities,
+  getMovieWatchedBy
 } from "../controllers/people.controller.js";
 
 export const peopleRouter = Router();
@@ -14,3 +15,4 @@ peopleRouter.get("/users/me/tasteMatches", requireAuth, asyncHandler(getTasteMat
 peopleRouter.put("/users/me/followedCelebrities/:personId", requireAuth, asyncHandler(putFollowedCelebrity));
 peopleRouter.delete("/users/me/followedCelebrities/:personId", requireAuth, asyncHandler(deleteFollowedCelebrity));
 peopleRouter.get("/users/me/followedCelebrities", requireAuth, asyncHandler(getFollowedCelebrities));
+peopleRouter.get("/movies/:movieId/watchedBy", requireAuth, asyncHandler(getMovieWatchedBy));
