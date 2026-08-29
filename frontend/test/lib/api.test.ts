@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
-vi.mock('./firebase', () => ({
+vi.mock('../../src/lib/firebase', () => ({
   auth: { currentUser: null },
   googleProvider: {}
 }))
 
-const { searchMovies, getMovie, getMe, updateMe } = await import('./api')
-const mockAuth = (await import('./firebase')).auth as unknown as { currentUser: { getIdToken: () => Promise<string> } | null }
+const { searchMovies, getMovie, getMe, updateMe } = await import('../../src/lib/api')
+const mockAuth = (await import('../../src/lib/firebase')).auth as unknown as { currentUser: { getIdToken: () => Promise<string> } | null }
 
 const originalFetch = globalThis.fetch
 

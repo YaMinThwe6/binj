@@ -5,9 +5,9 @@ const getCelebritySuggestions = vi.fn()
 const followCelebrity = vi.fn()
 const unfollowCelebrity = vi.fn()
 
-vi.mock('../lib/api', () => ({ getCelebritySuggestions, followCelebrity, unfollowCelebrity }))
+vi.mock('../../src/lib/api', () => ({ getCelebritySuggestions, followCelebrity, unfollowCelebrity }))
 
-const { CelebritiesStep } = await import('./CelebritiesStep')
+const { CelebritiesStep } = await import('../../src/onboarding/CelebritiesStep')
 
 const suggestions = [
   { personId: 'p1', name: 'Jane Doe', photo: null, appearsIn: 2 },

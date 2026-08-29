@@ -5,7 +5,7 @@ const signInWithGoogle = vi.fn()
 const signInWithMicrosoft = vi.fn()
 const signInWithToken = vi.fn()
 
-vi.mock('./lib/AuthContext', () => ({
+vi.mock('../src/lib/AuthContext', () => ({
   useAuth: () => ({
     user: null,
     loading: false,
@@ -16,7 +16,7 @@ vi.mock('./lib/AuthContext', () => ({
   })
 }))
 
-const { Login } = await import('./Login')
+const { Login } = await import('../src/Login')
 
 const originalFetch = globalThis.fetch
 

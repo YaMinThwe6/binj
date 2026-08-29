@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Greeting, ActivityItem } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 import { pickQuoteForMovieIds, pickRandomQuote } from "../data/movieQuotes.js";
@@ -26,11 +27,12 @@ homeRouter.get("/home/greeting", requireAuth, async (req, res) => {
     const matched = pickQuoteForMovieIds(watchedIds);
     const picked = matched ?? pickRandomQuote();
 
-    return res.json({
+    const greeting: Greeting = {
       quote: picked.quote,
       attribution: picked.attribution,
       source: matched ? "watched" : "random"
-    });
+    };
+    return res.json(greeting);
   } catch (err) {
     console.error(`[GET /home/greeting] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load greeting" } });
@@ -60,8 +62,8 @@ homeRouter.get("/home/activity", requireAuth, async (req, res) => {
       .limit(DEFAULT_ACTIVITY_LIMIT)
       .get();
 
-    const items = await Promise.all(
-      snap.docs.map(async (d) => {
+    const items: ActivityItem[] = await Promise.all(
+      snap.docs.map(async (d): Promise<ActivityItem> => {
         const data = d.data();
         const [userSnap, movieSnap] = await Promise.all([
           db!.collection("users").doc(data.uid).get(),

@@ -5,9 +5,9 @@ const getWatchedCandidates = vi.fn()
 const markWatched = vi.fn()
 const unmarkWatched = vi.fn()
 
-vi.mock('../lib/api', () => ({ getWatchedCandidates, markWatched, unmarkWatched }))
+vi.mock('../../src/lib/api', () => ({ getWatchedCandidates, markWatched, unmarkWatched }))
 
-const { WatchedStep } = await import('./WatchedStep')
+const { WatchedStep } = await import('../../src/onboarding/WatchedStep')
 
 const candidates = [
   { movieId: 'm1', title: 'Movie One', poster: null, year: 2020, genres: ['Drama'], voteAverage: 7 },

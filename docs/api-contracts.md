@@ -10,6 +10,7 @@ Endpoint-level request/response shapes for every flow in [hld.md](hld.md), built
 - **Errors:** a single envelope everywhere — `{ "error": { "code": string, "message": string } }` with a matching HTTP status (400 validation, 401 no/bad token, 403 authenticated but not permitted, 404 not found, 409 conflict). Not repeated per endpoint below.
 - **Pagination:** cursor-based (`?cursor=<opaque>&limit=<n>`), matching Firestore's own `startAfter` model rather than offset-based paging — response includes `nextCursor: string | null`.
 - **Timestamps:** ISO 8601 strings over the wire; stored as Firestore `timestamp` per schema.md.
+- **Types:** every response shape documented below has a matching TypeScript interface in `packages/shared-types` (`@binj/shared-types`, a pnpm workspace package) — both `backend/src/routes/*.ts` and `frontend/src/lib/api.ts` import from it rather than declaring their own copies, so the two sides can't silently drift apart.
 
 ---
 

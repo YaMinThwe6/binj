@@ -4,12 +4,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 const checkUsernameAvailable = vi.fn()
 const updateMe = vi.fn()
 
-vi.mock('../lib/api', () => ({
+vi.mock('../../src/lib/api', () => ({
   checkUsernameAvailable,
   updateMe
 }))
 
-const { UsernameStep } = await import('./UsernameStep')
+const { UsernameStep } = await import('../../src/onboarding/UsernameStep')
 
 afterEach(() => {
   checkUsernameAvailable.mockReset()

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
-vi.mock('./lib/AuthContext', () => ({
+vi.mock('../src/lib/AuthContext', () => ({
   useAuth: () => ({
     user: { uid: 'uid-1', displayName: 'Arjun', email: 'arjun@example.com' },
     loading: false,
@@ -10,12 +10,12 @@ vi.mock('./lib/AuthContext', () => ({
   })
 }))
 
-vi.mock('./lib/firebase', () => ({
+vi.mock('../src/lib/firebase', () => ({
   auth: { currentUser: { getIdToken: vi.fn().mockResolvedValue('fake-id-token') } },
   googleProvider: {}
 }))
 
-const { default: App } = await import('./App')
+const { default: App } = await import('../src/App')
 
 const originalFetch = globalThis.fetch
 

@@ -2,9 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 
 const getHomeActivity = vi.fn()
-vi.mock('../lib/api', () => ({ getHomeActivity }))
+vi.mock('../../src/lib/api', () => ({ getHomeActivity }))
 
-const { FriendsAreWatching } = await import('./FriendsAreWatching')
+const { FriendsAreWatching } = await import('../../src/home/FriendsAreWatching')
 
 afterEach(() => getHomeActivity.mockReset())
 

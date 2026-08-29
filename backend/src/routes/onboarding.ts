@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { MovieCandidate } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -45,7 +46,7 @@ onboardingRouter.get("/onboarding/watched-candidates", requireAuth, async (req, 
       candidates = await db.collection("movies").orderBy("voteAverage", "desc").limit(CANDIDATE_LIMIT).get();
     }
 
-    let items = candidates.docs.map((d) => {
+    let items: MovieCandidate[] = candidates.docs.map((d) => {
       const data = d.data();
       return {
         movieId: d.id,

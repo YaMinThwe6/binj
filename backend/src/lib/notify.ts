@@ -1,9 +1,7 @@
+import type { NotificationType } from "@binj/shared-types";
 import { db } from "./firebaseAdmin.js";
 
-// schema.md §5 users/{uid}/notifications/{notificationId}. Shared by every flow
-// that needs to tell a user something happened without them looking — currently
-// Follow requests (hld.md §4) and Event join requests/approvals (hld.md §7).
-export type NotificationType = "followRequest" | "followApproved" | "eventJoinRequest" | "eventJoinApproved";
+export type { NotificationType };
 
 export async function writeNotification(
   uid: string,

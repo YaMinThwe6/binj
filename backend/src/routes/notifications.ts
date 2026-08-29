@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { NotificationItem } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -34,7 +35,7 @@ notificationsRouter.get("/users/me/notifications", requireAuth, async (req, res)
     query = query.orderBy("createdAt", "desc").limit(limit);
 
     const snap = await query.get();
-    const items = snap.docs.map((d) => ({
+    const items: NotificationItem[] = snap.docs.map((d) => ({
       id: d.id,
       type: d.data().type,
       fromUserId: d.data().fromUserId ?? null,

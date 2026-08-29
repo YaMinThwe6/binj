@@ -4,9 +4,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 const getRecommendations = vi.fn()
 const markWatched = vi.fn()
 const addToWatchlist = vi.fn()
-vi.mock('../lib/api', () => ({ getRecommendations, markWatched, addToWatchlist }))
+vi.mock('../../src/lib/api', () => ({ getRecommendations, markWatched, addToWatchlist }))
 
-const { TopPicks } = await import('./TopPicks')
+const { TopPicks } = await import('../../src/home/TopPicks')
 
 const items = [
   { movieId: 'm1', title: 'Dune: Part Two', poster: null, year: 2024, genres: ['Sci-Fi'], voteAverage: 8.4, matchScore: 92 },

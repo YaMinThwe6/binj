@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { TasteMatch, CelebritySuggestion } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -21,7 +22,7 @@ peopleRouter.get("/users/me/tasteMatches", requireAuth, async (req, res) => {
       .get();
 
     const items = await Promise.all(
-      snap.docs.map(async (matchDoc) => {
+      snap.docs.map(async (matchDoc): Promise<TasteMatch> => {
         const [userSnap, followingSnap, requestSnap] = await Promise.all([
           db!.collection("users").doc(matchDoc.id).get(),
           db!.collection("users").doc(req.uid!).collection("following").doc(matchDoc.id).get(),
@@ -133,7 +134,7 @@ peopleRouter.get("/onboarding/celebrity-suggestions", requireAuth, async (req, r
     }
 
     const ranked = [...appearances.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
-    const items = ranked.map(([personId, appearsIn]) => ({
+    const items: CelebritySuggestion[] = ranked.map(([personId, appearsIn]) => ({
       personId,
       name: personInfo.get(personId)!.name,
       photo: personInfo.get(personId)!.photo,

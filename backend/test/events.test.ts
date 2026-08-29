@@ -185,17 +185,18 @@ describe("POST /events", () => {
     expect(store.has(`rooms/${stored.roomId}`)).toBe(true);
   });
 
-  it("generates a joinCode only for private events", async () => {
+  it("generates a joinCode only for private events, and returns it in the create response", async () => {
     const app = createApp();
     const publicRes = await authed(app, "post", "/events").send(validBody);
-    expect(publicRes.body).not.toHaveProperty("joinCode");
+    expect(publicRes.body.joinCode).toBeNull();
     const stored = store.get(`events/${publicRes.body.eventId}`) as { joinCode: string | null };
     expect(stored.joinCode).toBeNull();
 
     const privateRes = await authed(app, "post", "/events").send({ ...validBody, visibility: "private" });
+    expect(typeof privateRes.body.joinCode).toBe("string");
+    expect(privateRes.body.joinCode.length).toBeGreaterThan(0);
     const privateStored = store.get(`events/${privateRes.body.eventId}`) as { joinCode: string | null };
-    expect(typeof privateStored.joinCode).toBe("string");
-    expect(privateStored.joinCode!.length).toBeGreaterThan(0);
+    expect(privateStored.joinCode).toBe(privateRes.body.joinCode);
   });
 });
 

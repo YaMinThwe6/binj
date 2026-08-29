@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateUsernameSuggestions } from './usernameSuggestions'
+import { generateUsernameSuggestions } from '../../src/onboarding/usernameSuggestions'
 
 describe('generateUsernameSuggestions', () => {
   it('combines first/last name and the email local-part into candidates', () => {

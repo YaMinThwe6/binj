@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { RecommendationItem } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -7,16 +8,6 @@ export const recommendationsRouter = Router();
 const CANDIDATE_POOL = 30;
 const RESULT_LIMIT = 10;
 const MAX_GENRES = 10; // Firestore array-contains-any caps at 10 values
-
-interface MovieSummary {
-  movieId: string;
-  title: string;
-  poster: string | null;
-  year: number | null;
-  genres: string[];
-  voteAverage: number;
-  matchScore: number | null;
-}
 
 // Heuristic, not a learned model: 70% weight on how much of the caller's preferred
 // genres this movie covers, 30% weight on its own TMDB rating. Only meaningful when
@@ -31,7 +22,7 @@ function computeMatchScore(movieGenres: string[], voteAverage: number, preferred
   return Math.round(genreRatio * 70 + (voteAverage / 10) * 30);
 }
 
-function toSummary(id: string, data: FirebaseFirestore.DocumentData, preferredGenres: string[]): MovieSummary {
+function toSummary(id: string, data: FirebaseFirestore.DocumentData, preferredGenres: string[]): RecommendationItem {
   const genres = (data.genres as string[] | undefined) ?? [];
   const voteAverage = data.voteAverage ?? 0;
   return {

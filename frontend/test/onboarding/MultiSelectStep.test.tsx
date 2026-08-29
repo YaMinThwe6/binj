@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { MultiSelectStep } from './MultiSelectStep'
+import { MultiSelectStep } from '../../src/onboarding/MultiSelectStep'
 
 const options = [
   { value: 'a', label: 'Alpha' },

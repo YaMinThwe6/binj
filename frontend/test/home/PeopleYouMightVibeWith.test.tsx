@@ -4,9 +4,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 const getTasteMatches = vi.fn()
 const followUser = vi.fn()
 const unfollowUser = vi.fn()
-vi.mock('../lib/api', () => ({ getTasteMatches, followUser, unfollowUser }))
+vi.mock('../../src/lib/api', () => ({ getTasteMatches, followUser, unfollowUser }))
 
-const { PeopleYouMightVibeWith } = await import('./PeopleYouMightVibeWith')
+const { PeopleYouMightVibeWith } = await import('../../src/home/PeopleYouMightVibeWith')
 
 afterEach(() => {
   getTasteMatches.mockReset()

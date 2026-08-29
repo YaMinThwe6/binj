@@ -3,9 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const getUpcomingEvents = vi.fn()
 const joinEvent = vi.fn()
-vi.mock('../lib/api', () => ({ getUpcomingEvents, joinEvent }))
+vi.mock('../../src/lib/api', () => ({ getUpcomingEvents, joinEvent }))
 
-const { UpcomingEvents } = await import('./UpcomingEvents')
+const { UpcomingEvents } = await import('../../src/home/UpcomingEvents')
 
 const event = {
   eventId: 'evt-1',

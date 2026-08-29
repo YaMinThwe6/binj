@@ -13,6 +13,7 @@
     "compute-taste-matches": "tsx --env-file=.env scripts/computeTasteMatches.ts"
   },
   "dependencies": {
+    "@binj/shared-types": "workspace:*",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "firebase-admin": "^14.3.0",

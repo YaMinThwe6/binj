@@ -1,3 +1,4 @@
+import type { MovieSummary } from "@binj/shared-types";
 import { env } from "./env.js";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
@@ -120,9 +121,7 @@ export async function fetchMovieDetails(tmdbId: string): Promise<TmdbMovie> {
   };
 }
 
-export async function searchMovies(query: string): Promise<
-  { movieId: string; title: string; poster: string | null; year: number | null }[]
-> {
+export async function searchMovies(query: string): Promise<MovieSummary[]> {
   const data = await tmdbFetch(`/search/movie?query=${encodeURIComponent(query)}`);
   return (data.results ?? []).map((r: any) => ({
     movieId: String(r.id),

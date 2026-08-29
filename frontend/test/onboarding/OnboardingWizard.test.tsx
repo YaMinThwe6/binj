@@ -10,7 +10,7 @@ const getCelebritySuggestions = vi.fn()
 const followCelebrity = vi.fn()
 const unfollowCelebrity = vi.fn()
 
-vi.mock('../lib/api', () => ({
+vi.mock('../../src/lib/api', () => ({
   checkUsernameAvailable,
   updateMe,
   getWatchedCandidates,
@@ -21,7 +21,7 @@ vi.mock('../lib/api', () => ({
   unfollowCelebrity
 }))
 
-const { OnboardingWizard } = await import('./OnboardingWizard')
+const { OnboardingWizard } = await import('../../src/onboarding/OnboardingWizard')
 
 afterEach(() => {
   checkUsernameAvailable.mockReset()

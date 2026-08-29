@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { MovieDetail, MovieSummary } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { fetchMovieDetails, searchMovies, type TmdbMovie } from "../lib/tmdb.js";
 
@@ -12,7 +13,7 @@ moviesRouter.get("/movies/:movieId", async (req, res) => {
     if (db) {
       const snap = await db.collection("movies").doc(movieId).get();
       if (snap.exists) {
-        return res.json(snap.data());
+        return res.json(snap.data() as MovieDetail);
       }
     }
 
@@ -47,7 +48,7 @@ moviesRouter.get("/movies/:movieId", async (req, res) => {
       if (credits.length > 0) await batch.commit();
     }
 
-    return res.json(movieDoc);
+    return res.json(movieDoc satisfies MovieDetail);
   } catch (err) {
     console.error(`[GET /movies/${movieId}]`, err);
     return res.status(502).json({

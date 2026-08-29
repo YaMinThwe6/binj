@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildFirstGreeting } from './greeting'
-import type { MovieCandidate } from '../lib/api'
+import { buildFirstGreeting } from '../../src/onboarding/greeting'
+import type { MovieCandidate } from '../../src/lib/api'
 
 function movie(overrides: Partial<MovieCandidate>): MovieCandidate {
   return {

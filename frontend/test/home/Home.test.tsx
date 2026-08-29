@@ -8,7 +8,7 @@ const getTasteMatches = vi.fn()
 const getUpcomingEvents = vi.fn()
 const getHomeActivity = vi.fn()
 
-vi.mock('../lib/api', () => ({
+vi.mock('../../src/lib/api', () => ({
   getNotifications,
   getHomeGreeting,
   getRecommendations,
@@ -17,7 +17,7 @@ vi.mock('../lib/api', () => ({
   getHomeActivity
 }))
 
-const { Home } = await import('./Home')
+const { Home } = await import('../../src/home/Home')
 
 const me = {
   uid: 'uid-1',

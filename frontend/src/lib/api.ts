@@ -1,120 +1,38 @@
 import { auth } from './firebase'
+// Request/response shapes live in @binj/shared-types, the single source of
+// truth both frontend and backend import from (packages/shared-types) — see
+// [[feedback_monorepo_shared_packages_solid]]. Re-exported here so every
+// existing `import type { X } from '../lib/api'` across the app keeps working
+// unchanged; `Me` is this file's own name for the shared `UserProfile`.
+export type {
+  MovieSummary,
+  MovieDetail,
+  MovieCandidate,
+  CelebritySuggestion,
+  RecommendationItem,
+  TasteMatch,
+  UpcomingEvent,
+  ActivityItem,
+  Greeting,
+  NotificationItem
+} from '@binj/shared-types'
+export type { UserProfile as Me } from '@binj/shared-types'
+
+import type {
+  MovieSummary,
+  MovieDetail,
+  MovieCandidate,
+  CelebritySuggestion,
+  RecommendationItem,
+  TasteMatch,
+  UpcomingEvent,
+  ActivityItem,
+  Greeting,
+  NotificationItem,
+  UserProfile as Me
+} from '@binj/shared-types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:6501'
-
-export interface MovieSummary {
-  movieId: string
-  title: string
-  poster: string | null
-  year: number | null
-}
-
-export interface MovieDetail extends MovieSummary {
-  runtime: number | null
-  genres: string[]
-  synopsis: string | null
-  cast: { name: string; character: string; photo: string | null }[]
-  crew: { name: string; role: string; photo: string | null }[]
-  voteAverage: number
-  voteCount: number
-  trailerKey: string | null
-  streamingProviders: { name: string; type: string; logo: string }[]
-}
-
-export interface Me {
-  uid: string
-  displayName: string
-  username: string | null
-  email: string
-  photoURL: string | null
-  listVisible: boolean
-  followRequiresApproval: boolean
-  status: 'active' | 'restricted' | 'suspended'
-  favoriteGenres: string[] | null
-  preferredLanguages: string[] | null
-  onboardingComplete: boolean
-  notificationPrefs: { emailEnabled: boolean }
-  themePreference: 'dark' | 'light' | 'system'
-  accentTheme: 'emerald' | 'cyan' | 'purple' | 'pink' | 'amber' | 'red'
-  isNewUser: boolean
-}
-
-export interface MovieCandidate {
-  movieId: string
-  title: string
-  poster: string | null
-  year: number | null
-  genres: string[]
-  originalLanguage?: string | null
-  voteAverage: number
-}
-
-export interface CelebritySuggestion {
-  personId: string
-  name: string
-  photo: string | null
-  appearsIn: number
-}
-
-export interface RecommendationItem {
-  movieId: string
-  title: string
-  poster: string | null
-  year: number | null
-  genres: string[]
-  voteAverage: number
-  matchScore: number | null
-}
-
-export interface TasteMatch {
-  uid: string
-  displayName: string
-  score: number
-  relationship: 'following' | 'pending' | 'none'
-}
-
-export interface UpcomingEvent {
-  eventId: string
-  hostId: string
-  movieId: string
-  title: string | null
-  datetime: string | null
-  mode: 'online' | 'in-person'
-  location: { address: string; lat: number; lng: number } | null
-  visibility: 'public' | 'private'
-  participantLimit: number
-  participantCount: number
-  requiresApproval: boolean
-  movieTitle: string | null
-  moviePoster: string | null
-}
-
-export interface ActivityItem {
-  activityId: string
-  uid: string
-  displayName: string
-  type: 'watched' | 'watchlist_added'
-  movieId: string
-  movieTitle: string | null
-  moviePoster: string | null
-  createdAt: string | null
-}
-
-export interface Greeting {
-  quote: string
-  attribution: string
-  source: 'watched' | 'random'
-}
-
-export interface NotificationItem {
-  id: string
-  type: string
-  fromUserId: string | null
-  targetType: string | null
-  targetId: string | null
-  read: boolean
-  createdAt: string | null
-}
 
 interface ApiFetchOptions {
   method?: string

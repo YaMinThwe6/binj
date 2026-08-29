@@ -2,28 +2,28 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const updateMe = vi.fn()
-vi.mock('../lib/api', () => ({ updateMe }))
+vi.mock('../../src/lib/api', () => ({ updateMe }))
 
-const { LanguageStep } = await import('./LanguageStep')
+const { GenresStep } = await import('../../src/onboarding/GenresStep')
 
 afterEach(() => updateMe.mockReset())
 
-describe('LanguageStep', () => {
-  it('saves selected language codes (not display labels) and calls onDone with them', async () => {
+describe('GenresStep', () => {
+  it('saves selected genres and calls onDone with them', async () => {
     updateMe.mockResolvedValue({})
     const onDone = vi.fn()
-    render(<LanguageStep onDone={onDone} />)
+    render(<GenresStep onDone={onDone} />)
 
-    fireEvent.click(screen.getByText('Korean'))
+    fireEvent.click(screen.getByText('Comedy'))
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith(['ko']))
-    expect(updateMe).toHaveBeenCalledWith({ preferredLanguages: ['ko'] })
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith(['Comedy']))
+    expect(updateMe).toHaveBeenCalledWith({ favoriteGenres: ['Comedy'] })
   })
 
   it('skip calls onDone with an empty list and does not save', () => {
     const onDone = vi.fn()
-    render(<LanguageStep onDone={onDone} />)
+    render(<GenresStep onDone={onDone} />)
 
     fireEvent.click(screen.getByRole('button', { name: /skip/i }))
 

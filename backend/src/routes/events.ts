@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { randomBytes } from "node:crypto";
+import type { EventSummary, UpcomingEvent } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 import { writeNotification } from "../lib/notify.js";
@@ -18,7 +19,7 @@ function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null 
   return value instanceof Date ? value.toISOString() : value.toDate().toISOString();
 }
 
-function toEventSummary(id: string, data: FirebaseFirestore.DocumentData) {
+function toEventSummary(id: string, data: FirebaseFirestore.DocumentData): EventSummary {
   return {
     eventId: id,
     hostId: data.hostId,
@@ -28,6 +29,7 @@ function toEventSummary(id: string, data: FirebaseFirestore.DocumentData) {
     mode: data.mode,
     location: data.location ?? null,
     visibility: data.visibility,
+    joinCode: data.joinCode ?? null, // private events only — the host needs this back to share it (hld.md §7)
     participantLimit: data.participantLimit,
     participantCount: data.participantCount ?? 0,
     requiresApproval: data.requiresApproval,
@@ -124,7 +126,7 @@ eventsRouter.get("/events/upcoming", requireAuth, async (req, res) => {
       .limit(limit)
       .get();
 
-    const items = await Promise.all(
+    const items: UpcomingEvent[] = await Promise.all(
       snap.docs.map(async (d) => {
         const data = d.data();
         const movieSnap = await db!.collection("movies").doc(data.movieId).get();

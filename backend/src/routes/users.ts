@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { UserProfile } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -25,7 +26,10 @@ interface UserDoc {
   accentTheme: "emerald" | "cyan" | "purple" | "pink" | "amber" | "red";
 }
 
-function toResponse(doc: UserDoc, isNewUser = false) {
+// Return type is the shared UserProfile DTO (@binj/shared-types) — the wire
+// contract both frontend and backend agree on, distinct from UserDoc above
+// (internal storage shape, Firestore Timestamps included) by construction.
+function toResponse(doc: UserDoc, isNewUser = false): UserProfile {
   const { statusExpiresAt: _statusExpiresAt, createdAt: _createdAt, ...rest } = doc;
   return { ...rest, isNewUser };
 }
