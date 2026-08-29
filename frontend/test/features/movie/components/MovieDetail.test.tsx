@@ -12,6 +12,10 @@ const markWatched = vi.fn()
 const unmarkWatched = vi.fn()
 const likeMovie = vi.fn()
 const unlikeMovie = vi.fn()
+// Not the focus of these tests — defaulted once so WatchedByFriends' own fetch
+// doesn't need setup in every test (vi.clearAllMocks() below clears call
+// history, not this mockResolvedValue).
+const getMovieWatchedBy = vi.fn().mockResolvedValue({ items: [], nextCursor: null })
 
 vi.mock('../../../../src/features/movie/services/movieApi', () => ({
   getMovie,
@@ -24,7 +28,8 @@ vi.mock('../../../../src/features/movie/services/movieApi', () => ({
   markWatched,
   unmarkWatched,
   likeMovie,
-  unlikeMovie
+  unlikeMovie,
+  getMovieWatchedBy
 }))
 
 const { MovieDetail } = await import('../../../../src/features/movie/components/MovieDetail')

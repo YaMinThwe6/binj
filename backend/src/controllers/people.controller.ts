@@ -21,3 +21,8 @@ export async function getFollowedCelebrities(req: Request, res: Response): Promi
   const result = await peopleService.listFollowedCelebrities(req.uid!);
   Responder.success(res, result);
 }
+
+export async function getMovieWatchedBy(req: Request, res: Response): Promise<void> {
+  const result = await peopleService.getMovieWatchedBy(req.uid!, req.params.movieId);
+  Responder.success(res, result);
+}

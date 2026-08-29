@@ -16,3 +16,12 @@ export interface TasteMatch {
   score: number
   relationship: 'following' | 'pending' | 'none'
 }
+
+// GET /movies/:movieId/watchedBy item — hld.md §5a. Scoped to the caller's
+// own `following` list, both list-level (users.listVisible) and per-entry
+// (watched.visibility) privacy checks applied server-side.
+export interface WatchedByEntry {
+  uid: string
+  displayName: string
+  watchedAt: string | null
+}

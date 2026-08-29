@@ -110,6 +110,8 @@ GET /onboarding/celebrity-suggestions      → 200 { items: [{ personId, name, p
                                               // no fallback (this step is skippable, unlike Watched's trending fallback)
 ```
 
+**Implementation note (added once `watchedBy` was actually built):** `nextCursor` is always `null` — this endpoint fans out over the caller's own `following` list (capped at 30, a pragmatic safety bound on parallel reads, not a Firestore query-operator limit) rather than running a paginated Firestore query, so there's nothing to page through in the usual sense. Both privacy checks from §5a (`users.listVisible` list-level, `watched.visibility` per-entry) are enforced server-side; a followed user who watched the movie but fails either check is silently excluded, not surfaced with a placeholder. Live in `backend/src/services/people.service.ts` (`getMovieWatchedBy`) alongside `/users/me/tasteMatches` — grouped by feature (social discovery), not by URL prefix, same reasoning as Reviews (§3) living apart from Movies (§1) despite sharing a `/movies/:movieId/...` prefix.
+
 ## 6. Recommendations (§6) 🔒
 
 ```
