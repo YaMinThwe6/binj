@@ -47,7 +47,10 @@ export interface ModerationInput {
   reportReason: string; // what the reporter said was wrong
 }
 
-const MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash was retired for new API keys (discovered live, 2026-08-29 —
+// after this codebase's knowledge cutoff): the API itself now points callers
+// at gemini-3.6-flash as the direct replacement.
+const MODEL = "gemini-3.6-flash";
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,

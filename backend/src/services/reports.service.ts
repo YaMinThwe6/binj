@@ -2,6 +2,7 @@ import type { CreateReportResult } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { writeNotification } from "../lib/notify.js";
 import { AppError } from "../utils/AppError.js";
+import { logger } from "../lib/logger.js";
 import { geminiConfigured, moderateContent, type ModerationDecision } from "../lib/gemini.js";
 
 const VALID_TARGET_TYPES = ["message", "review", "user", "event"] as const;
@@ -145,7 +146,8 @@ export async function createReport(reporterUid: string, body: CreateReportInput)
   let decision: ModerationDecision;
   try {
     decision = await moderateContent({ targetType: targetType as TargetType, content: target.content, reportReason: reason.trim() });
-  } catch {
+  } catch (err) {
+    logger.error(`[POST /reports] moderateContent failed for report ${reportRef.id}`, err);
     reportDoc.status = "error";
     await reportRef.set(reportDoc);
     return { reportId: reportRef.id, status: "error" as const, decision: null };
