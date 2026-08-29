@@ -70,14 +70,19 @@ Key attributes, grounded in decisions already made across the HLD:
 |---|---|---|
 | `uid` | §13 (Firebase Auth) | Identity comes from Firebase Auth, not self-assigned |
 | `displayName`, `email` | §13 | Set at onboarding |
+| `username` | §13 | Set at onboarding step 3, `null` until then. Needs global uniqueness — Firestore has no native unique-constraint, so it's enforced structurally via a `usernames/{username}` reservation doc (schema.md), same deterministic-ID pattern used elsewhere for "one of these, structurally" guarantees |
+| `photoURL` | §13 | From the OAuth provider (Google/Microsoft) at signup, `null` for the Email+OTP path until a user-uploaded avatar exists — see the profile-page mockups' avatar/upload need, not yet otherwise modeled here |
 | `createdAt` | §13 | |
 | `listVisible` | §13, §5a | List-level privacy default (watched-list visibility) |
 | `followRequiresApproval` | §4, §13 | Default off |
 | `status` | §14b | `active` \| `restricted` \| `suspended` (+ expiry if temporary) |
 | `notificationPrefs.emailEnabled` | §17 | Per-user opt-out |
+| `themePreference` | UI direction | `"dark"` \| `"light"` \| `"system"`, default `"dark"` — BINJ ships dark-mode-first; user can switch to light or follow the OS setting |
+| `accentTheme` | UI direction | `"emerald"` \| `"cyan"` \| `"purple"` \| `"pink"` \| `"amber"` \| `"red"`, default `"emerald"` — the accent color used on the primary CTA, the BINJ rating, and a small set of other deliberately-chosen elements (never applied broadly). TMDB's rating stays a fixed neutral white regardless of the chosen accent, so the two ratings never collide |
+| `favoriteGenres` | §13 | Resolved — yes, a stored attribute (not a relationship): optional onboarding step, feeds §6's cold-start recommendations |
+| `preferredLanguages` | §13 | Optional onboarding step, added alongside `favoriteGenres` — ISO 639-1 codes for which regional/language cinema the user watches (e.g. Tamil, Korean, English), not a dubbing preference. Same shape and same consumer (recommendations, onboarding's Watched-step candidate filtering) as `favoriteGenres` |
+| `onboardingComplete` | §13 | Default `false`. Distinct from any single onboarding step's own optionality — genres/languages/watched/celebrities can all be individually skipped, but the wizard as a whole still needs a durable "done" signal so a returning user isn't shown it again. Also doubles as the frontend's "should I launch onboarding at all" check, alongside the bootstrap call's one-time `isNewUser` flag (api-contracts.md §11) — the flag catches "just signed up," this field catches "signed up before but never finished" |
 | role | §14b | **Not a stored attribute** — lives in Firebase custom claims, not Firestore, by design |
-
-Open question I don't see answered yet in the HLD: do we need `favoriteGenres` on the User as a stored attribute (from the optional onboarding step noted in §13, feeding §6's cold-start), or is that just... a User↔Movie-genre relationship we haven't modeled? Flagging it, not deciding it yet.
 
 ### Movie
 
@@ -85,8 +90,10 @@ Open question I don't see answered yet in the HLD: do we need `favoriteGenres` o
 |---|---|---|
 | `movieId` | §2 | TMDB-sourced ID (or wraps `tmdb_id`?) |
 | `title`, `year`, `runtime`, `genres[]` | §2, §6 | `genres` stored as a real array (TMDB gives this natively, unlike raw IMDb) |
-| `synopsis`, `poster`, `cast/crew` | §2 | Full detail, fetched lazily on first view |
-| `voteAverage` (TMDB rating) | §2 | Replaces "IMDb rating" entirely as of §2's correction |
+| `synopsis`, `poster`, `cast/crew` | §2 | Full detail, fetched lazily on first view. Cast/crew entries carry `personId` (TMDB's person id) — a stable FK into the `Person` entity below, not just a display name |
+| `originalLanguage` | §13 | TMDB's `original_language`, ISO 639-1 — the source of truth both onboarding's language-preference step and its Watched-step candidate filtering key off, rather than inventing a separate BINJ-owned language taxonomy |
+| `voteAverage`, `voteCount` (TMDB rating) | §2 | Replaces "IMDb rating" entirely as of §2's correction; vote count shown alongside the rating for credibility |
+| `trailerKey` | §2 | YouTube video id for the official trailer, from TMDB's `videos` endpoint; `null` if TMDB has none |
 | `binjRating.sum`, `binjRating.count` | §20 | BINJ's own aggregate, maintained transactionally |
 | `streamingProviders`, `streamingLastFetched` | §8 | Own refresh cycle, shorter TTL than the rest of the doc |
 | `isAdult` | imdb-data-analysis.md §2, HLD §5a | Carried over from TMDB/IMDb; floated in §5a as a possible future default for auto-private watched entries |
@@ -94,11 +101,21 @@ Open question I don't see answered yet in the HLD: do we need `favoriteGenres` o
 
 **Decision — `Movie` stays one entity, not split.** No reader ever needs just one slice — the detail page (§2) wants catalog fields and full-detail fields together, and search (§18) never reads this record at all, it hits the separate Vertex AI Search index. Splitting would add a join with no corresponding benefit. Mixed-freshness fields (`lastFetched` vs. `streamingLastFetched`) live on the same doc, each with its own staleness check.
 
+### Person
+
+| Attribute | Source | Notes |
+|---|---|---|
+| `personId` | §13 (onboarding's celebrity-follow step) | TMDB's person id — same "TMDB is the ID source of truth" pattern as `Movie` |
+| `name`, `photo`, `knownForDepartment`, `popularity` | §13 | From TMDB's credits payload — `popularity` ranks onboarding's celebrity suggestions |
+| `lastFetched` | §2's pattern, reused | Staleness marker |
+
+**Decision — `Person` is its own entity, not just inline cast/crew strings.** Added once onboarding needed to suggest *followable* celebrities: a name string on a movie's cast list isn't a stable, referenceable thing — following requires an ID that survives across every movie that person appears in. Same on-demand "create on first need" ingestion as `Movie` (§2), except the trigger is a `Movie` ingestion carrying that person in its credits, not a direct fetch of the person themselves — cast/crew people get upserted as a side effect of ingesting the movie they're credited on.
+
 ---
 
 ## 2. Direct User↔Movie relationships
 
-Four entities, each connecting exactly one `User` to exactly one `Movie`, but with different cardinality/constraint shapes:
+Five entities, each connecting exactly one `User` to exactly one `Movie`, but with different cardinality/constraint shapes:
 
 | Entity | Cardinality | Key attributes | Source |
 |---|---|---|---|
@@ -106,8 +123,11 @@ Four entities, each connecting exactly one `User` to exactly one `Movie`, but wi
 | `WatchedEntry` | User 1—N Movie (many, uncapped) | `watchedAt?`, `visibility: "public" \| "private"` (per-entry override) | §5a |
 | `Review` | User 1—1 Movie (capped at one per pair, enforced structurally by keying the doc on `authorId`) | `rating`, `reviewText?`, `isAnonymous`, `modRemovalCount`, `createdAt`, `updatedAt`, `deleted` (soft-delete, §21) | §20, §22 |
 | `ReviewBan` | User 1—1 Movie (at most one active ban per pair) | `bannedUntil` | §22 |
+| `LikeEntry` | User 1—1 Movie (capped at one per pair — you either like a movie or you don't) | `createdAt` | PRD §5.1/§22 (P0 "Likes"), added once the movie-detail UI made the gap visible |
 
-**Decision — `Review` and `ReviewBan` are keyed the same deterministic way** (`{userId}+{movieId}` as the doc path, not a random ID) — this is what makes "one review per user per movie" and "at most one active ban per user per movie" *structural* guarantees rather than application-level checks (§20's reasoning, reused for §22). `WatchlistEntry`/`WatchedEntry` don't need this since they're not capped at one — a user can have many.
+**Decision — `Review`, `ReviewBan`, and `LikeEntry` are keyed the same deterministic way** (`{userId}+{movieId}` as the doc path, not a random ID) — this is what makes "one review per user per movie," "at most one active ban per user per movie," and "like is a toggle, not a counter" *structural* guarantees rather than application-level checks (§20's reasoning, reused for §22 and now for likes). `WatchlistEntry`/`WatchedEntry` don't need this since they're not capped at one — a user can have many.
+
+**`LikeEntry` mirrors `Review`'s aggregate pattern, simplified.** `Movie.likeCount` is maintained the same transactional way as `binjRating` (§20) — but since a like has no *value* to average, only existence, the transaction is just "does `users/{uid}/likes/{movieId}` already exist? If not, create it and `likeCount += 1`; on unlike, delete it and `likeCount -= 1`" — no delta computation needed, since there's nothing to edit, only toggle on/off.
 
 **Worth naming explicitly:** `Review.modRemovalCount` means `Review` and `ReviewBan` aren't independent — a `Review`'s strike count is what *produces* a `ReviewBan` once it hits 3 (§22). That's a real relationship (one `Review`'s history can create one `ReviewBan`), not just two entities that happen to share a key shape.
 
@@ -127,6 +147,14 @@ All four are self-referential (`User` to `User`), all many-to-many, but they dif
 **Decision — why `Follow` is mirrored but `Block`/`Mute` aren't.** `Follow` needs both directions as real, frequently-shown UI surfaces — a profile shows both "following count" and "follower count," and both need fast reads. `Block` and `Mute` never need a reverse listing: nobody is ever shown "who has blocked/muted me" — surfacing that would itself leak information the feature exists specifically to hide. So a `Block` check at read time queries *both* single-direction docs (`did A block B` OR `did B block A`) rather than relying on a mirror — two cheap point-reads by known IDs, not a scan, so no mirror is needed for that either.
 
 **Relationship between `Block` and `Follow`/`FollowRequest`:** §19 already establishes that blocking severs an existing `Follow` in both directions. Extending that: a `Block` should also delete any pending `FollowRequest` between the same pair — otherwise a stale pending request could persist for two users who can no longer interact at all. Flagging this as a natural extension of §19's existing decision rather than a new open question — correct me if you want it handled differently.
+
+### FollowedCelebrity (User↔Person, not User↔User)
+
+| Entity | Storage | Effect | Key attributes | Source |
+|---|---|---|---|---|
+| `FollowedCelebrity` | Single write — `users/{uid}/followedCelebrities/{personId}` (not mirrored) | One-directional — a `Person` doesn't "follow back" | `followedAt` | §13's onboarding celebrity-suggestion step |
+
+**Decision — not mirrored, unlike `Follow`.** `Person` isn't a `User` — there's no reverse "who follows me" surface to serve on a celebrity's side (the eventual celebrity-page feature, still deferred, would read follower *counts* via a simple collection-count query, not a per-follower mirror). Simpler than `Follow`, not a variant of it.
 
 ---
 

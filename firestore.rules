@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Mirrors docs/schema.md §7. The backend uses the Admin SDK, which bypasses these
+// rules entirely — this file only governs the two places the frontend reads
+// Firestore directly (hld.md §16, §17). Everything else is backend-only.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /rooms/{roomId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberIds;
+      allow write: if false;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
+        allow write: if false;
+      }
+    }
+
+    match /users/{uid}/notifications/{notificationId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

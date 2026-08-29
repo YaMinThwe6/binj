@@ -1,0 +1,24 @@
+{
+  "name": "binj",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "dev:backend": "pnpm --filter binj-backend run dev",
+    "dev:frontend": "pnpm --filter binj-frontend run dev",
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm --filter binj-backend run typecheck && pnpm --filter binj-frontend exec tsc -b",
+    "prepare": "husky"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs",
+      "@firebase/util"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
