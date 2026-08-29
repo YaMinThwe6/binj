@@ -248,7 +248,7 @@ Firestore auto-indexes every single field; composite indexes are only needed whe
 |---|---|---|
 | `movies` | `genres` (array-contains-any) + `voteAverage` (desc) | §6 content-based recommendations |
 | `movies` | `originalLanguage` (asc, `in`) + `voteAverage` (desc) | §13 onboarding's Watched-step candidates, language-only branch |
-| `events` | `visibility` (asc) + `geohash` (asc) | §9 nearby-events range query, filtered to public |
+| `events` | `geohash` (asc) — single-field, auto-indexed | §9 nearby-events range query. **Implementation note:** built as a single-field `geohash` range query, not the originally-planned `visibility`+`geohash` composite — a caller-specific private-event check (host, or in `invitedUserIds`) can't be expressed as one shared equality filter across all callers anyway, so visibility is filtered in-app on the range query's results instead, same simplification §5a already uses for its own following-list fan-out |
 | `events` | `visibility` (asc) + `datetime` (asc) | `GET /events/upcoming` (api-contracts.md §8) — Home's "Upcoming watch events" |
 | `events` | `movieId` (asc) + `visibility` (asc) + `datetime` (asc) | "Watch parties for this movie" — the movie detail screen's events entry point, replacing the old per-movie room concept (§16). Movie Detail itself now ships; this movie-scoped events section is still a later item, so the query itself isn't wired up yet |
 | `activity` | `uid` (`in`) + `createdAt` (desc) | `GET /home/activity` (api-contracts.md §7b) — "Friends are watching", fanned out across the caller's `following` list |

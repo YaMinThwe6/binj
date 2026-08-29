@@ -4,6 +4,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import {
   postEvent,
   getUpcomingEvents,
+  getNearbyEvents,
   putJoinEvent,
   deleteJoinEvent,
   getJoinRequests,
@@ -15,6 +16,7 @@ export const eventsRouter = Router();
 
 eventsRouter.post("/events", requireAuth, asyncHandler(postEvent));
 eventsRouter.get("/events/upcoming", requireAuth, asyncHandler(getUpcomingEvents));
+eventsRouter.get("/events/nearby", requireAuth, asyncHandler(getNearbyEvents));
 eventsRouter.put("/events/:eventId/join", requireAuth, asyncHandler(putJoinEvent));
 eventsRouter.delete("/events/:eventId/join", requireAuth, asyncHandler(deleteJoinEvent));
 eventsRouter.get("/events/:eventId/joinRequests", requireAuth, asyncHandler(getJoinRequests));

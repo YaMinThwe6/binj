@@ -40,7 +40,13 @@ function matchWhere(data: DocData, w: Where): boolean {
     case "==":
       return val === target;
     case ">=":
-      return typeof val === "number" && typeof target === "number" && val >= target;
+      if (typeof val === "number" && typeof target === "number") return val >= target;
+      if (typeof val === "string" && typeof target === "string") return val >= target;
+      return false;
+    case "<":
+      if (typeof val === "number" && typeof target === "number") return val < target;
+      if (typeof val === "string" && typeof target === "string") return val < target;
+      return false;
     case "in":
       return Array.isArray(w.value) && w.value.includes(raw);
     default:
@@ -315,5 +321,143 @@ describe("join request approval", () => {
     expect(res.status).toBe(204);
     expect(store.has("events/evt-1/joinRequests/guest-1")).toBe(false);
     expect(store.has("events/evt-1/participants/guest-1")).toBe(false);
+  });
+});
+
+describe("POST /events computes a geohash for in-person events with a location", () => {
+  it("stores a geohash when location is given", async () => {
+    const app = createApp();
+    const res = await authed(app, "post", "/events").send({
+      ...validBody,
+      mode: "in-person",
+      location: { address: "MG Road, Bangalore", lat: 12.9716, lng: 77.5946 }
+    });
+    expect(res.status).toBe(201);
+    const stored = store.get(`events/${res.body.data.eventId}`) as { geohash: string | null };
+    expect(typeof stored.geohash).toBe("string");
+    expect(stored.geohash!.length).toBeGreaterThan(0);
+  });
+
+  it("leaves geohash null for an online event (no location)", async () => {
+    const app = createApp();
+    const res = await authed(app, "post", "/events").send(validBody); // mode: "online", no location
+    expect(res.status).toBe(201);
+    const stored = store.get(`events/${res.body.data.eventId}`) as { geohash: string | null };
+    expect(stored.geohash).toBeNull();
+  });
+});
+
+describe("GET /events/nearby", () => {
+  const bangalore = { lat: 12.9716, lng: 77.5946 };
+  const bangaloreNearby = { lat: 12.9761, lng: 77.5946 }; // ~0.5km away
+  const mysore = { lat: 12.2958, lng: 76.6394 }; // ~145km away
+
+  function inPersonBody(overrides: Partial<typeof validBody> & { location: { address: string; lat: number; lng: number } }) {
+    return { ...validBody, mode: "in-person" as const, ...overrides };
+  }
+
+  it("401s without a token", async () => {
+    const app = createApp();
+    const res = await request(app).get("/events/nearby?lat=12.9716&lng=77.5946&radiusKm=5");
+    expect(res.status).toBe(401);
+  });
+
+  it("400s when lat/lng/radiusKm are missing or invalid", async () => {
+    const app = createApp();
+    const missing = await authed(app, "get", "/events/nearby");
+    expect(missing.status).toBe(400);
+    expect(missing.body.code).toBe("INVALID_QUERY");
+
+    const badRadius = await authed(app, "get", "/events/nearby?lat=12.9716&lng=77.5946&radiusKm=-5");
+    expect(badRadius.status).toBe(400);
+  });
+
+  it("returns a public in-person event within the radius, with distanceKm", async () => {
+    const app = createApp();
+    await authed(app, "post", "/events").send(
+      inPersonBody({ location: { address: "Near MG Road", ...bangaloreNearby } })
+    );
+
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+    expect(res.body.data.items[0].movieTitle).toBe("Dune: Part Two");
+    expect(res.body.data.items[0].distanceKm).toBeGreaterThan(0);
+    expect(res.body.data.items[0].distanceKm).toBeLessThan(5);
+  });
+
+  it("excludes an event outside the search radius", async () => {
+    const app = createApp();
+    await authed(app, "post", "/events").send(inPersonBody({ location: { address: "Mysore Palace", ...mysore } }));
+
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("excludes online events (no location to search on)", async () => {
+    const app = createApp();
+    await authed(app, "post", "/events").send(validBody); // mode: "online"
+
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("excludes a private event the caller neither hosts nor was invited to", async () => {
+    const app = createApp();
+    await authed(app, "post", "/events").send(
+      inPersonBody({ visibility: "private", location: { address: "Near MG Road", ...bangaloreNearby } })
+    );
+
+    currentUid = "guest-1";
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("includes a private event the caller is hosting", async () => {
+    const app = createApp(); // currentUid stays "host-1"
+    await authed(app, "post", "/events").send(
+      inPersonBody({ visibility: "private", location: { address: "Near MG Road", ...bangaloreNearby } })
+    );
+
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+  });
+
+  it("includes a private event the caller was explicitly invited to", async () => {
+    const app = createApp();
+    await authed(app, "post", "/events").send(
+      inPersonBody({
+        visibility: "private",
+        location: { address: "Near MG Road", ...bangaloreNearby },
+        invitedUserIds: ["guest-1"]
+      })
+    );
+
+    currentUid = "guest-1";
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+  });
+
+  it("sorts multiple results by distance ascending", async () => {
+    const app = createApp();
+    await authed(app, "post", "/events").send(
+      // Deliberately still inside the same geohash-4 cell as bangaloreNearby
+      // (~3.2km away, vs. ~0.5km) — a point crossing into a neighboring cell
+      // would be silently excluded by the range query itself (the known
+      // "approximation of a bounding box" limitation this feature accepts).
+      inPersonBody({ title: "Far one", location: { address: "A bit further", lat: 13.0, lng: 77.6 } })
+    );
+    await authed(app, "post", "/events").send(
+      inPersonBody({ title: "Close one", location: { address: "Very close", ...bangaloreNearby } })
+    );
+
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=10`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.map((e: { title: string }) => e.title)).toEqual(["Close one", "Far one"]);
   });
 });
