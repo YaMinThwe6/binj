@@ -188,10 +188,14 @@ PATCH  /rooms/:roomId/messages/:messageId  body: { text } → 200   // author on
 DELETE /rooms/:roomId/messages/:messageId  → 204                  // author or moderator, §21
 
 PATCH  /rooms/:roomId                      body: { type: "persistent" } → 200   // host only, §16 — one-way ephemeral→persistent
-POST   /rooms/:roomId/events               body: { datetime, mode, location?, ... } → 201 { eventId }
+POST   /rooms/:roomId/events               body: { movieId, datetime, mode, visibility, participantLimit,
+                                                     requiresApproval, title?, location?, invitedUserIds? } → 201 { eventId, ...event fields }
                                               // schedule a new event from a persistent room; invitedUserIds defaults
-                                              // to the room's current memberIds (§16)
+                                              // to the room's current memberIds (§16). 400 ROOM_NOT_PERSISTENT if the
+                                              // room hasn't been promoted yet; links back to the SAME roomId, no new room
 ```
+
+**Implementation note (added once this was actually built):** "member of this room" is resolved purely against `rooms/{roomId}.memberIds` — both for the backend's write-path checks above and for `firestore.rules`' read-path checks on the frontend's direct `onSnapshot` subscription — since Security Rules can only see `memberIds`, not the caller's event-participant status. `events.service.ts`'s join/leave/approve paths keep `memberIds` in sync with event participation so a joined participant can actually chat, not just show up in the participant list. `DELETE .../messages/:messageId` is author-only for now, not "or moderator" — §14's role system isn't built yet, same gap already flagged for review disputes (§3). The ephemeral-room grace-period deletion timer from hld.md §16 isn't built (needs a Cloud Function + delayed job) — rooms and messages persist indefinitely rather than auto-cleaning up once everyone leaves.
 
 ## 10. Notifications (§17) 🔒
 

@@ -16,7 +16,11 @@ type Status = 'idle' | 'locating' | 'loading' | 'loaded' | 'denied' | 'error'
 // than prompting for location on every Home visit: matches PRD §30.7's
 // no-location-without-consent principle, and the browser's own permission
 // prompt only fires once findNearby() actually calls getCurrentPosition.
-export function NearbyEvents() {
+interface Props {
+  onOpenChat: (roomId: string) => void
+}
+
+export function NearbyEvents({ onOpenChat }: Props) {
   const [status, setStatus] = useState<Status>('idle')
   const [items, setItems] = useState<NearbyEvent[]>([])
   const [error, setError] = useState('')
@@ -87,6 +91,9 @@ export function NearbyEvents() {
                 <button type="button" disabled={!!joined} onClick={() => handleJoin(event.eventId)}>
                   {joined === 'joined' ? 'Joined' : joined === 'pending' ? 'Requested' : 'Join'}
                 </button>
+                {joined === 'joined' && (
+                  <button type="button" onClick={() => onOpenChat(event.roomId)}>Chat</button>
+                )}
               </li>
             )
           })}

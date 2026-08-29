@@ -19,6 +19,7 @@ const event = {
   participantLimit: 5,
   participantCount: 2,
   requiresApproval: false,
+  roomId: 'room-1',
   movieTitle: 'Interstellar',
   moviePoster: null,
   distanceKm: 1.2
@@ -34,7 +35,7 @@ afterEach(() => {
 
 describe('NearbyEvents', () => {
   it('shows a "Find events near me" button before any location is requested', () => {
-    render(<NearbyEvents />)
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
     expect(screen.getByRole('button', { name: /find events near me/i })).toBeInTheDocument()
     expect(getNearbyEvents).not.toHaveBeenCalled()
   })
@@ -50,7 +51,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents />)
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
 
     await waitFor(() => expect(getNearbyEvents).toHaveBeenCalledWith(12.9716, 77.5946, 25))
@@ -70,13 +71,36 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents />)
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
     await screen.findByText('Rooftop Watch Party')
 
     fireEvent.click(screen.getByRole('button', { name: /^join$/i }))
     await waitFor(() => expect(joinEvent).toHaveBeenCalledWith('evt-1'))
     expect(await screen.findByRole('button', { name: 'Joined' })).toBeDisabled()
+  })
+
+  it('offers a Chat button once joined, opening the event\'s room', async () => {
+    getNearbyEvents.mockResolvedValue({ items: [event] })
+    joinEvent.mockResolvedValue({ status: 'joined' })
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: (onSuccess: (pos: { coords: { latitude: number; longitude: number } }) => void) => {
+          onSuccess({ coords: { latitude: 12.9716, longitude: 77.5946 } })
+        }
+      }
+    })
+    const onOpenChat = vi.fn()
+
+    render(<NearbyEvents onOpenChat={onOpenChat} />)
+    fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
+    await screen.findByText('Rooftop Watch Party')
+
+    fireEvent.click(screen.getByRole('button', { name: /^join$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^chat$/i }))
+
+    expect(onOpenChat).toHaveBeenCalledWith('room-1')
   })
 
   it('shows a gentle message, not an error, when location permission is denied', async () => {
@@ -92,7 +116,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents />)
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
 
     await waitFor(() => expect(screen.getByText(/enable location access/i)).toBeInTheDocument())
@@ -102,7 +126,7 @@ describe('NearbyEvents', () => {
 
   it('shows an error when the browser has no geolocation support at all', () => {
     Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
-    render(<NearbyEvents />)
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
     expect(screen.getByRole('alert')).toHaveTextContent(/not available/i)
   })
@@ -118,7 +142,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents />)
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
 
     await waitFor(() => expect(screen.getByText(/no watch parties nearby/i)).toBeInTheDocument())

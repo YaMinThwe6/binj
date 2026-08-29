@@ -20,6 +20,21 @@ function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null 
   return value instanceof Date ? value.toISOString() : value.toDate().toISOString();
 }
 
+// Plain read-then-write arrays rather than Firestore's FieldValue.arrayUnion/
+// arrayRemove sentinels — deliberate: this codebase's tests run against a
+// hand-rolled in-memory Firestore mock (not the real emulator), which has no
+// concept of those sentinel objects. Reading the current array from within
+// the same transaction (before any writes, per Firestore's read-before-write
+// rule) keeps this correct against real Firestore too, not just the mock.
+function withRoomMember(memberIds: string[] | undefined, uid: string): string[] {
+  const current = memberIds ?? [];
+  return current.includes(uid) ? current : [...current, uid];
+}
+
+function withoutRoomMember(memberIds: string[] | undefined, uid: string): string[] {
+  return (memberIds ?? []).filter((m) => m !== uid);
+}
+
 function isValidLatLng(location: unknown): location is { lat: number; lng: number } {
   if (typeof location !== "object" || location === null) return false;
   const { lat, lng } = location as { lat?: unknown; lng?: unknown };
@@ -40,6 +55,7 @@ function toEventSummary(id: string, data: FirebaseFirestore.DocumentData): Event
     participantLimit: data.participantLimit,
     participantCount: data.participantCount ?? 0,
     requiresApproval: data.requiresApproval,
+    roomId: data.roomId,
     createdAt: toIso(data.createdAt)
   };
 }
@@ -56,10 +72,16 @@ export interface CreateEventInput {
   invitedUserIds?: unknown;
 }
 
+export interface CreateEventOptions {
+  // Present only for POST /rooms/:roomId/events (hld.md §16's "a persistent
+  // room can spawn new events") — reuses the room instead of creating a new
+  // one, so one room ends up associated with multiple events over time.
+  existingRoomId?: string;
+}
+
 // POST /events — hld.md §7 "Create Event". Host auto-joins; every event gets a
-// roomId (schema.md §4) so §16's chat feature has something real to attach to
-// later, even though the chat UI itself isn't built yet.
-export async function createEvent(hostId: string, body: CreateEventInput): Promise<EventSummary> {
+// roomId (schema.md §4) so §16's chat feature has something to attach to.
+export async function createEvent(hostId: string, body: CreateEventInput, options: CreateEventOptions = {}): Promise<EventSummary> {
   const { movieId, datetime, mode, visibility, participantLimit, requiresApproval } = body;
   if (
     typeof movieId !== "string" ||
@@ -88,7 +110,7 @@ export async function createEvent(hostId: string, body: CreateEventInput): Promi
   }
 
   const eventRef = db.collection("events").doc();
-  const roomRef = db.collection("rooms").doc();
+  const roomRef = options.existingRoomId ? db.collection("rooms").doc(options.existingRoomId) : db.collection("rooms").doc();
   const participantRef = eventRef.collection("participants").doc(hostId);
   const now = new Date();
 
@@ -118,7 +140,19 @@ export async function createEvent(hostId: string, body: CreateEventInput): Promi
   const batch = db.batch();
   batch.set(eventRef, eventDoc);
   batch.set(participantRef, { joinedAt: now });
-  batch.set(roomRef, { type: "persistent", originEventId: eventRef.id, memberIds: [hostId], createdAt: now });
+  if (!options.existingRoomId) {
+    // hld.md §16 — ephemeral by default (Google Meet-chat-style); the host
+    // promotes to persistent later via PATCH /rooms/:roomId, not upfront here.
+    batch.set(roomRef, { type: "ephemeral", originEventId: eventRef.id, memberIds: [hostId], createdAt: now });
+  } else {
+    // Reusing an existing (persistent) room — just make sure the new host is
+    // a member too, without touching its type/originEventId/other members.
+    // Read happens outside the batch (batches are write-only) — acceptable
+    // here since scheduling an event from a room is low-frequency/low-contention,
+    // unlike the join/leave paths below which go through a transaction instead.
+    const roomSnap = await roomRef.get();
+    batch.update(roomRef, { memberIds: withRoomMember(roomSnap.data()?.memberIds as string[] | undefined, hostId) });
+  }
   await batch.commit();
 
   return toEventSummary(eventRef.id, eventDoc);
@@ -174,12 +208,22 @@ export async function joinEvent(uid: string, eventId: string): Promise<{ status:
   if (!event.requiresApproval) {
     const result = await db.runTransaction(async (tx) => {
       const freshEvent = await tx.get(eventRef);
+      // hld.md §16 — room membership tracks event participation; Firestore
+      // Security Rules gate chat reads purely on rooms/{roomId}.memberIds, so
+      // this has to stay in sync with participants, not just event-side state.
+      // All reads (including this one) happen before any writes below, per
+      // Firestore's read-before-write rule within a transaction.
+      const roomId = freshEvent.data()?.roomId as string | undefined;
+      const roomRef = roomId ? db.collection("rooms").doc(roomId) : null;
+      const roomSnap = roomRef ? await tx.get(roomRef) : null;
+
       const count = (freshEvent.data()?.participantCount as number) ?? 0;
       if (count >= (freshEvent.data()?.participantLimit as number)) {
         return "full" as const;
       }
       tx.set(participantRef, { joinedAt: new Date() });
       tx.update(eventRef, { participantCount: count + 1 });
+      if (roomRef) tx.update(roomRef, { memberIds: withRoomMember(roomSnap?.data()?.memberIds as string[] | undefined, uid) });
       return "joined" as const;
     });
     if (result === "full") {
@@ -205,11 +249,16 @@ export async function leaveEvent(uid: string, eventId: string): Promise<void> {
 
   await db.runTransaction(async (tx) => {
     const [participantSnap, eventSnap] = await Promise.all([tx.get(participantRef), tx.get(eventRef)]);
+    const roomId = eventSnap.exists ? (eventSnap.data()?.roomId as string | undefined) : undefined;
+    const roomRef = roomId ? db.collection("rooms").doc(roomId) : null;
+    const roomSnap = roomRef ? await tx.get(roomRef) : null;
+
     if (participantSnap.exists) {
       tx.delete(participantRef);
       if (eventSnap.exists) {
         const count = (eventSnap.data()?.participantCount as number) ?? 1;
         tx.update(eventRef, { participantCount: Math.max(0, count - 1) });
+        if (roomRef) tx.update(roomRef, { memberIds: withoutRoomMember(roomSnap?.data()?.memberIds as string[] | undefined, uid) });
       }
     }
     tx.delete(requestRef);
@@ -253,10 +302,15 @@ export async function approveJoinRequest(uid: string, eventId: string, requester
   const result = await db.runTransaction(async (tx) => {
     const [requestSnap, freshEvent] = await Promise.all([tx.get(requestRef), tx.get(eventRef)]);
     if (!requestSnap.exists) return "not_found" as const;
+    const roomId = freshEvent.data()?.roomId as string | undefined;
+    const roomRef = roomId ? db.collection("rooms").doc(roomId) : null;
+    const roomSnap = roomRef ? await tx.get(roomRef) : null;
+
     const count = (freshEvent.data()?.participantCount as number) ?? 0;
     if (count >= (freshEvent.data()?.participantLimit as number)) return "full" as const;
     tx.set(eventRef.collection("participants").doc(requesterUid), { joinedAt: new Date() });
     tx.update(eventRef, { participantCount: count + 1 });
+    if (roomRef) tx.update(roomRef, { memberIds: withRoomMember(roomSnap?.data()?.memberIds as string[] | undefined, requesterUid) });
     tx.delete(requestRef);
     return "approved" as const;
   });
