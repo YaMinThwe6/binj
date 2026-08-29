@@ -22,10 +22,17 @@ export interface ModerationDecision {
   violates: boolean
   category: ModerationCategory
   contentAction: ContentAction
+  // The action actually applied — may be capped below what Gemini itself
+  // suggested when confidence was low (see flaggedForReview).
   accountAction: AccountAction
   suspensionDays: number | null
   confidence: number
   rationale: string
+  // True when confidence fell below the threshold and accountAction was
+  // capped to "warn" rather than whatever severity Gemini suggested. There's
+  // no moderator dashboard to route this to yet — it's stored on the report
+  // doc and logged server-side for now.
+  flaggedForReview: boolean
   resolvedAt: string | null
 }
 

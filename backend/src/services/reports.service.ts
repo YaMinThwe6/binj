@@ -8,6 +8,31 @@ import { geminiConfigured, moderateContent, type ModerationDecision } from "../l
 const VALID_TARGET_TYPES = ["message", "review", "user", "event"] as const;
 type TargetType = (typeof VALID_TARGET_TYPES)[number];
 
+// Below this, Gemini's own account-level call isn't trusted at full force —
+// there's no human moderator to catch a wrong suspension before it lands, so
+// a shaky decision gets capped to the cheapest, most reversible rung
+// (warn) instead of executing whatever severity Gemini guessed. Content
+// removal is left uncapped: it's already soft/reversible (deleted:true, not
+// a hard delete) and lower-stakes than penalizing someone's account.
+const CONFIDENCE_THRESHOLD = 0.7;
+const SEVERE_ACCOUNT_ACTIONS = ["restrict", "suspend_temporary", "suspend_permanent"] as const;
+
+// Flags the report for a human to look at later — there is no moderator
+// dashboard to route this to yet (§14's role system was never built, same
+// gap flagged everywhere else in this codebase), so "flagged" today means:
+// stored on the report doc (queryable directly in Firestore) and logged
+// server-side at warn level (visible in Cloud Run/local logs). A real
+// access-controlled endpoint for a human to pull this list is follow-up
+// work — deliberately not building an unguarded one that would leak every
+// user's report reasons/rationale to any other signed-in user.
+function capLowConfidenceDecision(decision: ModerationDecision): { decision: ModerationDecision; flaggedForReview: boolean } {
+  const flaggedForReview = decision.confidence < CONFIDENCE_THRESHOLD;
+  if (!flaggedForReview || !SEVERE_ACCOUNT_ACTIONS.includes(decision.accountAction as (typeof SEVERE_ACCOUNT_ACTIONS)[number])) {
+    return { decision, flaggedForReview };
+  }
+  return { decision: { ...decision, accountAction: "warn", suspensionDays: null }, flaggedForReview };
+}
+
 export interface CreateReportInput {
   targetType?: unknown;
   targetId?: unknown;
@@ -143,9 +168,9 @@ export async function createReport(reporterUid: string, body: CreateReportInput)
     return { reportId: reportRef.id, status: "pending" as const, decision: null };
   }
 
-  let decision: ModerationDecision;
+  let rawDecision: ModerationDecision;
   try {
-    decision = await moderateContent({ targetType: targetType as TargetType, content: target.content, reportReason: reason.trim() });
+    rawDecision = await moderateContent({ targetType: targetType as TargetType, content: target.content, reportReason: reason.trim() });
   } catch (err) {
     logger.error(`[POST /reports] moderateContent failed for report ${reportRef.id}`, err);
     reportDoc.status = "error";
@@ -153,16 +178,25 @@ export async function createReport(reporterUid: string, body: CreateReportInput)
     return { reportId: reportRef.id, status: "error" as const, decision: null };
   }
 
+  const { decision, flaggedForReview } = capLowConfidenceDecision(rawDecision);
+  if (flaggedForReview) {
+    logger.warn(
+      `[POST /reports] low-confidence decision (${rawDecision.confidence}) for report ${reportRef.id} — Gemini suggested accountAction "${rawDecision.accountAction}", applying "${decision.accountAction}" instead. category=${rawDecision.category} rationale="${rawDecision.rationale}"`
+    );
+  }
+
   await applyDecision(db, targetType as TargetType, targetId, target, decision);
 
   reportDoc.status = decision.violates ? "actioned" : "dismissed";
-  reportDoc.decision = decision;
+  reportDoc.decision = rawDecision; // the raw Gemini output, for audit — not what necessarily got applied
+  reportDoc.appliedAccountAction = decision.accountAction;
+  reportDoc.flaggedForReview = flaggedForReview;
   reportDoc.resolvedAt = now;
   await reportRef.set(reportDoc);
 
   return {
     reportId: reportRef.id,
     status: reportDoc.status as "actioned" | "dismissed",
-    decision: { ...decision, resolvedAt: toIso(now) }
+    decision: { ...decision, flaggedForReview, resolvedAt: toIso(now) }
   };
 }

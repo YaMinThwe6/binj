@@ -129,6 +129,7 @@ describe('RoomChat', () => {
         suspensionDays: null,
         confidence: 0.8,
         rationale: 'This was harassment.',
+        flaggedForReview: false,
         resolvedAt: '2026-01-01T20:05:00.000Z'
       }
     })
@@ -143,6 +144,32 @@ describe('RoomChat', () => {
     )
     expect(await screen.findByText(/action taken/i)).toHaveTextContent('This was harassment.')
     expect(screen.queryByLabelText(/why are you reporting/i)).not.toBeInTheDocument()
+  })
+
+  it('mentions when a decision was low-confidence and flagged for human review', async () => {
+    mockSubscription(messages)
+    reportContent.mockResolvedValue({
+      reportId: 'rep-2',
+      status: 'dismissed',
+      decision: {
+        violates: false,
+        category: 'legitimate-discussion',
+        contentAction: 'none',
+        accountAction: 'none',
+        suspensionDays: null,
+        confidence: 0.3,
+        rationale: 'Unclear.',
+        flaggedForReview: true,
+        resolvedAt: '2026-01-01T20:05:00.000Z'
+      }
+    })
+    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^report$/i }))
+    fireEvent.change(screen.getByLabelText(/why are you reporting/i), { target: { value: 'not sure' } })
+    fireEvent.click(screen.getByRole('button', { name: /submit report/i }))
+
+    expect(await screen.findByText(/flagged for human review/i)).toBeInTheDocument()
   })
 
   it('closes the report form on Cancel without submitting', () => {

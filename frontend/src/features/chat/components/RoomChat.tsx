@@ -16,8 +16,9 @@ function formatTime(iso: string | null): string {
 function describeReportResult(result: CreateReportResult): string {
   if (result.status === 'pending') return 'Reported — awaiting review.'
   if (result.status === 'error') return "Reported — couldn't be reviewed automatically, please try again."
-  if (result.status === 'dismissed') return `Reported — no violation found. ${result.decision?.rationale ?? ''}`.trim()
-  return `Reported — action taken. ${result.decision?.rationale ?? ''}`.trim()
+  const flaggedNote = result.decision?.flaggedForReview ? ' (low confidence — flagged for human review.)' : ''
+  if (result.status === 'dismissed') return `Reported — no violation found. ${result.decision?.rationale ?? ''}${flaggedNote}`.trim()
+  return `Reported — action taken. ${result.decision?.rationale ?? ''}${flaggedNote}`.trim()
 }
 
 // hld.md §16 — messages arrive in real time via subscribeToMessages'

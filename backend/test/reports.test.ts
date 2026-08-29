@@ -302,4 +302,102 @@ describe("POST /reports", () => {
       expect((store.get("users/uid-2") as { status: string }).status).toBe("active");
     });
   });
+
+  describe("low-confidence decisions", () => {
+    it("caps a low-confidence suspension down to a warning instead of applying it", async () => {
+      moderateContent.mockResolvedValue({
+        violates: true,
+        category: "harassment",
+        contentAction: "remove",
+        accountAction: "suspend_permanent",
+        suspensionDays: null,
+        confidence: 0.4,
+        rationale: "Possibly harassment, but the wording is ambiguous."
+      });
+      store.set("rooms/room-1/messages/msg-1", { authorId: "uid-2", text: "ambiguous message", deleted: false });
+      store.set("users/uid-2", { displayName: "Someone", status: "active" });
+
+      const app = createApp();
+      const res = await authed(app, { targetType: "message", targetId: "msg-1", roomId: "room-1", reason: "seems harassing" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.decision.accountAction).toBe("warn"); // capped, not the suggested suspend_permanent
+      expect(res.body.data.decision.flaggedForReview).toBe(true);
+
+      const user = store.get("users/uid-2") as { status: string };
+      expect(user.status).toBe("active"); // never suspended/restricted
+      const notifications = [...store.entries()].filter(([k]) => k.startsWith("users/uid-2/notifications/"));
+      expect(notifications).toHaveLength(1); // still warned
+
+      // content removal is untouched by the cap — still soft/reversible, lower stakes
+      expect((store.get("rooms/room-1/messages/msg-1") as { deleted: boolean }).deleted).toBe(true);
+    });
+
+    it("does not cap a high-confidence suspension", async () => {
+      moderateContent.mockResolvedValue({
+        violates: true,
+        category: "grooming",
+        contentAction: "remove",
+        accountAction: "suspend_permanent",
+        suspensionDays: null,
+        confidence: 0.95,
+        rationale: "Clear, severe violation."
+      });
+      store.set("users/uid-2", { displayName: "Someone", status: "active" });
+
+      const app = createApp();
+      const res = await authed(app, { targetType: "user", targetId: "uid-2", reason: "grooming behavior" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.decision.accountAction).toBe("suspend_permanent");
+      expect(res.body.data.decision.flaggedForReview).toBe(false);
+      expect((store.get("users/uid-2") as { status: string }).status).toBe("suspended");
+    });
+
+    it("flags a low-confidence decision even when accountAction didn't need capping", async () => {
+      moderateContent.mockResolvedValue({
+        violates: false,
+        category: "legitimate-discussion",
+        contentAction: "none",
+        accountAction: "none",
+        suspensionDays: null,
+        confidence: 0.3,
+        rationale: "Unclear whether this is a violation."
+      });
+      store.set("users/uid-2", { displayName: "Someone", status: "active" });
+
+      const app = createApp();
+      const res = await authed(app, { targetType: "user", targetId: "uid-2", reason: "not sure, flagging just in case" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.decision.flaggedForReview).toBe(true);
+      expect(res.body.data.decision.accountAction).toBe("none"); // nothing to cap, already the lightest option
+    });
+
+    it("stores the raw Gemini decision, the applied action, and the flag on the report doc for audit", async () => {
+      moderateContent.mockResolvedValue({
+        violates: true,
+        category: "harassment",
+        contentAction: "none",
+        accountAction: "restrict",
+        suspensionDays: 10,
+        confidence: 0.5,
+        rationale: "Uncertain call."
+      });
+      store.set("users/uid-2", { displayName: "Someone", status: "active" });
+
+      const app = createApp();
+      const res = await authed(app, { targetType: "user", targetId: "uid-2", reason: "rudeness" });
+
+      const reportId = res.body.data.reportId;
+      const stored = store.get(`reports/${reportId}`) as {
+        decision: { accountAction: string; confidence: number };
+        appliedAccountAction: string;
+        flaggedForReview: boolean;
+      };
+      expect(stored.decision.accountAction).toBe("restrict"); // raw Gemini suggestion, preserved
+      expect(stored.appliedAccountAction).toBe("warn"); // what actually happened
+      expect(stored.flaggedForReview).toBe(true);
+    });
+  });
 });
