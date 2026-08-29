@@ -3,8 +3,8 @@ import { auth } from './firebase'
 // truth both frontend and backend import from (packages/shared-types) — see
 // [[feedback_monorepo_shared_packages_solid]]. `Me` is this file's own name
 // for the shared `UserProfile`.
-export type { UserProfile as Me } from '@binj/shared-types'
-import type { UserProfile as Me } from '@binj/shared-types'
+export type { UserProfile as Me, ReportTargetType, CreateReportResult } from '@binj/shared-types'
+import type { UserProfile as Me, ReportTargetType, CreateReportResult } from '@binj/shared-types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:6501'
 
@@ -58,4 +58,19 @@ export function getMe(): Promise<Me> {
 
 export function updateMe(patch: Partial<Pick<Me, 'displayName' | 'username' | 'listVisible' | 'followRequiresApproval' | 'favoriteGenres' | 'preferredLanguages' | 'onboardingComplete' | 'themePreference' | 'accentTheme'>>): Promise<Me> {
   return apiFetch('/users/me', { method: 'PATCH', body: patch, auth: true })
+}
+
+// PRD §30.3/§30.8 — cross-cutting: every feature that can be reported (chat
+// messages today, reviews/events/profiles later) calls into this same
+// endpoint, so it lives alongside getMe/updateMe rather than under any one
+// feature. Gemini's decision applies immediately server-side; the caller
+// gets it back in the same response, not a separate "check later" step.
+export function reportContent(input: {
+  targetType: ReportTargetType
+  targetId: string
+  reason: string
+  roomId?: string
+  movieId?: string
+}): Promise<CreateReportResult> {
+  return apiFetch('/reports', { method: 'POST', body: input, auth: true })
 }

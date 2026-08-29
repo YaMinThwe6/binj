@@ -14,6 +14,7 @@ import { homeRouter } from "./routes/home.route.js";
 import { notificationsRouter } from "./routes/notifications.route.js";
 import { reviewsRouter } from "./routes/reviews.route.js";
 import { roomsRouter } from "./routes/rooms.route.js";
+import { reportsRouter } from "./routes/reports.route.js";
 import { isFirebaseConfigured } from "./lib/firebaseAdmin.js";
 import { globalErrorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { Responder } from "./utils/responder.js";
@@ -42,6 +43,7 @@ export function createApp(): Express {
   app.use(notificationsRouter);
   app.use(reviewsRouter);
   app.use(roomsRouter);
+  app.use(reportsRouter);
 
   app.use(notFoundHandler);
   app.use(globalErrorHandler);

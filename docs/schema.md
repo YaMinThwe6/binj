@@ -199,8 +199,8 @@ rooms/{roomId}/messages/{messageId}      // auto-ID
 
 ```
 users/{uid}/notifications/{notificationId}   // auto-ID
-  type: string                               // "followRequest" | "eventJoinRequest" | "eventJoinApproved" | "moderationAction" | ...
-  fromUserId: string | null                  // omitted for moderationAction, §17
+  type: string                               // "followRequest" | "followApproved" | "eventJoinRequest" | "eventJoinApproved" | "moderationWarning"
+  fromUserId: string | null                  // null for moderationWarning — there's no human "from", §17
   targetType: string | null
   targetId: string | null
   read: boolean
@@ -210,33 +210,32 @@ users/{uid}/notifications/{notificationId}   // auto-ID
 ```
 reports/{reportId}                       // auto-ID
   reporterId: string
-  targetType: string                     // "message" | "review" | "event" | "user" | "room"
-  targetId: string
-  category: string
-  reason: string
-  status: "pending" | "reviewed" | "dismissed"
+  targetType: "message" | "review" | "user" | "event"
+  targetId: string                       // messageId / review's authorId / uid / eventId
+  roomId: string | null                  // set when targetType is "message" — locates rooms/{roomId}/messages/{targetId}
+  movieId: string | null                 // set when targetType is "review" — locates movies/{movieId}/reviews/{targetId}
+  reason: string                         // reporter's free-text reason; no reporter-supplied category (Gemini determines it)
+  status: "pending" | "actioned" | "dismissed" | "error"
+  decision: {                            // null until Gemini resolves it (or forever, if Gemini isn't configured)
+                                          // RAW Gemini output — accountAction here is what Gemini suggested,
+                                          // before any confidence-based capping (see appliedAccountAction below)
+    violates: boolean
+    category: string
+    contentAction: "none" | "remove"
+    accountAction: "none" | "warn" | "restrict" | "suspend_temporary" | "suspend_permanent"
+    suspensionDays: number | null
+    confidence: number
+    rationale: string
+  } | null
+  appliedAccountAction: string | null    // what actually got executed — equals decision.accountAction unless capped
+  flaggedForReview: boolean              // true when confidence < 0.7; see hld.md §14 "capping low-confidence decisions"
   createdAt: timestamp
-```
-
-```
-users/{uid}/moderationLog/{logId}        // auto-ID
-  action: "warning" | "removeContent" | "restrict" | "suspend"
-  moderatorId: string
-  reportId: string | null
-  expiresAt: timestamp | null
-  createdAt: timestamp
-```
-
-```
-moderationDisputes/{disputeId}           // auto-ID
-  movieId: string                        // + authorId together identify the disputed review, instead of a single path string
-  authorId: string
-  moderatorId: string
-  status: "pending" | "upheld" | "overturned"
-  resolvedByAdminId: string | null
   resolvedAt: timestamp | null
-  createdAt: timestamp
 ```
+
+**Implementation note (added once this was actually built):** `users/{uid}/moderationLog` and `moderationDisputes` from the original sketch were never built — there's no moderator role to write a log entry as, and no dispute flow without a human moderator's decision to dispute in the first place (same §14-role-system gap already flagged for reviews' dispute endpoint). `reports/{reportId}.decision` — the full Gemini output, including a `rationale` string — serves as the audit trail instead, in one place rather than scattered per-user logs. See [hld.md](hld.md) §14 and [api-contracts.md](api-contracts.md) §12.
+
+**Implementation note (confidence-threshold capping):** `decision` always keeps Gemini's raw, uncapped suggestion. When `decision.confidence < 0.7` and `decision.accountAction` was a severe one (`restrict`/`suspend_temporary`/`suspend_permanent`), the account action actually applied is capped to `"warn"` — `appliedAccountAction` records that effective value, and `flaggedForReview` is set so the report is still findable for human monitoring even though no moderator queue/dashboard exists to push it to (query `flaggedForReview == true` directly, or check server logs). `contentAction` is never capped.
 
 ---
 

@@ -247,22 +247,23 @@ GET   /onboarding/watched-candidates       query: { genres?, languages? } → 20
 ```
 No `POST /users` — profile creation is the lazy, on-first-authenticated-request pattern from §13, not a distinct signup call. `GET /users/me` on a brand-new token is what triggers it server-side — `isNewUser` is `true` only on that exact bootstrap call (hld.md §13's flow diagram calls this out explicitly: "return 'new user' flag"), `false` on every call after. The frontend's actual "should I show onboarding" check is `isNewUser || !onboardingComplete` — the flag alone doesn't catch a user who signed up, got partway through the wizard, and closed the app.
 
-## 12. Reporting & moderation (§14a, §14b, §14c) 🔒
+## 12. Reporting & moderation (§14a, §30.8) 🔒
 
 ```
-POST /reports                              body: { targetType, targetId, category, reason } → 201 { reportId }
-
-GET  /moderation/reports                   query: { status=pending, cursor?, limit? } → 200 { items: [...] }
-                                              // 🔒 + moderator/admin custom claim required, §14b
-POST /moderation/reports/:reportId/action  body: { action: "warning"|"removeContent"|"restrict"|"suspend",
-                                                     targetType, targetId, expiresAt? } → 200
-                                              // 🔒 + moderator/admin claim
-
-GET  /admin/disputes                       query: { status=pending } → 200 { items: [...] }   // 🔒 + admin claim only
-POST /admin/disputes/:disputeId/resolve    body: { outcome: "upheld"|"overturned" } → 200      // 🔒 + admin claim only
-
-POST /admin/users/:uid/role                body: { role: "moderator"|"admin"|null } → 204      // 🔒 + admin claim only, §14c
+POST /reports   body: { targetType: "message"|"review"|"user"|"event", targetId, reason,
+                         roomId?,    // required when targetType is "message" — locates rooms/{roomId}/messages/{targetId}
+                         movieId? }  // required when targetType is "review" — locates movies/{movieId}/reviews/{targetId}
+              → 201 { reportId, status: "pending"|"actioned"|"dismissed"|"error",
+                       decision: { violates, category, contentAction: "none"|"remove",
+                                    accountAction: "none"|"warn"|"restrict"|"suspend_temporary"|"suspend_permanent",
+                                    suspensionDays, confidence, rationale, flaggedForReview, resolvedAt } | null }
 ```
+
+**Implementation note (added once this was actually built — supersedes the original §14b/§14c-based sketch this section used to have):** there is no moderator/admin role, no report queue, and no `/moderation/*` or `/admin/*` endpoints — §14b (human moderator review) and §14c (role assignment) were never built. Instead, `POST /reports` does everything in one request: it creates the report AND immediately asks Gemini to classify and decide (PRD §30.8), then applies that decision synchronously — soft-deleting the content and/or updating the target's account `status`/`statusExpiresAt` — before responding. The decision comes back to the *reporter* in the same response, for transparency. This is a deliberate product decision to make the AI moderator fully autonomous rather than PRD §30.8's original "triage layer, human still decides" framing.
+
+**Confidence-threshold capping (added after live testing raised "what happens when AI confidence is very low?"):** when `decision.confidence < 0.7` and Gemini suggested a severe `accountAction` (`restrict`, `suspend_temporary`, or `suspend_permanent`), the applied `accountAction` is capped down to `"warn"` (and `suspensionDays` forced to `null`) before it's applied — a low-confidence call can never itself suspend or restrict an account. `contentAction` is deliberately never capped, since a soft-delete is already reversible and lower-stakes than an account penalty. Every decision below the threshold — capped or not — gets `flaggedForReview: true` in the response. There is still no moderator queue/dashboard to route flags to (per the "AI moderators, not humans" product decision): today "flagging" means the report doc stores `flaggedForReview` and `appliedAccountAction` (see `docs/schema.md` §5), and the server logs a `logger.warn(...)` — both inspectable via the Firestore console or Cloud Run logs, not a new endpoint. `reports/{reportId}.decision` always stores Gemini's raw, uncapped suggestion for audit purposes; `appliedAccountAction` records what was actually executed. See `backend/src/services/reports.service.ts`'s `capLowConfidenceDecision()`.
+
+400 `INVALID_REPORT` for a bad/missing `targetType`/`targetId`/`reason` (or a missing `roomId`/`movieId` for the two target types that need one to be located). 404 `TARGET_NOT_FOUND` if the reported message/review/user/event doesn't exist. When `GEMINI_API_KEY` isn't configured, the report is still created but `status` stays `"pending"` and `decision` is `null` forever — there's no human fallback queue to route it to. If Gemini itself errors, `status` is `"error"`, `decision` is `null`, nothing gets actioned — fails safe rather than guessing. See `backend/src/lib/gemini.ts` for the exact prompt/decision schema and `backend/src/services/reports.service.ts` for how each action is applied.
 
 ## 13. Not REST endpoints — direct client connections
 

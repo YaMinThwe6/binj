@@ -5,8 +5,10 @@ const sendMessage = vi.fn()
 const deleteMessage = vi.fn()
 const subscribeToMessages = vi.fn()
 const unsubscribe = vi.fn()
+const reportContent = vi.fn()
 
 vi.mock('../../../../src/features/chat/services/roomApi', () => ({ sendMessage, deleteMessage, subscribeToMessages }))
+vi.mock('../../../../src/lib/api', () => ({ reportContent }))
 
 const { RoomChat } = await import('../../../../src/features/chat/components/RoomChat')
 
@@ -21,6 +23,7 @@ afterEach(() => {
   deleteMessage.mockReset()
   subscribeToMessages.mockReset()
   unsubscribe.mockReset()
+  reportContent.mockReset()
 })
 
 function mockSubscription(msgs: typeof messages) {
@@ -104,5 +107,79 @@ describe('RoomChat', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /back/i }))
     expect(onBack).toHaveBeenCalled()
+  })
+
+  it('only offers Report on other people\'s messages, not the caller\'s own', () => {
+    mockSubscription(messages)
+    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+
+    expect(screen.getAllByRole('button', { name: /^report$/i })).toHaveLength(1) // only m2, authored by uid-2
+  })
+
+  it('opens a reason form on Report, and submits it to reportContent', async () => {
+    mockSubscription(messages)
+    reportContent.mockResolvedValue({
+      reportId: 'rep-1',
+      status: 'actioned',
+      decision: {
+        violates: true,
+        category: 'harassment',
+        contentAction: 'remove',
+        accountAction: 'warn',
+        suspensionDays: null,
+        confidence: 0.8,
+        rationale: 'This was harassment.',
+        flaggedForReview: false,
+        resolvedAt: '2026-01-01T20:05:00.000Z'
+      }
+    })
+    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^report$/i }))
+    fireEvent.change(screen.getByLabelText(/why are you reporting/i), { target: { value: 'being rude' } })
+    fireEvent.click(screen.getByRole('button', { name: /submit report/i }))
+
+    await waitFor(() =>
+      expect(reportContent).toHaveBeenCalledWith({ targetType: 'message', targetId: 'm2', roomId: 'room-1', reason: 'being rude' })
+    )
+    expect(await screen.findByText(/action taken/i)).toHaveTextContent('This was harassment.')
+    expect(screen.queryByLabelText(/why are you reporting/i)).not.toBeInTheDocument()
+  })
+
+  it('mentions when a decision was low-confidence and flagged for human review', async () => {
+    mockSubscription(messages)
+    reportContent.mockResolvedValue({
+      reportId: 'rep-2',
+      status: 'dismissed',
+      decision: {
+        violates: false,
+        category: 'legitimate-discussion',
+        contentAction: 'none',
+        accountAction: 'none',
+        suspensionDays: null,
+        confidence: 0.3,
+        rationale: 'Unclear.',
+        flaggedForReview: true,
+        resolvedAt: '2026-01-01T20:05:00.000Z'
+      }
+    })
+    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^report$/i }))
+    fireEvent.change(screen.getByLabelText(/why are you reporting/i), { target: { value: 'not sure' } })
+    fireEvent.click(screen.getByRole('button', { name: /submit report/i }))
+
+    expect(await screen.findByText(/flagged for human review/i)).toBeInTheDocument()
+  })
+
+  it('closes the report form on Cancel without submitting', () => {
+    mockSubscription(messages)
+    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^report$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+    expect(screen.queryByLabelText(/why are you reporting/i)).not.toBeInTheDocument()
+    expect(reportContent).not.toHaveBeenCalled()
   })
 })
