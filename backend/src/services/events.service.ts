@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { EventSummary, UpcomingEvent, NearbyEvent } from "@binj/shared-types";
+type EventDetail = UpcomingEvent;
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { writeNotification } from "../lib/notify.js";
 import { AppError } from "../utils/AppError.js";
@@ -174,16 +175,22 @@ export async function listUpcomingEvents(rawLimit: unknown): Promise<{ items: Up
     .limit(limit)
     .get();
 
+  // §21's soft-delete filtered in application code, not a third Firestore
+  // range/inequality filter alongside the two already on this query
+  // (visibility, datetime) — Firestore only allows one range filter per
+  // query, and datetime already claims that slot.
   const items: UpcomingEvent[] = await Promise.all(
-    snap.docs.map(async (d) => {
-      const data = d.data();
-      const movieSnap = await db.collection("movies").doc(data.movieId).get();
-      return {
-        ...toEventSummary(d.id, data),
-        movieTitle: movieSnap.data()?.title ?? null,
-        moviePoster: movieSnap.data()?.poster ?? null
-      };
-    })
+    snap.docs
+      .filter((d) => d.data().deleted !== true)
+      .map(async (d) => {
+        const data = d.data();
+        const movieSnap = await db.collection("movies").doc(data.movieId).get();
+        return {
+          ...toEventSummary(d.id, data),
+          movieTitle: movieSnap.data()?.title ?? null,
+          moviePoster: movieSnap.data()?.poster ?? null
+        };
+      })
   );
 
   return { items };
@@ -196,7 +203,7 @@ export async function joinEvent(uid: string, eventId: string): Promise<{ status:
   const eventRef = db.collection("events").doc(eventId);
 
   const eventSnap = await eventRef.get();
-  if (!eventSnap.exists) {
+  if (!eventSnap.exists || eventSnap.data()?.deleted === true) {
     throw new AppError("EVENT_NOT_FOUND", "No such event", 404);
   }
   const event = eventSnap.data()!;
@@ -365,6 +372,7 @@ export async function listNearbyEvents(callerUid: string, rawLat: unknown, rawLn
 
   const candidates = snap.docs
     .map((d) => ({ id: d.id, data: d.data() }))
+    .filter(({ data }) => data.deleted !== true)
     .filter(({ data }) => {
       if (data.visibility === "public") return true;
       return data.hostId === callerUid || (Array.isArray(data.invitedUserIds) && data.invitedUserIds.includes(callerUid));
@@ -391,4 +399,50 @@ export async function listNearbyEvents(callerUid: string, rawLat: unknown, rawLn
   );
 
   return { items };
+}
+
+// GET /events/:eventId — hld.md §7/§21, api-contracts.md §8. Deliberately no
+// visibility-based access check here, consistent with the security model
+// already established for PUT /events/:eventId/join and this file's own note
+// on listNearbyEvents: a private event is protected by not being *listed*
+// anywhere the caller isn't allowed to see it (upcoming/nearby already do
+// that filtering) — not by blocking direct access to an unguessable
+// Firestore doc ID. Same reasoning as a join-code holder already being able
+// to open a private event directly by ID today. A soft-deleted event 404s,
+// same as a nonexistent one — indistinguishable from the outside.
+export async function getEvent(eventId: string): Promise<EventDetail> {
+  const db = requireDb();
+  const eventSnap = await db.collection("events").doc(eventId).get();
+  if (!eventSnap.exists || eventSnap.data()?.deleted === true) {
+    throw new AppError("EVENT_NOT_FOUND", "No such event", 404);
+  }
+  const data = eventSnap.data()!;
+  const movieSnap = await db.collection("movies").doc(data.movieId).get();
+  return {
+    ...toEventSummary(eventSnap.id, data),
+    movieTitle: movieSnap.data()?.title ?? null,
+    moviePoster: movieSnap.data()?.poster ?? null
+  };
+}
+
+// DELETE /events/:eventId — hld.md §21's general edit/delete pattern: author
+// (the host) only. No moderator branch — §14's role system was never built
+// (superseded by full-autonomy AI moderation, see hld.md §14), same reason
+// room-message delete stayed author-only. Soft delete only, per §21's
+// project-wide policy: the doc, its participants/joinRequests subcollections,
+// and its room are left untouched (audit trail; rooms are never
+// auto-deleted regardless, per hld.md §16). Existing participants aren't
+// notified of the cancellation — a smaller piece of the still-open "event
+// notifications" gap (hld.md §11), not addressed here.
+export async function deleteEvent(uid: string, eventId: string): Promise<void> {
+  const db = requireDb();
+  const eventRef = db.collection("events").doc(eventId);
+  const eventSnap = await eventRef.get();
+  if (!eventSnap.exists || eventSnap.data()?.deleted === true) {
+    throw new AppError("EVENT_NOT_FOUND", "No such event", 404);
+  }
+  if (eventSnap.data()?.hostId !== uid) {
+    throw new AppError("FORBIDDEN", "Only the host can delete this event", 403);
+  }
+  await eventRef.update({ deleted: true });
 }

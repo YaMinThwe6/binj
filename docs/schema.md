@@ -168,6 +168,8 @@ events/{eventId}                         // auto-ID
   invitedUserIds: array<string> | null
   roomId: string
   createdAt: timestamp
+  deleted: boolean | undefined            // §21 soft-delete (host-only); absent/false on every
+                                           // event until DELETE /events/:eventId is called on it
 
 events/{eventId}/participants/{uid}
   joinedAt: timestamp
