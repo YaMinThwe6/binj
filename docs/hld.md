@@ -1,6 +1,6 @@
 # BINJ — High-Level Design (Working Notes)
 
-Living document from the HLD walkthrough. Captures components, traced request flows, decisions made, and things still open. See [PRD.md](PRD.md) for product scope, [imdb-data-analysis.md](imdb-data-analysis.md) for the IMDb dataset analysis, and [backend-conventions.md](backend-conventions.md) for tooling/logging/folder-structure/response-envelope conventions (separate from *what* the backend does, which lives here).
+Living document from the HLD walkthrough. Captures components, traced request flows, decisions made, and things still open. See [PRD.md](PRD.md) for product scope, [imdb-data-analysis.md](imdb-data-analysis.md) for the IMDb dataset analysis, and [backend-conventions.md](backend-conventions.md) / [frontend-conventions.md](frontend-conventions.md) for tooling/logging/folder-structure/response-envelope conventions (separate from *what* the app does, which lives here).
 
 ---
 
