@@ -60,12 +60,10 @@ describe('Login — Email + OTP flow', () => {
 
     render(<Login />)
 
-    fireEvent.click(screen.getByRole('button', { name: /continue with email/i }))
-
     fireEvent.change(screen.getByLabelText(/email address/i), {
       target: { value: 'a@example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /send code/i }))
+    fireEvent.click(screen.getByRole('button', { name: /send me a code/i }))
 
     await waitFor(() =>
       expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument()
@@ -104,9 +102,8 @@ describe('Login — Email + OTP flow', () => {
 
     render(<Login />)
 
-    fireEvent.click(screen.getByRole('button', { name: /continue with email/i }))
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /send code/i }))
+    fireEvent.click(screen.getByRole('button', { name: /send me a code/i }))
 
     await waitFor(() => screen.getByLabelText(/verification code/i))
     fireEvent.change(screen.getByLabelText(/verification code/i), { target: { value: '000000' } })

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getMe, type Me } from './lib/api'
 import { useAuth } from './lib/AuthContext'
+import { applyAccentTheme } from './lib/theme'
 import { Login } from './features/auth/components/Login'
 import { OnboardingWizard } from './features/onboarding/components/OnboardingWizard'
 import { Home } from './features/home/components/Home'
@@ -22,6 +23,10 @@ function App() {
       .then(setMe)
       .catch((err) => setErrorMessage(err instanceof Error ? err.message : 'Failed to load profile'))
   }, [user])
+
+  useEffect(() => {
+    applyAccentTheme(me?.accentTheme)
+  }, [me?.accentTheme])
 
   if (authLoading) {
     return (
