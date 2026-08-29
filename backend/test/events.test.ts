@@ -127,6 +127,7 @@ let currentUid = "host-1";
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: currentUid })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -163,23 +164,23 @@ describe("POST /events", () => {
     const app = createApp();
     const res = await authed(app, "post", "/events").send({ ...validBody, mode: "carrier-pigeon" });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_EVENT");
+    expect(res.body.code).toBe("INVALID_EVENT");
   });
 
   it("404s when the movie doesn't exist", async () => {
     const app = createApp();
     const res = await authed(app, "post", "/events").send({ ...validBody, movieId: "no-such-movie" });
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("MOVIE_NOT_FOUND");
+    expect(res.body.code).toBe("MOVIE_NOT_FOUND");
   });
 
   it("creates the event, auto-joins the host, and assigns a roomId", async () => {
     const app = createApp();
     const res = await authed(app, "post", "/events").send(validBody);
     expect(res.status).toBe(201);
-    expect(res.body.hostId).toBe("host-1");
-    expect(res.body.participantCount).toBe(1);
-    const eventId = res.body.eventId;
+    expect(res.body.data.hostId).toBe("host-1");
+    expect(res.body.data.participantCount).toBe(1);
+    const eventId = res.body.data.eventId;
     expect(store.has(`events/${eventId}/participants/host-1`)).toBe(true);
     const stored = store.get(`events/${eventId}`) as { roomId: string };
     expect(store.has(`rooms/${stored.roomId}`)).toBe(true);
@@ -188,15 +189,15 @@ describe("POST /events", () => {
   it("generates a joinCode only for private events, and returns it in the create response", async () => {
     const app = createApp();
     const publicRes = await authed(app, "post", "/events").send(validBody);
-    expect(publicRes.body.joinCode).toBeNull();
-    const stored = store.get(`events/${publicRes.body.eventId}`) as { joinCode: string | null };
+    expect(publicRes.body.data.joinCode).toBeNull();
+    const stored = store.get(`events/${publicRes.body.data.eventId}`) as { joinCode: string | null };
     expect(stored.joinCode).toBeNull();
 
     const privateRes = await authed(app, "post", "/events").send({ ...validBody, visibility: "private" });
-    expect(typeof privateRes.body.joinCode).toBe("string");
-    expect(privateRes.body.joinCode.length).toBeGreaterThan(0);
-    const privateStored = store.get(`events/${privateRes.body.eventId}`) as { joinCode: string | null };
-    expect(privateStored.joinCode).toBe(privateRes.body.joinCode);
+    expect(typeof privateRes.body.data.joinCode).toBe("string");
+    expect(privateRes.body.data.joinCode.length).toBeGreaterThan(0);
+    const privateStored = store.get(`events/${privateRes.body.data.eventId}`) as { joinCode: string | null };
+    expect(privateStored.joinCode).toBe(privateRes.body.data.joinCode);
   });
 });
 
@@ -210,8 +211,8 @@ describe("GET /events/upcoming", () => {
     const app = createApp();
     const res = await authed(app, "get", "/events/upcoming");
     expect(res.status).toBe(200);
-    expect(res.body.items.map((e: { eventId: string }) => e.eventId)).toEqual(["soon", "later"]);
-    expect(res.body.items[0].movieTitle).toBe("Dune: Part Two");
+    expect(res.body.data.items.map((e: { eventId: string }) => e.eventId)).toEqual(["soon", "later"]);
+    expect(res.body.data.items[0].movieTitle).toBe("Dune: Part Two");
   });
 });
 
@@ -228,7 +229,7 @@ describe("PUT /events/:eventId/join", () => {
     const app = createApp();
     const res = await authed(app, "put", "/events/evt-1/join");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "joined" });
+    expect(res.body.data).toEqual({ status: "joined" });
     expect(store.has("events/evt-1/participants/guest-1")).toBe(true);
     expect((store.get("events/evt-1") as { participantCount: number }).participantCount).toBe(2);
   });
@@ -239,7 +240,7 @@ describe("PUT /events/:eventId/join", () => {
     const app = createApp();
     const res = await authed(app, "put", "/events/evt-1/join");
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("EVENT_FULL");
+    expect(res.body.code).toBe("EVENT_FULL");
   });
 
   it("creates a pending join request when approval is required", async () => {
@@ -248,7 +249,7 @@ describe("PUT /events/:eventId/join", () => {
     const app = createApp();
     const res = await authed(app, "put", "/events/evt-1/join");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "pending" });
+    expect(res.body.data).toEqual({ status: "pending" });
     expect(store.has("events/evt-1/joinRequests/guest-1")).toBe(true);
   });
 
@@ -259,7 +260,7 @@ describe("PUT /events/:eventId/join", () => {
     const app = createApp();
     const res = await authed(app, "put", "/events/evt-1/join");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "joined" });
+    expect(res.body.data).toEqual({ status: "joined" });
     expect((store.get("events/evt-1") as { participantCount: number }).participantCount).toBe(2);
   });
 });

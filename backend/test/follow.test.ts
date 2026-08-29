@@ -95,6 +95,7 @@ const dbWithPaths = {
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
   db: dbWithPaths,
+  requireDb: () => dbWithPaths,
   isFirebaseConfigured: () => true
 }));
 
@@ -119,7 +120,7 @@ describe("PUT /users/:uid/follow", () => {
     const app = createApp();
     const res = await authed(app, "put", "/users/uid-1/follow");
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("CANNOT_FOLLOW_SELF");
+    expect(res.body.code).toBe("CANNOT_FOLLOW_SELF");
   });
 
   it("404s for a nonexistent user", async () => {
@@ -133,7 +134,7 @@ describe("PUT /users/:uid/follow", () => {
     const app = createApp();
     const res = await authed(app, "put", "/users/uid-2/follow");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "following" });
+    expect(res.body.data).toEqual({ status: "following" });
     expect(store.has("users/uid-1/following/uid-2")).toBe(true);
     expect(store.has("users/uid-2/followers/uid-1")).toBe(true);
   });
@@ -143,7 +144,7 @@ describe("PUT /users/:uid/follow", () => {
     const app = createApp();
     const res = await authed(app, "put", "/users/uid-2/follow");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "pending" });
+    expect(res.body.data).toEqual({ status: "pending" });
     expect(store.has("users/uid-2/followRequests/uid-1")).toBe(true);
     expect(store.has("users/uid-1/following/uid-2")).toBe(false);
   });
@@ -154,7 +155,7 @@ describe("PUT /users/:uid/follow", () => {
     const app = createApp();
     const res = await authed(app, "put", "/users/uid-2/follow");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "following" });
+    expect(res.body.data).toEqual({ status: "following" });
   });
 });
 
@@ -177,7 +178,7 @@ describe("follow requests", () => {
     const app = createApp();
     const res = await authed(app, "get", "/users/me/followRequests");
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([{ uid: "uid-2", displayName: "Rohan", photoURL: null }]);
+    expect(res.body.data.items).toEqual([{ uid: "uid-2", displayName: "Rohan", photoURL: null }]);
   });
 
   it("approve creates the following/followers pair and clears the request", async () => {

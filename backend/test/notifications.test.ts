@@ -61,6 +61,7 @@ const db = { collection: (name: string) => ({ ...collectionRef(name), doc: (id: 
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -83,7 +84,7 @@ describe("GET /users/me/notifications", () => {
     const app = createApp();
     const res = await request(app).get("/users/me/notifications").set("Authorization", "Bearer good");
     expect(res.status).toBe(200);
-    expect(res.body.items.map((n: { id: string }) => n.id)).toEqual(["n2", "n1"]);
+    expect(res.body.data.items.map((n: { id: string }) => n.id)).toEqual(["n2", "n1"]);
   });
 
   it("filters to unread only when unreadOnly=true", async () => {
@@ -91,7 +92,7 @@ describe("GET /users/me/notifications", () => {
     store.set("users/uid-1/notifications/n2", { type: "eventJoinApproved", fromUserId: "uid-3", read: true, createdAt: new Date("2026-01-02") });
     const app = createApp();
     const res = await request(app).get("/users/me/notifications?unreadOnly=true").set("Authorization", "Bearer good");
-    expect(res.body.items.map((n: { id: string }) => n.id)).toEqual(["n1"]);
+    expect(res.body.data.items.map((n: { id: string }) => n.id)).toEqual(["n1"]);
   });
 });
 

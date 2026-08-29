@@ -58,6 +58,7 @@ const db = { collection: (name: string) => collectionRef(name) };
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -83,8 +84,8 @@ describe("GET /home/greeting", () => {
     const app = createApp();
     const res = await authed(app, "/home/greeting");
     expect(res.status).toBe(200);
-    expect(res.body.source).toBe("watched");
-    expect(res.body.attribution).toBe("Inception");
+    expect(res.body.data.source).toBe("watched");
+    expect(res.body.data.attribution).toBe("Inception");
   });
 
   it("falls back to a random quote when nothing watched matches the curated set", async () => {
@@ -92,9 +93,9 @@ describe("GET /home/greeting", () => {
     const app = createApp();
     const res = await authed(app, "/home/greeting");
     expect(res.status).toBe(200);
-    expect(res.body.source).toBe("random");
-    expect(typeof res.body.quote).toBe("string");
-    expect(typeof res.body.attribution).toBe("string");
+    expect(res.body.data.source).toBe("random");
+    expect(typeof res.body.data.quote).toBe("string");
+    expect(typeof res.body.data.attribution).toBe("string");
   });
 });
 
@@ -103,7 +104,7 @@ describe("GET /home/activity", () => {
     const app = createApp();
     const res = await authed(app, "/home/activity");
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([]);
+    expect(res.body.data.items).toEqual([]);
   });
 
   it("only surfaces activity from people the caller actually follows, newest first", async () => {
@@ -118,7 +119,7 @@ describe("GET /home/activity", () => {
     const app = createApp();
     const res = await authed(app, "/home/activity");
     expect(res.status).toBe(200);
-    expect(res.body.items.map((i: { activityId: string }) => i.activityId)).toEqual(["a2", "a1"]);
-    expect(res.body.items[0]).toMatchObject({ displayName: "Rohan", type: "watchlist_added", movieTitle: "Dune: Part Two" });
+    expect(res.body.data.items.map((i: { activityId: string }) => i.activityId)).toEqual(["a2", "a1"]);
+    expect(res.body.data.items[0]).toMatchObject({ displayName: "Rohan", type: "watchlist_added", movieTitle: "Dune: Part Two" });
   });
 });

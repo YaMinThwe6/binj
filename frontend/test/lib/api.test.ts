@@ -5,7 +5,7 @@ vi.mock('../../src/lib/firebase', () => ({
   googleProvider: {}
 }))
 
-const { searchMovies, getMovie, getMe, updateMe } = await import('../../src/lib/api')
+const { getMe, updateMe } = await import('../../src/lib/api')
 const mockAuth = (await import('../../src/lib/firebase')).auth as unknown as { currentUser: { getIdToken: () => Promise<string> } | null }
 
 const originalFetch = globalThis.fetch
@@ -13,36 +13,6 @@ const originalFetch = globalThis.fetch
 afterEach(() => {
   globalThis.fetch = originalFetch
   vi.restoreAllMocks()
-})
-
-describe('searchMovies', () => {
-  it('calls the search endpoint with the query and returns items', async () => {
-    const mockResponse = { items: [{ movieId: '634649', title: 'Spider-Man: No Way Home', poster: null, year: 2021 }] }
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => mockResponse,
-    }) as unknown as typeof fetch
-
-    const result = await searchMovies('spider-man')
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/search/movies?q=spider-man'),
-      expect.objectContaining({ method: 'GET' })
-    )
-    expect(result).toEqual(mockResponse)
-  })
-})
-
-describe('getMovie', () => {
-  it('throws with the server error message when the request fails', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 502,
-      json: async () => ({ error: { code: 'TMDB_UPSTREAM_ERROR', message: 'Failed to fetch movie details' } }),
-    }) as unknown as typeof fetch
-
-    await expect(getMovie('1930')).rejects.toThrow('Failed to fetch movie details')
-  })
 })
 
 describe('getMe', () => {
@@ -59,7 +29,8 @@ describe('getMe', () => {
     const me = { uid: 'uid-1', displayName: 'Arjun', email: 'a@example.com' }
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => me,
+      status: 200,
+      json: async () => ({ success: true, message: 'OK', statusCode: 200, data: me }),
     }) as unknown as typeof fetch
 
     const result = await getMe()
@@ -73,6 +44,17 @@ describe('getMe', () => {
     )
     expect(result).toEqual(me)
   })
+
+  it('throws with the server error message when the request fails', async () => {
+    mockAuth.currentUser = { getIdToken: vi.fn().mockResolvedValue('fake-id-token') } as never
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ success: false, message: 'Firestore is not configured', code: 'FIRESTORE_NOT_CONFIGURED', statusCode: 503 }),
+    }) as unknown as typeof fetch
+
+    await expect(getMe()).rejects.toThrow('Firestore is not configured')
+  })
 })
 
 describe('updateMe', () => {
@@ -84,7 +66,8 @@ describe('updateMe', () => {
     mockAuth.currentUser = { getIdToken: vi.fn().mockResolvedValue('fake-id-token') } as never
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ accentTheme: 'pink' }),
+      status: 200,
+      json: async () => ({ success: true, message: 'OK', statusCode: 200, data: { accentTheme: 'pink' } }),
     }) as unknown as typeof fetch
 
     await updateMe({ accentTheme: 'pink' })

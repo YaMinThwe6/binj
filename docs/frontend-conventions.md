@@ -4,7 +4,9 @@ Written 2026-08-29, alongside [backend-conventions.md](backend-conventions.md) �
 
 ---
 
-## 1. Target structure — feature-based
+## 1. Structure — feature-based
+
+**Status (2026-08-29): done**, on `feature/architecture-restructure` — the tree below is now the actual `src/` layout, not just a target (with `features/auth/` also getting a `services/` folder, per §2).
 
 One component per file (already the practice — every `.tsx` in the codebase is a single component), organized by feature/domain rather than by file type, so working on one feature means working in one folder instead of jumping across the whole tree.
 
@@ -22,7 +24,8 @@ frontend/src/
 │                            # error-parsing logic every feature's service file calls into)
 ├── features/
 │   ├── auth/
-│   │   └── components/     # Login.tsx
+│   │   ├── components/     # Login.tsx
+│   │   └── services/       # authApi.ts
 │   ├── onboarding/
 │   │   ├── components/     # OnboardingWizard, UsernameStep, GenresStep, LanguageStep,
 │   │   │                   # WatchedStep, CelebritiesStep, SuccessStep, MultiSelectStep
@@ -47,18 +50,17 @@ A feature's `index.ts` is its public API surface (re-exporting only what other f
 
 ## 2. `lib/api.ts` → per-feature `services/`
 
-**Decision:** split. The current single `lib/api.ts` (~30 functions spanning auth, onboarding, home, movies, reviews, events, follow, notifications) becomes one `services/<feature>Api.ts` per feature:
+**Status (2026-08-29): done**, on `feature/architecture-restructure`. The old single `lib/api.ts` (~30 functions spanning auth, onboarding, home, movies, reviews, events, follow, notifications) is now one `services/<feature>Api.ts` per feature:
 
+- `features/auth/services/authApi.ts` — `startEmailAuth`, `verifyEmailAuth`. (Added during execution — the original plan's tree showed `features/auth/` with only `components/`, but the two Login-only API calls clearly belong in their own feature's `services/`, same as every other feature, rather than staying in cross-cutting `lib/`.)
 - `features/onboarding/services/onboardingApi.ts` — `checkUsernameAvailable`, `getWatchedCandidates`, `getCelebritySuggestions`, `followCelebrity`/`unfollowCelebrity`
 - `features/home/services/homeApi.ts` — `getHomeGreeting`, `getHomeActivity`, `getRecommendations`, `getTasteMatches`, `followUser`/`unfollowUser`, `getUpcomingEvents`, `joinEvent`/`leaveEvent`, `getNotifications`, `markNotificationRead`
 - `features/movie/services/movieApi.ts` — `searchMovies`, `getMovie`, `getMovieStatus`, `getMovieReviews`, `submitReview`, `deleteReview`, `likeMovie`/`unlikeMovie`, `addToWatchlist`/`removeFromWatchlist`, `markWatched`/`unmarkWatched`
-- `getMe`/`updateMe` (used by nearly everything — onboarding, Home's topbar, App.tsx's gate) stay in `lib/` alongside `AuthContext` rather than forced into any one feature
+- `getMe`/`updateMe` (used by nearly everything — onboarding, Home's topbar, App.tsx's gate) stay in `lib/api.ts` alongside `AuthContext` rather than forced into any one feature
 
-`apiFetch()` itself (the shared fetch wrapper: auth header injection, JSON body, the `{error:{code,message}}` unwrap) stays in `lib/api.ts` (or a renamed `lib/apiClient.ts`) — it's genuinely cross-cutting, every service file imports it, no feature owns it.
+`apiFetch()` itself (the shared fetch wrapper: auth header injection, JSON body) stays in `lib/api.ts` — it's genuinely cross-cutting, every service file imports it, no feature owns it. It was also updated in the same pass to parse the new backend envelope (docs/backend-conventions.md §3): unwraps `data` on success, throws `responseBody.message` on failure — replacing the old `responseBody?.error?.message` shape.
 
-Type re-exports (`export type { ... } from '@binj/shared-types'`) move to whichever service file each type actually belongs to, rather than one shared block.
-
-**Not yet executed** — this is the target, not the current state. Tracked as a dedicated branch, same [[feedback_feature_branch_workflow]] convention as any other change, sequenced **after `feature/movie-detail-rate-review` merges** (that branch is where `MovieDetail.tsx`/`MovieSearch.tsx` currently live; branching for the restructure before it merges would either bloat that PR with an unrelated diff or create merge conflicts with a file that doesn't exist on `main` yet).
+Type re-exports (`export type { ... } from '@binj/shared-types'`) moved to whichever service file each type actually belongs to, rather than one shared block. `Me` (the app's name for `UserProfile`) stayed in `lib/api.ts` alongside `getMe`/`updateMe`.
 
 ---
 

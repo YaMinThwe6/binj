@@ -1,19 +1,21 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { moviesRouter } from "./routes/movies.js";
-import { usersRouter } from "./routes/users.js";
-import { authRouter } from "./routes/auth.js";
-import { userMoviesRouter } from "./routes/userMovies.js";
-import { recommendationsRouter } from "./routes/recommendations.js";
-import { peopleRouter } from "./routes/people.js";
-import { onboardingRouter } from "./routes/onboarding.js";
-import { followRouter } from "./routes/follow.js";
-import { eventsRouter } from "./routes/events.js";
-import { homeRouter } from "./routes/home.js";
-import { notificationsRouter } from "./routes/notifications.js";
-import { reviewsRouter } from "./routes/reviews.js";
+import { moviesRouter } from "./routes/movies.route.js";
+import { usersRouter } from "./routes/users.route.js";
+import { authRouter } from "./routes/auth.route.js";
+import { userMoviesRouter } from "./routes/userMovies.route.js";
+import { recommendationsRouter } from "./routes/recommendations.route.js";
+import { peopleRouter } from "./routes/people.route.js";
+import { onboardingRouter } from "./routes/onboarding.route.js";
+import { followRouter } from "./routes/follow.route.js";
+import { eventsRouter } from "./routes/events.route.js";
+import { homeRouter } from "./routes/home.route.js";
+import { notificationsRouter } from "./routes/notifications.route.js";
+import { reviewsRouter } from "./routes/reviews.route.js";
 import { isFirebaseConfigured } from "./lib/firebaseAdmin.js";
+import { globalErrorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { Responder } from "./utils/responder.js";
 
 export function createApp(): Express {
   const app = express();
@@ -23,7 +25,7 @@ export function createApp(): Express {
   app.use(express.json());
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", firebaseConfigured: isFirebaseConfigured() });
+    Responder.success(res, { status: "ok", firebaseConfigured: isFirebaseConfigured() });
   });
 
   app.use(moviesRouter);
@@ -39,9 +41,8 @@ export function createApp(): Express {
   app.use(notificationsRouter);
   app.use(reviewsRouter);
 
-  app.use((_req, res) => {
-    res.status(404).json({ error: { code: "NOT_FOUND", message: "No such route" } });
-  });
+  app.use(notFoundHandler);
+  app.use(globalErrorHandler);
 
   return app;
 }

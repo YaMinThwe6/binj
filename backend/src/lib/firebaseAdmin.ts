@@ -3,6 +3,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { env, firebaseConfigured } from "./env.js";
 import { logger } from "./logger.js";
+import { AppError } from "../utils/AppError.js";
 
 let db: Firestore | null = null;
 let auth: Auth | null = null;
@@ -23,3 +24,22 @@ if (firebaseConfigured) {
 
 export { db, auth };
 export const isFirebaseConfigured = () => firebaseConfigured;
+
+// Every service function that touches Firestore starts with this instead of
+// its own `if (!db) return res.status(503)...` — one place declares the
+// "Firestore isn't configured" contract, services just get a non-null `db`.
+export function requireDb(): Firestore {
+  if (!db) {
+    throw new AppError("FIRESTORE_NOT_CONFIGURED", "Firestore is not configured on this server", 503);
+  }
+  return db;
+}
+
+// Same idea as requireDb(), for the handful of services that need the
+// Firebase Auth Admin SDK directly (currently just auth.service.ts).
+export function requireFirebaseAuth(): Auth {
+  if (!auth) {
+    throw new AppError("FIREBASE_NOT_CONFIGURED", "Firebase is not configured on this server", 503);
+  }
+  return auth;
+}

@@ -99,6 +99,7 @@ const db = {
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -122,7 +123,7 @@ describe("Watchlist", () => {
     const app = createApp();
     const res = await authed(app, "put", "/users/me/watchlist/no-such-movie");
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("MOVIE_NOT_FOUND");
+    expect(res.body.code).toBe("MOVIE_NOT_FOUND");
   });
 
   it("PUT adds a real movie to the watchlist", async () => {
@@ -152,8 +153,8 @@ describe("Watchlist", () => {
     const app = createApp();
     const res = await authed(app, "get", "/users/me/watchlist?limit=1");
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([{ movieId: "movie-2", addedAt: "2026-01-02T00:00:00.000Z" }]);
-    expect(res.body.nextCursor).toBe("movie-2");
+    expect(res.body.data.items).toEqual([{ movieId: "movie-2", addedAt: "2026-01-02T00:00:00.000Z" }]);
+    expect(res.body.data.nextCursor).toBe("movie-2");
   });
 });
 
@@ -199,7 +200,7 @@ describe("Watched", () => {
       .set("Authorization", "Bearer good")
       .send({ visibility: "private" });
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("NOT_WATCHED");
+    expect(res.body.code).toBe("NOT_WATCHED");
   });
 
   it("PATCH 400s on an invalid visibility value", async () => {
@@ -264,7 +265,7 @@ describe("GET /users/me/movies/:movieId — status bundle", () => {
     const app = createApp();
     const res = await authed(app, "get", "/users/me/movies/movie-1");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ watchlisted: false, watched: false, liked: false, review: null });
+    expect(res.body.data).toEqual({ watchlisted: false, watched: false, liked: false, review: null });
   });
 
   it("reflects true state when watchlisted, watched, and liked", async () => {
@@ -273,7 +274,7 @@ describe("GET /users/me/movies/:movieId — status bundle", () => {
     store.set("users/uid-1/likes/movie-1", { createdAt: new Date() });
     const app = createApp();
     const res = await authed(app, "get", "/users/me/movies/movie-1");
-    expect(res.body).toMatchObject({ watchlisted: true, watched: true, liked: true });
+    expect(res.body.data).toMatchObject({ watchlisted: true, watched: true, liked: true });
   });
 
   it("review reflects the caller's own review even when isAnonymous is true", async () => {
@@ -283,7 +284,7 @@ describe("GET /users/me/movies/:movieId — status bundle", () => {
     });
     const app = createApp();
     const res = await authed(app, "get", "/users/me/movies/movie-1");
-    expect(res.body.review).toMatchObject({ rating: 5, reviewText: "Loved it", isAnonymous: true });
+    expect(res.body.data.review).toMatchObject({ rating: 5, reviewText: "Loved it", isAnonymous: true });
   });
 
   it("review is null after a soft-delete, not the stale deleted content", async () => {
@@ -293,7 +294,7 @@ describe("GET /users/me/movies/:movieId — status bundle", () => {
     });
     const app = createApp();
     const res = await authed(app, "get", "/users/me/movies/movie-1");
-    expect(res.body.review).toBeNull();
+    expect(res.body.data.review).toBeNull();
   });
 });
 

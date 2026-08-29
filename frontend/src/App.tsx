@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { getMe, type Me } from './lib/api'
 import { useAuth } from './lib/AuthContext'
-import { Login } from './Login'
-import { OnboardingWizard } from './onboarding/OnboardingWizard'
-import { Home } from './home/Home'
-import { MovieSearch } from './MovieSearch'
+import { Login } from './features/auth/components/Login'
+import { OnboardingWizard } from './features/onboarding/components/OnboardingWizard'
+import { Home } from './features/home/components/Home'
+import { MovieSearch } from './features/movie/components/MovieSearch'
 import './App.css'
 
 function App() {

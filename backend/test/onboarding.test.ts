@@ -61,6 +61,7 @@ const db = { collection: (name: string) => makeCollectionRef(name) };
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -90,7 +91,7 @@ describe("GET /onboarding/watched-candidates", () => {
     const app = createApp();
     const res = await req(app);
     expect(res.status).toBe(200);
-    expect(res.body.items.map((m: { movieId: string }) => m.movieId)).toEqual([
+    expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).toEqual([
       "interstellar",
       "parasite",
       "dune",
@@ -103,14 +104,14 @@ describe("GET /onboarding/watched-candidates", () => {
     const app = createApp();
     const res = await req(app, "?genres=Thriller");
     expect(res.status).toBe(200);
-    expect(res.body.items.map((m: { movieId: string }) => m.movieId)).toEqual(["parasite", "oldboy"]);
+    expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).toEqual(["parasite", "oldboy"]);
   });
 
   it("filters by languages only", async () => {
     const app = createApp();
     const res = await req(app, "?languages=ko");
     expect(res.status).toBe(200);
-    expect(res.body.items.map((m: { movieId: string }) => m.movieId)).toEqual(["parasite", "oldboy"]);
+    expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).toEqual(["parasite", "oldboy"]);
   });
 
   it("combines genres and languages (genre query, language filtered in-app)", async () => {
@@ -118,6 +119,6 @@ describe("GET /onboarding/watched-candidates", () => {
     const res = await req(app, "?genres=Drama&languages=ko");
     expect(res.status).toBe(200);
     // Drama movies are interstellar(en) and parasite(ko) — only parasite matches both
-    expect(res.body.items.map((m: { movieId: string }) => m.movieId)).toEqual(["parasite"]);
+    expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).toEqual(["parasite"]);
   });
 });
