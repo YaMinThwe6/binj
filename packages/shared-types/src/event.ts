@@ -27,3 +27,9 @@ export interface UpcomingEvent extends EventSummary {
   movieTitle: string | null
   moviePoster: string | null
 }
+
+// GET /events/nearby item — hld.md §9. Same shape as UpcomingEvent, plus the
+// caller-relative distance the geohash-range query was filtered/sorted by.
+export interface NearbyEvent extends UpcomingEvent {
+  distanceKm: number
+}

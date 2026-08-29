@@ -5,6 +5,7 @@ import { GreetingHero } from './GreetingHero'
 import { TopPicks } from './TopPicks'
 import { PeopleYouMightVibeWith } from './PeopleYouMightVibeWith'
 import { UpcomingEvents } from './UpcomingEvents'
+import { NearbyEvents } from './NearbyEvents'
 import { FriendsAreWatching } from './FriendsAreWatching'
 import '../home.css'
 
@@ -41,6 +42,7 @@ export function Home({ me, onSignOut, onNavigateSearch }: Props) {
       <TopPicks />
       <PeopleYouMightVibeWith />
       <UpcomingEvents />
+      <NearbyEvents />
       <FriendsAreWatching />
 
       <nav className="bottom-nav">

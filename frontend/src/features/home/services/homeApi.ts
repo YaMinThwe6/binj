@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../lib/api'
-export type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem } from '@binj/shared-types'
-import type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem } from '@binj/shared-types'
+export type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent } from '@binj/shared-types'
+import type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent } from '@binj/shared-types'
 
 export function getHomeGreeting(): Promise<Greeting> {
   return apiFetch('/home/greeting', { auth: true })
@@ -28,6 +28,10 @@ export function unfollowUser(uid: string): Promise<void> {
 
 export function getUpcomingEvents(): Promise<{ items: UpcomingEvent[] }> {
   return apiFetch('/events/upcoming', { auth: true })
+}
+
+export function getNearbyEvents(lat: number, lng: number, radiusKm: number): Promise<{ items: NearbyEvent[] }> {
+  return apiFetch(`/events/nearby?lat=${lat}&lng=${lng}&radiusKm=${radiusKm}`, { auth: true })
 }
 
 export function joinEvent(eventId: string): Promise<{ status: 'joined' | 'pending' }> {

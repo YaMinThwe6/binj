@@ -12,6 +12,11 @@ export async function getUpcomingEvents(req: Request, res: Response): Promise<vo
   Responder.success(res, result);
 }
 
+export async function getNearbyEvents(req: Request, res: Response): Promise<void> {
+  const result = await eventsService.listNearbyEvents(req.uid!, req.query.lat, req.query.lng, req.query.radiusKm);
+  Responder.success(res, result);
+}
+
 export async function putJoinEvent(req: Request, res: Response): Promise<void> {
   const result = await eventsService.joinEvent(req.uid!, req.params.eventId);
   Responder.success(res, result);

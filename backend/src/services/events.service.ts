@@ -1,8 +1,12 @@
 import { randomBytes } from "node:crypto";
-import type { EventSummary, UpcomingEvent } from "@binj/shared-types";
+import type { EventSummary, UpcomingEvent, NearbyEvent } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { writeNotification } from "../lib/notify.js";
 import { AppError } from "../utils/AppError.js";
+import { encodeGeohash, geohashPrecisionForRadiusKm, geohashPrefixRange, haversineDistanceKm } from "../lib/geohash.js";
+
+const GEOHASH_STORAGE_PRECISION = 9;
+const MAX_NEARBY_RADIUS_KM = 200;
 
 const DEFAULT_UPCOMING_LIMIT = 10;
 const MAX_UPCOMING_LIMIT = 50;
@@ -14,6 +18,12 @@ function generateJoinCode(): string {
 function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : value.toDate().toISOString();
+}
+
+function isValidLatLng(location: unknown): location is { lat: number; lng: number } {
+  if (typeof location !== "object" || location === null) return false;
+  const { lat, lng } = location as { lat?: unknown; lng?: unknown };
+  return typeof lat === "number" && typeof lng === "number" && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
 function toEventSummary(id: string, data: FirebaseFirestore.DocumentData): EventSummary {
@@ -89,7 +99,12 @@ export async function createEvent(hostId: string, body: CreateEventInput): Promi
     datetime: parsedDatetime,
     mode,
     location: body.location ?? null,
-    geohash: null, // §9 location-based discovery — not computed yet, not needed for Home
+    // hld.md §9 — geohash powers /events/nearby's prefix-range query. Only
+    // meaningful for in-person events with a real lat/lng; online events (and
+    // in-person events without a resolved location yet) simply aren't
+    // discoverable by location, same as they're already absent from any
+    // radius search a client might run.
+    geohash: isValidLatLng(body.location) ? encodeGeohash(body.location.lat, body.location.lng, GEOHASH_STORAGE_PRECISION) : null,
     visibility,
     participantLimit,
     participantCount: 1, // host auto-joins
@@ -265,4 +280,61 @@ export async function denyJoinRequest(uid: string, eventId: string, requesterUid
     throw new AppError("FORBIDDEN", "Only the host can deny join requests", 403);
   }
   await db.collection("events").doc(eventId).collection("joinRequests").doc(requesterUid).delete();
+}
+
+// GET /events/nearby — hld.md §9. Firestore has no native radius query, so
+// this runs a geohash-prefix range query (an approximation of a bounding
+// box), then post-filters to an actual haversine distance and sorts by it.
+// Composes with §7's existing visibility rules rather than bypassing them —
+// a naive geo-radius query would otherwise leak a private event's
+// existence/location to any nearby stranger: results are limited to public
+// events, or private events the caller is hosting or was explicitly invited
+// to. (A join-code holder who isn't invited can still open that event
+// directly by ID — this endpoint just doesn't surface it via location.)
+export async function listNearbyEvents(callerUid: string, rawLat: unknown, rawLng: unknown, rawRadiusKm: unknown): Promise<{ items: NearbyEvent[] }> {
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
+  const radiusKm = Number(rawRadiusKm);
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+    throw new AppError("INVALID_QUERY", "lat/lng must be valid coordinates", 400);
+  }
+  if (!Number.isFinite(radiusKm) || radiusKm <= 0 || radiusKm > MAX_NEARBY_RADIUS_KM) {
+    throw new AppError("INVALID_QUERY", `radiusKm must be a positive number up to ${MAX_NEARBY_RADIUS_KM}`, 400);
+  }
+
+  const db = requireDb();
+  const precision = geohashPrecisionForRadiusKm(radiusKm);
+  const prefix = encodeGeohash(lat, lng, precision);
+  const { start, end } = geohashPrefixRange(prefix);
+
+  const snap = await db.collection("events").where("geohash", ">=", start).where("geohash", "<", end).get();
+
+  const candidates = snap.docs
+    .map((d) => ({ id: d.id, data: d.data() }))
+    .filter(({ data }) => {
+      if (data.visibility === "public") return true;
+      return data.hostId === callerUid || (Array.isArray(data.invitedUserIds) && data.invitedUserIds.includes(callerUid));
+    })
+    .filter(({ data }) => isValidLatLng(data.location))
+    .map(({ id, data }) => ({
+      id,
+      data,
+      distanceKm: haversineDistanceKm(lat, lng, data.location.lat, data.location.lng)
+    }))
+    .filter(({ distanceKm }) => distanceKm <= radiusKm)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+
+  const items: NearbyEvent[] = await Promise.all(
+    candidates.map(async ({ id, data, distanceKm }) => {
+      const movieSnap = await db.collection("movies").doc(data.movieId).get();
+      return {
+        ...toEventSummary(id, data),
+        movieTitle: movieSnap.data()?.title ?? null,
+        moviePoster: movieSnap.data()?.poster ?? null,
+        distanceKm: Math.round(distanceKm * 10) / 10
+      };
+    })
+  );
+
+  return { items };
 }
