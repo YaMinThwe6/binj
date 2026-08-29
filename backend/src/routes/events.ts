@@ -4,6 +4,7 @@ import type { EventSummary, UpcomingEvent } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 import { writeNotification } from "../lib/notify.js";
+import { logger } from "../lib/logger.js";
 
 export const eventsRouter = Router();
 
@@ -104,7 +105,7 @@ eventsRouter.post("/events", requireAuth, async (req, res) => {
 
     return res.status(201).json(toEventSummary(eventRef.id, eventDoc));
   } catch (err) {
-    console.error(`[POST /events] hostId=${hostId}`, err);
+    logger.error(`[POST /events] hostId=${hostId}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to create event" } });
   }
 });
@@ -140,7 +141,7 @@ eventsRouter.get("/events/upcoming", requireAuth, async (req, res) => {
 
     return res.json({ items });
   } catch (err) {
-    console.error("[GET /events/upcoming]", err);
+    logger.error("[GET /events/upcoming]", err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load upcoming events" } });
   }
 });
@@ -188,7 +189,7 @@ eventsRouter.put("/events/:eventId/join", requireAuth, async (req, res) => {
     }
     return res.json({ status: "pending" });
   } catch (err) {
-    console.error(`[PUT /events/${eventId}/join] uid=${uid}`, err);
+    logger.error(`[PUT /events/${eventId}/join] uid=${uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to join event" } });
   }
 });
@@ -216,7 +217,7 @@ eventsRouter.delete("/events/:eventId/join", requireAuth, async (req, res) => {
     });
     return res.status(204).send();
   } catch (err) {
-    console.error(`[DELETE /events/${eventId}/join] uid=${uid}`, err);
+    logger.error(`[DELETE /events/${eventId}/join] uid=${uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to leave event" } });
   }
 });
@@ -245,7 +246,7 @@ eventsRouter.get("/events/:eventId/joinRequests", requireAuth, async (req, res) 
     );
     return res.json({ items });
   } catch (err) {
-    console.error(`[GET /events/${eventId}/joinRequests] uid=${uid}`, err);
+    logger.error(`[GET /events/${eventId}/joinRequests] uid=${uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load join requests" } });
   }
 });
@@ -286,7 +287,7 @@ eventsRouter.post("/events/:eventId/joinRequests/:requesterUid/approve", require
     await writeNotification(requesterUid, "eventJoinApproved", uid, "event", eventId);
     return res.status(204).send();
   } catch (err) {
-    console.error(`[POST /events/${eventId}/joinRequests/${requesterUid}/approve] uid=${uid}`, err);
+    logger.error(`[POST /events/${eventId}/joinRequests/${requesterUid}/approve] uid=${uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to approve join request" } });
   }
 });
@@ -307,7 +308,7 @@ eventsRouter.post("/events/:eventId/joinRequests/:requesterUid/deny", requireAut
     await db.collection("events").doc(eventId).collection("joinRequests").doc(requesterUid).delete();
     return res.status(204).send();
   } catch (err) {
-    console.error(`[POST /events/${eventId}/joinRequests/${requesterUid}/deny] uid=${uid}`, err);
+    logger.error(`[POST /events/${eventId}/joinRequests/${requesterUid}/deny] uid=${uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to deny join request" } });
   }
 });

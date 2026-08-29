@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { NotificationItem } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
+import { logger } from "../lib/logger.js";
 
 export const notificationsRouter = Router();
 
@@ -47,7 +48,7 @@ notificationsRouter.get("/users/me/notifications", requireAuth, async (req, res)
 
     return res.json({ items });
   } catch (err) {
-    console.error(`[GET /users/me/notifications] uid=${req.uid}`, err);
+    logger.error(`[GET /users/me/notifications] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load notifications" } });
   }
 });
@@ -68,7 +69,7 @@ notificationsRouter.patch("/users/me/notifications/:notificationId", requireAuth
     await ref.update({ read: true });
     return res.status(204).send();
   } catch (err) {
-    console.error(`[PATCH /users/me/notifications/${notificationId}]`, err);
+    logger.error(`[PATCH /users/me/notifications/${notificationId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to update notification" } });
   }
 });

@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { MovieCandidate } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
+import { logger } from "../lib/logger.js";
 
 export const onboardingRouter = Router();
 
@@ -68,7 +69,7 @@ onboardingRouter.get("/onboarding/watched-candidates", requireAuth, async (req, 
 
     return res.json({ items });
   } catch (err) {
-    console.error("[GET /onboarding/watched-candidates]", err);
+    logger.error("[GET /onboarding/watched-candidates]", err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load watched candidates" } });
   }
 });

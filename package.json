@@ -9,6 +9,9 @@
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "typecheck": "pnpm --filter binj-backend run typecheck && pnpm --filter binj-frontend exec tsc -b",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "prepare": "husky"
   },
   "pnpm": {
@@ -19,6 +22,14 @@
     ]
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.5",
+    "globals": "^17.11.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.68.0"
   }
 }

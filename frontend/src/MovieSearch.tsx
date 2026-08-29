@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { searchMovies, getMovie, type MovieSummary, type MovieDetail } from './lib/api'
+import { searchMovies, type MovieSummary } from './lib/api'
+import { MovieDetail } from './MovieDetail'
 
 interface Props {
   onBack: () => void
@@ -8,7 +9,7 @@ interface Props {
 export function MovieSearch({ onBack }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MovieSummary[]>([])
-  const [selected, setSelected] = useState<MovieDetail | null>(null)
+  const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -16,7 +17,7 @@ export function MovieSearch({ onBack }: Props) {
     e.preventDefault()
     if (!query.trim()) return
     setStatus('loading')
-    setSelected(null)
+    setSelectedMovieId(null)
     try {
       const { items } = await searchMovies(query.trim())
       setResults(items)
@@ -27,16 +28,8 @@ export function MovieSearch({ onBack }: Props) {
     }
   }
 
-  async function handleSelect(movieId: string) {
-    setStatus('loading')
-    try {
-      const movie = await getMovie(movieId)
-      setSelected(movie)
-      setStatus('idle')
-    } catch (err) {
-      setStatus('error')
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to load movie')
-    }
+  if (selectedMovieId) {
+    return <MovieDetail movieId={selectedMovieId} onBack={() => setSelectedMovieId(null)} />
   }
 
   return (
@@ -61,32 +54,15 @@ export function MovieSearch({ onBack }: Props) {
       {status === 'loading' && <p>Loading…</p>}
       {status === 'error' && <p role="alert">{errorMessage}</p>}
 
-      {selected ? (
-        <article className="movie-detail">
-          <button type="button" onClick={() => setSelected(null)}>
-            ← Back to results
-          </button>
-          <h2>
-            {selected.title} {selected.year ? `(${selected.year})` : ''}
-          </h2>
-          <p>{selected.synopsis}</p>
-          <p>Genres: {selected.genres.join(', ')}</p>
-          <p>TMDB rating: {selected.voteAverage.toFixed(1)}</p>
-          {selected.cast.length > 0 && (
-            <p>Cast: {selected.cast.slice(0, 5).map((c) => c.name).join(', ')}</p>
-          )}
-        </article>
-      ) : (
-        <ul className="results">
-          {results.map((movie) => (
-            <li key={movie.movieId}>
-              <button type="button" onClick={() => handleSelect(movie.movieId)}>
-                {movie.title} {movie.year ? `(${movie.year})` : ''}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="results">
+        {results.map((movie) => (
+          <li key={movie.movieId}>
+            <button type="button" onClick={() => setSelectedMovieId(movie.movieId)}>
+              {movie.title} {movie.year ? `(${movie.year})` : ''}
+            </button>
+          </li>
+        ))}
+      </ul>
     </main>
   )
 }

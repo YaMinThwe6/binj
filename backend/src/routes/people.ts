@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { TasteMatch, CelebritySuggestion } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
+import { logger } from "../lib/logger.js";
 
 export const peopleRouter = Router();
 
@@ -40,7 +41,7 @@ peopleRouter.get("/users/me/tasteMatches", requireAuth, async (req, res) => {
 
     return res.json({ items });
   } catch (err) {
-    console.error(`[GET /users/me/tasteMatches] uid=${req.uid}`, err);
+    logger.error(`[GET /users/me/tasteMatches] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load taste matches" } });
   }
 });
@@ -63,7 +64,7 @@ peopleRouter.put("/users/me/followedCelebrities/:personId", requireAuth, async (
     await db.collection("users").doc(req.uid!).collection("followedCelebrities").doc(personId).set({ followedAt: new Date() });
     return res.status(204).send();
   } catch (err) {
-    console.error(`[PUT /users/me/followedCelebrities/${personId}]`, err);
+    logger.error(`[PUT /users/me/followedCelebrities/${personId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to follow celebrity" } });
   }
 });
@@ -76,7 +77,7 @@ peopleRouter.delete("/users/me/followedCelebrities/:personId", requireAuth, asyn
     await db.collection("users").doc(req.uid!).collection("followedCelebrities").doc(personId).delete();
     return res.status(204).send();
   } catch (err) {
-    console.error(`[DELETE /users/me/followedCelebrities/${personId}]`, err);
+    logger.error(`[DELETE /users/me/followedCelebrities/${personId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to unfollow celebrity" } });
   }
 });
@@ -94,7 +95,7 @@ peopleRouter.get("/users/me/followedCelebrities", requireAuth, async (req, res) 
     );
     return res.json({ items, nextCursor: null });
   } catch (err) {
-    console.error(`[GET /users/me/followedCelebrities] uid=${req.uid}`, err);
+    logger.error(`[GET /users/me/followedCelebrities] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load followed celebrities" } });
   }
 });
@@ -143,7 +144,7 @@ peopleRouter.get("/onboarding/celebrity-suggestions", requireAuth, async (req, r
 
     return res.json({ items });
   } catch (err) {
-    console.error(`[GET /onboarding/celebrity-suggestions] uid=${req.uid}`, err);
+    logger.error(`[GET /onboarding/celebrity-suggestions] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load celebrity suggestions" } });
   }
 });

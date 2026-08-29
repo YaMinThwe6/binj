@@ -59,8 +59,24 @@ describe("GET /movies/:movieId", () => {
     const res = await request(app).get("/movies/27205");
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ title: "Inception (cached)" });
+    expect(res.body).toMatchObject({ title: "Inception (cached)" });
     expect(fetchMovieDetails).not.toHaveBeenCalled();
+  });
+
+  it("always includes binjRating and likeCount, defaulting to zero when absent from storage", async () => {
+    store.set("movies/27205", { title: "Inception (cached), never rated or liked" });
+    const app = createApp();
+    const res = await request(app).get("/movies/27205");
+    expect(res.body.binjRating).toEqual({ sum: 0, count: 0 });
+    expect(res.body.likeCount).toBe(0);
+  });
+
+  it("preserves real binjRating and likeCount when they're already stored", async () => {
+    store.set("movies/27205", { title: "Inception (rated)", binjRating: { sum: 12, count: 3 }, likeCount: 7 });
+    const app = createApp();
+    const res = await request(app).get("/movies/27205");
+    expect(res.body.binjRating).toEqual({ sum: 12, count: 3 });
+    expect(res.body.likeCount).toBe(7);
   });
 
   it("on a cache miss: fetches TMDB, stores the movie doc without the credits field, and upserts people docs", async () => {
@@ -82,6 +98,8 @@ describe("GET /movies/:movieId", () => {
     expect(res.status).toBe(200);
     expect(res.body.credits).toBeUndefined();
     expect(res.body.title).toBe("Inception");
+    expect(res.body.binjRating).toEqual({ sum: 0, count: 0 });
+    expect(res.body.likeCount).toBe(0);
 
     const movieDoc = store.get("movies/27205") as { credits?: unknown; title: string };
     expect(movieDoc.credits).toBeUndefined();

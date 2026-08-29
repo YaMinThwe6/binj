@@ -253,6 +253,50 @@ describe("Likes", () => {
   });
 });
 
+describe("GET /users/me/movies/:movieId — status bundle", () => {
+  it("401s without a token", async () => {
+    const app = createApp();
+    const res = await request(app).get("/users/me/movies/movie-1");
+    expect(res.status).toBe(401);
+  });
+
+  it("all false / review null when the caller has no relationship to the movie yet", async () => {
+    const app = createApp();
+    const res = await authed(app, "get", "/users/me/movies/movie-1");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ watchlisted: false, watched: false, liked: false, review: null });
+  });
+
+  it("reflects true state when watchlisted, watched, and liked", async () => {
+    store.set("users/uid-1/watchlist/movie-1", { addedAt: new Date() });
+    store.set("users/uid-1/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-1/likes/movie-1", { createdAt: new Date() });
+    const app = createApp();
+    const res = await authed(app, "get", "/users/me/movies/movie-1");
+    expect(res.body).toMatchObject({ watchlisted: true, watched: true, liked: true });
+  });
+
+  it("review reflects the caller's own review even when isAnonymous is true", async () => {
+    store.set("movies/movie-1/reviews/uid-1", {
+      rating: 5, reviewText: "Loved it", isAnonymous: true, deleted: false,
+      createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01")
+    });
+    const app = createApp();
+    const res = await authed(app, "get", "/users/me/movies/movie-1");
+    expect(res.body.review).toMatchObject({ rating: 5, reviewText: "Loved it", isAnonymous: true });
+  });
+
+  it("review is null after a soft-delete, not the stale deleted content", async () => {
+    store.set("movies/movie-1/reviews/uid-1", {
+      rating: 2, reviewText: "meh", isAnonymous: false, deleted: true,
+      createdAt: new Date(), updatedAt: new Date()
+    });
+    const app = createApp();
+    const res = await authed(app, "get", "/users/me/movies/movie-1");
+    expect(res.body.review).toBeNull();
+  });
+});
+
 describe("auth", () => {
   it("401s without a token on a write endpoint", async () => {
     const app = createApp();

@@ -24,6 +24,8 @@ GET /movies/:movieId
 ```
 Triggers the cache → Firestore → TMDB fallback chain server-side (§2); streaming providers refresh on their own TTL (§8) but are returned as part of the same response, not a separate call.
 
+**Implementation note (added once this was actually built):** `binjRating`/`likeCount` are normalized in the response to `{sum:0,count:0}`/`0` when absent from storage (a movie nobody's rated or liked yet has no reason to have those fields actually written) — the client never has to special-case "missing" vs. "zero". `isAdult` from the original sketch above isn't currently returned (it's fetched from TMDB and stored, just not surfaced in the response yet — no feature depends on it client-side).
+
 ## 2. Watchlist & Watched (§3, §5a) 🔒
 
 ```
@@ -44,17 +46,30 @@ DELETE /users/me/likes/:movieId            → 204   // toggle off; movies.likeC
 ## 3. Reviews & review bans (§20, §22)
 
 ```
-GET  /movies/:movieId/reviews              → 200 { items: [{ authorId, rating, reviewText, isAnonymous, createdAt, updatedAt }], nextCursor }
-                                              // excludes deleted:true and, per author, respects isAnonymous (authorId withheld client-side when true)
+GET  /movies/:movieId/reviews              query: { cursor?, limit? } → 200 { items: [{ authorId, displayName, rating,
+                                                     reviewText, isAnonymous, createdAt, updatedAt }], nextCursor }
+                                              // excludes deleted:true; authorId/displayName are null — SERVER-SIDE,
+                                              // not client-side — when isAnonymous is true
 
-PUT  /movies/:movieId/reviews/me  🔒        body: { rating, reviewText?, isAnonymous } → 200 { rating, reviewText, isAnonymous, createdAt, updatedAt }
-                                              // submit or edit — same operation, §20. 403 if an active ReviewBan exists for this movie
-DELETE /movies/:movieId/reviews/me 🔒       → 204
+PUT  /movies/:movieId/reviews/me  🔒        body: { rating (integer 1-5), reviewText?, isAnonymous } →
+                                              200 { rating, reviewText, isAnonymous, createdAt, updatedAt }
+                                              // submit or edit — same operation, §20. 400 INVALID_RATING /
+                                              // INVALID_BODY on bad input, 404 if the movie doesn't exist,
+                                              // 403 ACCOUNT_RESTRICTED if the caller's account isn't active
+DELETE /movies/:movieId/reviews/me 🔒       → 204   // 404 REVIEW_NOT_FOUND if there's nothing to delete
+
+GET  /users/me/movies/:movieId 🔒           → 200 { watchlisted, watched, liked, review: MyReview | null }
+                                              // NOT in the original sketch above — added so Movie Detail's action
+                                              // bar and "write vs. edit review" can render in one request instead
+                                              // of four (backend/src/routes/userMovies.ts)
 
 POST /movies/:movieId/reviews/:authorId/dispute 🔒
                                               body: { reason } → 201 { disputeId, status: "pending" }
-                                              // caller must be :authorId (§22)
+                                              // caller must be :authorId (§22) — not yet implemented, depends on
+                                              // the moderator-role system (§14)
 ```
+
+**Implementation note (added once this was actually built):** the 403 ReviewBan check from the original sketch, and the whole §22 strike/ban/dispute system, are deferred — they depend on the moderator-role system (§14), which doesn't exist yet. What's real: submit/edit/delete/list, the account-restricted check (§14b's `status` field, already real), and the anonymous-redaction fix noted above.
 
 ## 4. Follow / Block / Mute (§4, §19) 🔒
 
