@@ -190,6 +190,11 @@ describe("POST /events", () => {
     expect(store.has(`events/${eventId}/participants/host-1`)).toBe(true);
     const stored = store.get(`events/${eventId}`) as { roomId: string };
     expect(store.has(`rooms/${stored.roomId}`)).toBe(true);
+
+    const room = store.get(`rooms/${stored.roomId}`) as { type: string; originEventId: string; memberIds: string[] };
+    expect(room.type).toBe("ephemeral"); // hld.md §16 — ephemeral by default, host promotes later
+    expect(room.originEventId).toBe(eventId);
+    expect(room.memberIds).toEqual(["host-1"]);
   });
 
   it("generates a joinCode only for private events, and returns it in the create response", async () => {
@@ -240,6 +245,16 @@ describe("PUT /events/:eventId/join", () => {
     expect((store.get("events/evt-1") as { participantCount: number }).participantCount).toBe(2);
   });
 
+  it("adds the joiner to the event's room so they can chat (hld.md §16)", async () => {
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", requiresApproval: false, participantCount: 1, participantLimit: 5, roomId: "room-1" });
+    store.set("rooms/room-1", { type: "ephemeral", originEventId: "evt-1", memberIds: ["host-1"] });
+    currentUid = "guest-1";
+    const app = createApp();
+    const res = await authed(app, "put", "/events/evt-1/join");
+    expect(res.status).toBe(200);
+    expect((store.get("rooms/room-1") as { memberIds: string[] }).memberIds).toEqual(["host-1", "guest-1"]);
+  });
+
   it("409s when the event is full", async () => {
     store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", requiresApproval: false, participantCount: 1, participantLimit: 1 });
     currentUid = "guest-1";
@@ -282,6 +297,17 @@ describe("DELETE /events/:eventId/join", () => {
     expect(store.has("events/evt-1/participants/guest-1")).toBe(false);
     expect((store.get("events/evt-1") as { participantCount: number }).participantCount).toBe(1);
   });
+
+  it("removes the leaver from the event's room membership too", async () => {
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", participantCount: 2, participantLimit: 5, roomId: "room-1" });
+    store.set("events/evt-1/participants/guest-1", { joinedAt: new Date() });
+    store.set("rooms/room-1", { type: "ephemeral", originEventId: "evt-1", memberIds: ["host-1", "guest-1"] });
+    currentUid = "guest-1";
+    const app = createApp();
+    const res = await authed(app, "delete", "/events/evt-1/join");
+    expect(res.status).toBe(204);
+    expect((store.get("rooms/room-1") as { memberIds: string[] }).memberIds).toEqual(["host-1"]);
+  });
 });
 
 describe("join request approval", () => {
@@ -294,14 +320,16 @@ describe("join request approval", () => {
   });
 
   it("approve moves the pending request into participants and increments the count", async () => {
-    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", participantCount: 1, participantLimit: 5 });
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", participantCount: 1, participantLimit: 5, roomId: "room-1" });
     store.set("events/evt-1/joinRequests/guest-1", { createdAt: new Date() });
+    store.set("rooms/room-1", { type: "ephemeral", originEventId: "evt-1", memberIds: ["host-1"] });
     const app = createApp(); // currentUid stays "host-1"
     const res = await authed(app, "post", "/events/evt-1/joinRequests/guest-1/approve");
     expect(res.status).toBe(204);
     expect(store.has("events/evt-1/participants/guest-1")).toBe(true);
     expect(store.has("events/evt-1/joinRequests/guest-1")).toBe(false);
     expect((store.get("events/evt-1") as { participantCount: number }).participantCount).toBe(2);
+    expect((store.get("rooms/room-1") as { memberIds: string[] }).memberIds).toEqual(["host-1", "guest-1"]);
   });
 
   it("approve 409s when the event filled up while the request was pending", async () => {

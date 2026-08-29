@@ -19,6 +19,7 @@ export interface EventSummary {
   participantLimit: number
   participantCount: number
   requiresApproval: boolean
+  roomId: string // hld.md §16 — every event has exactly one chat room
   createdAt: string | null
 }
 

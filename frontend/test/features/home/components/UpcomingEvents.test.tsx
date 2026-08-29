@@ -19,6 +19,7 @@ const event = {
   participantLimit: 5,
   participantCount: 2,
   requiresApproval: false,
+  roomId: 'room-1',
   movieTitle: 'Interstellar',
   moviePoster: null
 }
@@ -31,14 +32,14 @@ afterEach(() => {
 describe('UpcomingEvents', () => {
   it('shows an empty-state message when there are no public events', async () => {
     getUpcomingEvents.mockResolvedValue({ items: [] })
-    render(<UpcomingEvents />)
+    render(<UpcomingEvents onOpenChat={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/no public events/i)).toBeInTheDocument())
   })
 
   it('renders an event and joins it on click', async () => {
     getUpcomingEvents.mockResolvedValue({ items: [event] })
     joinEvent.mockResolvedValue({ status: 'joined' })
-    render(<UpcomingEvents />)
+    render(<UpcomingEvents onOpenChat={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText('Interstellar Watch Party')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /join/i }))
@@ -50,11 +51,26 @@ describe('UpcomingEvents', () => {
   it('shows Requested when the event requires approval', async () => {
     getUpcomingEvents.mockResolvedValue({ items: [event] })
     joinEvent.mockResolvedValue({ status: 'pending' })
-    render(<UpcomingEvents />)
+    render(<UpcomingEvents onOpenChat={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText('Interstellar Watch Party')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /join/i }))
 
     expect(await screen.findByRole('button', { name: 'Requested' })).toBeDisabled()
+  })
+
+  it('offers a Chat button once joined, opening the event\'s room', async () => {
+    getUpcomingEvents.mockResolvedValue({ items: [event] })
+    joinEvent.mockResolvedValue({ status: 'joined' })
+    const onOpenChat = vi.fn()
+    render(<UpcomingEvents onOpenChat={onOpenChat} />)
+
+    await waitFor(() => expect(screen.getByText('Interstellar Watch Party')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^chat$/i })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /join/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^chat$/i }))
+
+    expect(onOpenChat).toHaveBeenCalledWith('room-1')
   })
 })

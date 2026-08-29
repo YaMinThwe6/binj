@@ -7,6 +7,7 @@ import { PeopleYouMightVibeWith } from './PeopleYouMightVibeWith'
 import { UpcomingEvents } from './UpcomingEvents'
 import { NearbyEvents } from './NearbyEvents'
 import { FriendsAreWatching } from './FriendsAreWatching'
+import { RoomChat } from '../../chat/components/RoomChat'
 import '../home.css'
 
 interface Props {
@@ -17,12 +18,17 @@ interface Props {
 
 export function Home({ me, onSignOut, onNavigateSearch }: Props) {
   const [unreadCount, setUnreadCount] = useState(0)
+  const [openRoomId, setOpenRoomId] = useState<string | null>(null)
 
   useEffect(() => {
     getNotifications(true)
       .then((res) => setUnreadCount(res.items.length))
       .catch(() => setUnreadCount(0))
   }, [])
+
+  if (openRoomId) {
+    return <RoomChat roomId={openRoomId} currentUid={me.uid} onBack={() => setOpenRoomId(null)} />
+  }
 
   return (
     <main className="home">
@@ -41,8 +47,8 @@ export function Home({ me, onSignOut, onNavigateSearch }: Props) {
       <GreetingHero displayName={me.displayName} />
       <TopPicks />
       <PeopleYouMightVibeWith />
-      <UpcomingEvents />
-      <NearbyEvents />
+      <UpcomingEvents onOpenChat={setOpenRoomId} />
+      <NearbyEvents onOpenChat={setOpenRoomId} />
       <FriendsAreWatching />
 
       <nav className="bottom-nav">

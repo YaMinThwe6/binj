@@ -8,7 +8,11 @@ function formatDate(iso: string | null): string {
     ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-export function UpcomingEvents() {
+interface Props {
+  onOpenChat: (roomId: string) => void
+}
+
+export function UpcomingEvents({ onOpenChat }: Props) {
   const [items, setItems] = useState<UpcomingEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -49,6 +53,9 @@ export function UpcomingEvents() {
               <button type="button" disabled={!!status} onClick={() => handleJoin(event.eventId)}>
                 {status === 'joined' ? 'Joined' : status === 'pending' ? 'Requested' : 'Join'}
               </button>
+              {status === 'joined' && (
+                <button type="button" onClick={() => onOpenChat(event.roomId)}>Chat</button>
+              )}
             </li>
           )
         })}
