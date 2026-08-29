@@ -23,7 +23,7 @@ describe('PeopleYouMightVibeWith', () => {
         { uid: 'u3', displayName: 'Kabir', score: 79, relationship: 'pending' }
       ]
     })
-    render(<PeopleYouMightVibeWith />)
+    render(<PeopleYouMightVibeWith onOpenProfile={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument()
@@ -34,7 +34,7 @@ describe('PeopleYouMightVibeWith', () => {
   it('clicking Connect on a non-followed person calls followUser and updates the label', async () => {
     getTasteMatches.mockResolvedValue({ items: [{ uid: 'u1', displayName: 'Rohan', score: 84, relationship: 'none' }] })
     followUser.mockResolvedValue({ status: 'following' })
-    render(<PeopleYouMightVibeWith />)
+    render(<PeopleYouMightVibeWith onOpenProfile={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
@@ -46,12 +46,22 @@ describe('PeopleYouMightVibeWith', () => {
   it('clicking Following unfollows and reverts to Connect', async () => {
     getTasteMatches.mockResolvedValue({ items: [{ uid: 'u1', displayName: 'Rohan', score: 84, relationship: 'following' }] })
     unfollowUser.mockResolvedValue(undefined)
-    render(<PeopleYouMightVibeWith />)
+    render(<PeopleYouMightVibeWith onOpenProfile={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Following' })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Following' }))
 
     await waitFor(() => expect(unfollowUser).toHaveBeenCalledWith('u1'))
     expect(await screen.findByRole('button', { name: 'Connect' })).toBeInTheDocument()
+  })
+
+  it('opens the profile when a person\'s name is clicked, without triggering Connect', async () => {
+    getTasteMatches.mockResolvedValue({ items: [{ uid: 'u1', displayName: 'Rohan', score: 84, relationship: 'none' }] })
+    const onOpenProfile = vi.fn()
+    render(<PeopleYouMightVibeWith onOpenProfile={onOpenProfile} />)
+
+    fireEvent.click(await screen.findByText('Rohan'))
+    expect(onOpenProfile).toHaveBeenCalledWith('u1')
+    expect(followUser).not.toHaveBeenCalled()
   })
 })

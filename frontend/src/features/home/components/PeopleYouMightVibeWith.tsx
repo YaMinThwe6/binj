@@ -7,7 +7,11 @@ function connectLabel(relationship: TasteMatch['relationship']): string {
   return 'Connect'
 }
 
-export function PeopleYouMightVibeWith() {
+interface Props {
+  onOpenProfile: (uid: string) => void
+}
+
+export function PeopleYouMightVibeWith({ onOpenProfile }: Props) {
   const [items, setItems] = useState<TasteMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -54,8 +58,10 @@ export function PeopleYouMightVibeWith() {
       <ul className="card-row">
         {items.map((person) => (
           <li key={person.uid} className="person-card">
-            <div className="avatar">{person.displayName.charAt(0).toUpperCase()}</div>
-            <div className="person-name">{person.displayName}</div>
+            <button type="button" className="person-name-button" onClick={() => onOpenProfile(person.uid)}>
+              <div className="avatar">{person.displayName.charAt(0).toUpperCase()}</div>
+              <div className="person-name">{person.displayName}</div>
+            </button>
             <div className="match-score">{person.score}% match</div>
             <button type="button" onClick={() => toggleConnect(person.uid)}>
               {connectLabel(person.relationship)}

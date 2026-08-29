@@ -25,3 +25,32 @@ export interface WatchedByEntry {
   displayName: string
   watchedAt: string | null
 }
+
+// GET /users/:uid item — a public-profile watched entry, movie details
+// already joined in so the frontend doesn't need a second round-trip per movie.
+export interface PublicProfileWatchedEntry {
+  movieId: string
+  title: string | null
+  poster: string | null
+  watchedAt: string | null
+}
+
+// GET /users/:uid (api-contracts.md §11b) — the public-facing counterpart to
+// UserProfile (GET /users/me): only what's meant to be visible to other
+// users, privacy-filtered server-side the same way as watchedBy above.
+// `relationship` is "self" when the caller requests their own uid — the
+// watched list still gets the same privacy filter in that case (a user
+// wanting their own unfiltered list already has GET /users/me/watched).
+export interface PublicProfile {
+  uid: string
+  displayName: string
+  username: string | null
+  photoURL: string | null
+  favoriteGenres: string[] | null
+  preferredLanguages: string[] | null
+  followerCount: number
+  followingCount: number
+  relationship: 'self' | 'following' | 'pending' | 'none'
+  watchedListVisible: boolean
+  watched: PublicProfileWatchedEntry[]
+}
