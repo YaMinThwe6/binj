@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { APIProvider, Map, AdvancedMarker, InfoWindow } from '@vis.gl/react-google-maps'
-import { mapsApiKey } from '../../../lib/maps'
+import { mapsApiKey, mapsMapId } from '../../../lib/maps'
 import type { NearbyEvent } from '../services/homeApi'
 
 interface Props {
@@ -32,7 +32,7 @@ export function NearbyEventsMap({ center, items, joinStatus, onJoin }: Props) {
       <Map
         defaultCenter={center}
         defaultZoom={12}
-        mapId="binj-nearby-events"
+        mapId={mapsMapId}
         style={{ width: '100%', height: '240px', borderRadius: '14px' }}
       >
         <AdvancedMarker position={center} title="You" />

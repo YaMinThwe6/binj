@@ -20,7 +20,7 @@ vi.mock('@vis.gl/react-google-maps', () => ({
   )
 }))
 
-vi.mock('../../../../src/lib/maps', () => ({ mapsApiKey: 'test-key' }))
+vi.mock('../../../../src/lib/maps', () => ({ mapsApiKey: 'test-key', mapsMapId: 'test-map-id' }))
 
 const { NearbyEventsMap } = await import('../../../../src/features/home/components/NearbyEventsMap')
 

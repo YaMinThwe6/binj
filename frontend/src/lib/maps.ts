@@ -7,3 +7,10 @@
 // instead of trying to mount the Maps SDK with no key.
 export const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
 export const mapsConfigured = Boolean(mapsApiKey)
+
+// AdvancedMarker (used for every pin in NearbyEventsMap) requires a real,
+// vector-enabled Map ID created in Cloud Console → Map Management — it won't
+// render pins against just any string. Left undefined when unset rather than
+// a hardcoded placeholder, so <Map> falls back to its default (raster, no
+// Map ID) instead of silently pointing at an ID that doesn't exist.
+export const mapsMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined
