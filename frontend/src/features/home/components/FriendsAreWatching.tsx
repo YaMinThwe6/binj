@@ -14,7 +14,11 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-export function FriendsAreWatching() {
+interface Props {
+  onOpenProfile: (uid: string) => void
+}
+
+export function FriendsAreWatching({ onOpenProfile }: Props) {
   const [items, setItems] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -36,7 +40,12 @@ export function FriendsAreWatching() {
       <ul className="card-row">
         {items.map((item) => (
           <li key={item.activityId} className="activity-card">
-            <div className="activity-who">{item.displayName} {verbFor(item.type)}</div>
+            <div className="activity-who">
+              <button type="button" className="person-name-button" onClick={() => onOpenProfile(item.uid)}>
+                {item.displayName}
+              </button>{' '}
+              {verbFor(item.type)}
+            </div>
             <div className="movie-title">{item.movieTitle ?? 'a movie'}</div>
             <div className="movie-meta">{timeAgo(item.createdAt)}</div>
           </li>

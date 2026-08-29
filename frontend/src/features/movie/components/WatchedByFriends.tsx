@@ -3,13 +3,14 @@ import { getMovieWatchedBy, type WatchedByEntry } from '../services/movieApi'
 
 interface Props {
   movieId: string
+  onOpenProfile: (uid: string) => void
 }
 
 // hld.md §5a — only people the caller follows, never a global "everyone who
 // watched this" list. Renders nothing when the caller follows no one, none of
 // them watched it, or their watched-list privacy hides it — same "just don't
 // show the section" pattern as Home's other social sections.
-export function WatchedByFriends({ movieId }: Props) {
+export function WatchedByFriends({ movieId, onOpenProfile }: Props) {
   const [items, setItems] = useState<WatchedByEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -28,7 +29,11 @@ export function WatchedByFriends({ movieId }: Props) {
       <h2>People you follow who watched this</h2>
       <ul>
         {items.map((person) => (
-          <li key={person.uid}>{person.displayName}</li>
+          <li key={person.uid}>
+            <button type="button" className="person-name-button" onClick={() => onOpenProfile(person.uid)}>
+              {person.displayName}
+            </button>
+          </li>
         ))}
       </ul>
     </section>

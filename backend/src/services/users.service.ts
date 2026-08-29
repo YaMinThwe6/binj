@@ -1,4 +1,4 @@
-import type { UserProfile } from "@binj/shared-types";
+import type { UserProfile, PublicProfile } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { AppError } from "../utils/AppError.js";
 
@@ -158,4 +158,80 @@ export async function updateUser(uid: string, claims: Claims, body: Record<strin
 
   const snap = await userRef.get();
   return toResponse(snap.data() as UserDoc, false);
+}
+
+function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : value.toDate().toISOString();
+}
+
+// Preview cap for the watched list shown on a public profile — not a
+// paginated list (that's GET /users/me/watched for the owner's own view),
+// just enough for a "recently watched" section. Fetched unlimited-then-
+// filtered-then-sliced (not a Firestore .limit()) so a mostly-private list
+// doesn't undercount the public entries that actually exist.
+const PROFILE_WATCHED_PREVIEW = 12;
+
+// GET /users/:uid — api-contracts.md §11b, hld.md §5a/§8. The public-facing
+// counterpart to GET /users/me: same privacy rules as getMovieWatchedBy
+// (list-level users.listVisible + per-entry watched.visibility), just not
+// scoped to the caller's `following` list here — profile info is public.
+export async function getPublicProfile(callerUid: string, targetUid: string): Promise<PublicProfile> {
+  const db = requireDb();
+  const targetRef = db.collection("users").doc(targetUid);
+  const targetSnap = await targetRef.get();
+  if (!targetSnap.exists) {
+    throw new AppError("USER_NOT_FOUND", "No such user", 404);
+  }
+  const target = targetSnap.data() as UserDoc;
+
+  const [followersSnap, followingSnap] = await Promise.all([
+    targetRef.collection("followers").get(),
+    targetRef.collection("following").get()
+  ]);
+
+  let relationship: PublicProfile["relationship"];
+  if (targetUid === callerUid) {
+    relationship = "self";
+  } else {
+    const [followingCallerSnap, requestSnap] = await Promise.all([
+      db.collection("users").doc(callerUid).collection("following").doc(targetUid).get(),
+      targetRef.collection("followRequests").doc(callerUid).get()
+    ]);
+    relationship = followingCallerSnap.exists ? "following" : requestSnap.exists ? "pending" : "none";
+  }
+
+  const watchedListVisible = target.listVisible === true;
+  let watched: PublicProfile["watched"] = [];
+  if (watchedListVisible) {
+    const watchedSnap = await targetRef.collection("watched").orderBy("watchedAt", "desc").get();
+    const publicEntries = watchedSnap.docs
+      .filter((d) => d.data().visibility !== "private")
+      .slice(0, PROFILE_WATCHED_PREVIEW);
+    watched = await Promise.all(
+      publicEntries.map(async (d) => {
+        const movieSnap = await db.collection("movies").doc(d.id).get();
+        return {
+          movieId: d.id,
+          title: movieSnap.data()?.title ?? null,
+          poster: movieSnap.data()?.poster ?? null,
+          watchedAt: toIso(d.data().watchedAt ?? null)
+        };
+      })
+    );
+  }
+
+  return {
+    uid: targetUid,
+    displayName: target.displayName,
+    username: target.username,
+    photoURL: target.photoURL,
+    favoriteGenres: target.favoriteGenres,
+    preferredLanguages: target.preferredLanguages,
+    followerCount: followersSnap.docs.length,
+    followingCount: followingSnap.docs.length,
+    relationship,
+    watchedListVisible,
+    watched
+  };
 }

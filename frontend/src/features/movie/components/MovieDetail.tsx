@@ -16,6 +16,7 @@ import {
   type Review
 } from '../services/movieApi'
 import { WatchedByFriends } from './WatchedByFriends'
+import { Profile } from '../../profile/components/Profile'
 
 interface Props {
   movieId: string
@@ -47,6 +48,7 @@ export function MovieDetail({ movieId, onBack }: Props) {
   const [reviewText, setReviewText] = useState('')
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [formError, setFormError] = useState('')
+  const [openProfileUid, setOpenProfileUid] = useState<string | null>(null)
 
   function loadReviews() {
     return getMovieReviews(movieId)
@@ -129,6 +131,10 @@ export function MovieDetail({ movieId, onBack }: Props) {
     }
   }
 
+  if (openProfileUid) {
+    return <Profile uid={openProfileUid} onBack={() => setOpenProfileUid(null)} />
+  }
+
   if (movieError) {
     return (
       <main className="movie-detail-page">
@@ -177,7 +183,7 @@ export function MovieDetail({ movieId, onBack }: Props) {
         </button>
       </div>
 
-      <WatchedByFriends movieId={movieId} />
+      <WatchedByFriends movieId={movieId} onOpenProfile={setOpenProfileUid} />
 
       {movie.streamingProviders.length > 0 && (
         <section>

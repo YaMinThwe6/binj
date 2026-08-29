@@ -247,6 +247,16 @@ GET   /onboarding/watched-candidates       query: { genres?, languages? } → 20
 ```
 No `POST /users` — profile creation is the lazy, on-first-authenticated-request pattern from §13, not a distinct signup call. `GET /users/me` on a brand-new token is what triggers it server-side — `isNewUser` is `true` only on that exact bootstrap call (hld.md §13's flow diagram calls this out explicitly: "return 'new user' flag"), `false` on every call after. The frontend's actual "should I show onboarding" check is `isNewUser || !onboardingComplete` — the flag alone doesn't catch a user who signed up, got partway through the wizard, and closed the app.
 
+### 11b. Public profile (§8, §9) 🔒
+
+```
+GET /users/:uid   → 200 { uid, displayName, username, photoURL, favoriteGenres, preferredLanguages,
+                            followerCount, followingCount, relationship: "self"|"following"|"pending"|"none",
+                            watchedListVisible, watched: [{ movieId, title, poster, watchedAt }] }
+```
+
+The public-facing counterpart to `GET /users/me` — added once "People Discovery" (§9's watchedBy/tasteMatches) had somewhere to actually link a person's card *to*. 404 `USER_NOT_FOUND` for a nonexistent uid. `relationship` is computed against the caller's own follow subcollections (same read as §4's Follow flow), never trusted from the client. `watched` applies the exact same two-part privacy filter as `GET /movies/:movieId/watchedBy` (§5, hld.md §5a) — list-level `listVisible` and per-entry `visibility`, both server-side — capped to the 12 most recent public entries as a profile preview, not a paginated list; `watchedListVisible` tells the frontend whether the empty array means "nothing public" or "list is hidden." This filter applies even when a caller requests their own uid — the unfiltered self view is what `GET /users/me/watched` is for.
+
 ## 12. Reporting & moderation (§14a, §30.8) 🔒
 
 ```
