@@ -1116,6 +1116,8 @@ BINJ should support **context-aware** content moderation — detecting vulgarity
 
 Exact detection scope (real-time message screening vs. report-triggered analysis only), false-positive handling, and whether Gemini or a separate AI Agent framework is used remain implementation details for the build phase — this section commits to the product requirement (context-aware moderation must exist), not the exact model/pipeline.
 
+**Implementation note (added once this was actually built):** resolved as report-triggered analysis via Gemini, and — a deliberate escalation past this section's own "AI-assisted detection is a triage/flagging layer, not a replacement for human enforcement" framing — fully autonomous: there is no human moderator step at all. Gemini's decision (violates or not, what to do about it) executes immediately and directly. See [docs/hld.md](hld.md) §14 and [docs/api-contracts.md](api-contracts.md) §12 for the full design and why (no moderator-role system exists in this codebase to hand a flagged report off to).
+
 ## 30.9 Product Design Principle
 
 BINJ should encourage:

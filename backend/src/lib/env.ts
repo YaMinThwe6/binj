@@ -7,7 +7,8 @@ const envSchema = z.object({
   FIREBASE_PROJECT_ID: z.string().min(1).optional(),
   GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
   SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASS: z.string().min(1).optional()
+  SMTP_PASS: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.string().min(1).optional()
 });
 
 export const env = envSchema.parse(process.env);
@@ -17,3 +18,9 @@ export const firebaseConfigured = Boolean(
 );
 
 export const smtpConfigured = Boolean(env.SMTP_USER && env.SMTP_PASS);
+
+// PRD §30.8 — AI-assisted content moderation. Same graceful-degradation
+// pattern as Firebase/SMTP above: reports still get created without a key,
+// they just stay "pending" (no human queue exists to fall back to — see
+// gemini.ts) rather than the request failing outright.
+export const geminiConfigured = Boolean(env.GEMINI_API_KEY);

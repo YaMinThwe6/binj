@@ -5,7 +5,7 @@ vi.mock('../../src/lib/firebase', () => ({
   googleProvider: {}
 }))
 
-const { getMe, updateMe } = await import('../../src/lib/api')
+const { getMe, updateMe, reportContent } = await import('../../src/lib/api')
 const mockAuth = (await import('../../src/lib/firebase')).auth as unknown as { currentUser: { getIdToken: () => Promise<string> } | null }
 
 const originalFetch = globalThis.fetch
@@ -83,5 +83,42 @@ describe('updateMe', () => {
         })
       })
     )
+  })
+})
+
+describe('reportContent', () => {
+  afterEach(() => {
+    mockAuth.currentUser = null
+  })
+
+  it('POSTs the report and returns the AI moderator\'s decision', async () => {
+    mockAuth.currentUser = { getIdToken: vi.fn().mockResolvedValue('fake-id-token') } as never
+    const decision = {
+      violates: true,
+      category: 'harassment',
+      contentAction: 'remove',
+      accountAction: 'warn',
+      suspensionDays: null,
+      confidence: 0.8,
+      rationale: 'Direct harassment.',
+      resolvedAt: '2026-01-01T00:00:00.000Z'
+    }
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, message: 'OK', statusCode: 201, data: { reportId: 'rep-1', status: 'actioned', decision } }),
+    }) as unknown as typeof fetch
+
+    const result = await reportContent({ targetType: 'message', targetId: 'msg-1', roomId: 'room-1', reason: 'harassing me' })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/reports'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ targetType: 'message', targetId: 'msg-1', roomId: 'room-1', reason: 'harassing me' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer fake-id-token' })
+      })
+    )
+    expect(result).toEqual({ reportId: 'rep-1', status: 'actioned', decision })
   })
 })

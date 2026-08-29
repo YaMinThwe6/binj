@@ -13,7 +13,7 @@ Living document from the HLD walkthrough. Captures components, traced request fl
 - **Cache** — sits in front of Firestore's `movies` collection to avoid repeated reads/TMDB calls
 - **Firebase Authentication** — frontend talks to it directly for sign-up/login (see §13); backend only ever verifies the resulting token, never handles credentials itself
 - **BigQuery** — demoted to **analytics-only**, off the live request path (see §5b)
-- **Gemini / Google AI Studio** — not yet traced
+- **Gemini / Google AI Studio** — autonomous content moderation, §14/§30.8. Server-side only (`backend/src/lib/gemini.ts`), same "credentials stay backend-only" principle as TMDB — unlike Maps/Firebase Auth below, there's no reason for the frontend to ever call Gemini directly here.
 - **Google Maps Platform** — not yet traced
 - **Firebase Realtime Database** — used specifically for live presence ("who's watching now"), not general app data; see §15
 - **Real-time layer for chat/event rooms** — Firestore listeners; see §16
@@ -331,7 +331,7 @@ Return matching events, sorted by distance
 - **"Movies none of us have watched" filter** — new feature idea, captured here so it isn't lost. Given a chosen set of people, find movies none of them have watched — solves the real "have you seen this already?" round-robin problem when a group is picking something to watch together. Architecturally this is the *same* building block as §5a (per-user `watched` subcollection + fan-out over a bounded set of people, now known to be a `following`-based set), just walked movies-first instead of people-first. Not yet designed in detail.
 - **How data flows into BigQuery for analytics** (§2, §5b) — Firestore export vs. event streaming (e.g. Pub/Sub). Not yet designed.
 - **Switch Recommendations (§6) to a precomputed/embedding-based approach** — noted for later, not needed for the prototype.
-- **Gemini flows** — not yet traced. (Google Maps is now partially traced — geocoding and map rendering per §9 — but no Gemini-powered feature has been walked through yet.)
+- **Gemini flows** — traced now: autonomous content moderation, §14/§30.8. (Google Maps is still only partially traced — geocoding and map rendering per §9 remain unbuilt, see that section's implementation note.)
 - **Event notifications** (e.g. host notified of a new join request) — surfaced in §7, not yet designed.
 - **Passkey (WebAuthn) sign-in** — future addition alongside OAuth (§13). Firebase Auth has no native passkey provider yet; adding this later means either a third-party Firebase Extension or a custom WebAuthn ceremony + Admin SDK custom-token minting. Not designed in detail — revisit once core product is stable.
 - **Anonymous reviews/ratings — decided.** Opt-in **per review/rating** (a per-submission user choice, not a global account-wide setting). When chosen: the author's display name is hidden **consistently on every surface where that specific review/rating renders** (movie page, search, even the poster's own profile reviews list) — not selectively shown in one place and revealed in another. The backend still stores the real `authorId` for moderation/repeat-offender detection (PRD §30's enforcement ladder still works). The rating still contributes normally to the movie's aggregate BINJ score — anonymity hides *who* posted it, not the rating itself. Scoped deliberately to **not** reach into §5a's "people who watched this movie" — that's governed by the separate watched-list privacy settings, since "I watched this" and "here's my anonymous opinion" are different disclosures; a user wanting both hidden uses both mechanisms (they're independent, composable). Not yet traced as its own flow — the "submit rating/review" flow itself (of which anonymity is now one property) is still a candidate for a future walkthrough session.
@@ -452,6 +452,15 @@ Backend executes:
         ↓
 Return success
 ```
+
+**Superseding decision (added once this was actually built, explicit product direction — not the original plan above):** §14b as sketched is **not built**. Instead of a human moderator role/queue, the AI-assisted moderation from PRD §30.8 executes **autonomously, in the same request as the report** — there is no moderator role, no queue, no human in the loop at all. `POST /reports` (§14a, still accurate) both creates the report AND immediately asks Gemini to classify + decide + apply the outcome, returning the decision to the *reporter* in the same response. This is a deliberate escalation beyond PRD §30.8's original "triage/flagging layer, human still decides" framing — the product decision here is full autonomy.
+
+Practical consequences of this swap:
+- No `users/{uid}/moderationLog` subcollection — `reports/{reportId}.decision` (the full Gemini output: category, actions taken, confidence, rationale) already serves as the audit trail, one place instead of scattered per-user logs.
+- The reporter-supplied `category` from §14a's original report doc is dropped — Gemini determines the actual category itself from the content, a free-text `reason` from the reporter is enough context.
+- Every action stays reversible/soft per this project's general policy: content removal is a soft `deleted:true` (never hard-deleted), restrictions/temporary suspensions get a real `statusExpiresAt` (only a permanent suspension, reserved for severe categories like grooming, leaves it `null`).
+- When Gemini isn't configured (`GEMINI_API_KEY` unset), the report still gets created but stays `"pending"` forever — there's deliberately no human fallback queue to route it to instead.
+- See `backend/src/lib/gemini.ts` for the exact prompt (faithful to PRD §30.2's prohibited-behavior list and §30.8's "legitimate movie discussion vs. real violation" distinction) and `backend/src/services/reports.service.ts` for the full decision-application logic. api-contracts.md §12 has the exact request/response shape.
 
 **Decision — role lives in Firebase custom claims, not a Firestore field.** Firebase Auth supports attaching custom claims (like a role) directly to a user's ID token/JWT. The backend reads the role straight off the already-verified token — no extra Firestore lookup needed on every privileged check, unlike a `users/{uid}.role` field, which would cost a read every time.
 
