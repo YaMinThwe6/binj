@@ -14,7 +14,10 @@ export type {
   UpcomingEvent,
   ActivityItem,
   Greeting,
-  NotificationItem
+  NotificationItem,
+  Review,
+  MyReview,
+  MovieStatus
 } from '@binj/shared-types'
 export type { UserProfile as Me } from '@binj/shared-types'
 
@@ -29,6 +32,9 @@ import type {
   ActivityItem,
   Greeting,
   NotificationItem,
+  Review,
+  MyReview,
+  MovieStatus,
   UserProfile as Me
 } from '@binj/shared-types'
 
@@ -179,4 +185,32 @@ export function getNotifications(unreadOnly = false): Promise<{ items: Notificat
 
 export function markNotificationRead(id: string): Promise<void> {
   return apiFetch(`/users/me/notifications/${encodeURIComponent(id)}`, { method: 'PATCH', body: { read: true }, auth: true })
+}
+
+export function likeMovie(movieId: string): Promise<void> {
+  return apiFetch(`/users/me/likes/${encodeURIComponent(movieId)}`, { method: 'PUT', auth: true })
+}
+
+export function unlikeMovie(movieId: string): Promise<void> {
+  return apiFetch(`/users/me/likes/${encodeURIComponent(movieId)}`, { method: 'DELETE', auth: true })
+}
+
+export function getMovieStatus(movieId: string): Promise<MovieStatus> {
+  return apiFetch(`/users/me/movies/${encodeURIComponent(movieId)}`, { auth: true })
+}
+
+export function getMovieReviews(movieId: string, cursor?: string): Promise<{ items: Review[]; nextCursor: string | null }> {
+  const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+  return apiFetch(`/movies/${encodeURIComponent(movieId)}/reviews${qs}`)
+}
+
+export function submitReview(
+  movieId: string,
+  review: { rating: number; reviewText: string | null; isAnonymous: boolean }
+): Promise<MyReview> {
+  return apiFetch(`/movies/${encodeURIComponent(movieId)}/reviews/me`, { method: 'PUT', body: review, auth: true })
+}
+
+export function deleteReview(movieId: string): Promise<void> {
+  return apiFetch(`/movies/${encodeURIComponent(movieId)}/reviews/me`, { method: 'DELETE', auth: true })
 }

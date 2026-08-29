@@ -2,6 +2,7 @@ import { Router } from "express";
 import { auth, db } from "../lib/firebaseAdmin.js";
 import { sendOtpEmail, isMailerConfigured } from "../lib/mailer.js";
 import { generateCode, hashCode, OTP_TTL_MS, MAX_ATTEMPTS } from "../lib/otp.js";
+import { logger } from "../lib/logger.js";
 
 export const authRouter = Router();
 
@@ -33,7 +34,7 @@ authRouter.post("/auth/email/start", async (req, res) => {
     await sendOtpEmail(email, code);
     return res.status(204).send();
   } catch (err) {
-    console.error(`[POST /auth/email/start] email=${email}`, err);
+    logger.error(`[POST /auth/email/start] email=${email}`, err);
     return res.status(502).json({ error: { code: "OTP_SEND_FAILED", message: "Failed to send verification code" } });
   }
 });
@@ -86,7 +87,7 @@ authRouter.post("/auth/email/verify", async (req, res) => {
     const customToken = await auth.createCustomToken(userRecord.uid);
     return res.status(200).json({ customToken });
   } catch (err) {
-    console.error(`[POST /auth/email/verify] email=${email}`, err);
+    logger.error(`[POST /auth/email/verify] email=${email}`, err);
     return res.status(502).json({ error: { code: "VERIFY_FAILED", message: "Failed to verify code" } });
   }
 });

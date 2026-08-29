@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { env, smtpConfigured } from "./env.js";
+import { logger } from "./logger.js";
 
 let transporter: Transporter | null = null;
 
@@ -9,7 +10,7 @@ if (smtpConfigured) {
     auth: { user: env.SMTP_USER, pass: env.SMTP_PASS }
   });
 } else {
-  console.warn(
+  logger.warn(
     "[mailer] SMTP_USER / SMTP_PASS not set — the Email+OTP sign-in path will 503 until SMTP is configured."
   );
 }

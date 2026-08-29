@@ -1,6 +1,8 @@
 import { Router } from "express";
+import type { MovieStatus } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
+import { logger } from "../lib/logger.js";
 
 export const userMoviesRouter = Router();
 
@@ -46,7 +48,7 @@ userMoviesRouter.put("/users/me/watchlist/:movieId", requireAuth, async (req, re
     await writeActivity(req.uid!, "watchlist_added", movieId);
     return res.status(204).send();
   } catch (err) {
-    console.error(`[PUT /users/me/watchlist/${movieId}]`, err);
+    logger.error(`[PUT /users/me/watchlist/${movieId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to add to watchlist" } });
   }
 });
@@ -59,7 +61,7 @@ userMoviesRouter.delete("/users/me/watchlist/:movieId", requireAuth, async (req,
     await db.collection("users").doc(req.uid!).collection("watchlist").doc(movieId).delete();
     return res.status(204).send();
   } catch (err) {
-    console.error(`[DELETE /users/me/watchlist/${movieId}]`, err);
+    logger.error(`[DELETE /users/me/watchlist/${movieId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to remove from watchlist" } });
   }
 });
@@ -81,7 +83,7 @@ userMoviesRouter.get("/users/me/watchlist", requireAuth, async (req, res) => {
     const nextCursor = snap.docs.length === limit ? snap.docs[snap.docs.length - 1].id : null;
     return res.json({ items, nextCursor });
   } catch (err) {
-    console.error("[GET /users/me/watchlist]", err);
+    logger.error("[GET /users/me/watchlist]", err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load watchlist" } });
   }
 });
@@ -108,7 +110,7 @@ userMoviesRouter.put("/users/me/watched/:movieId", requireAuth, async (req, res)
     }
     return res.status(204).send();
   } catch (err) {
-    console.error(`[PUT /users/me/watched/${movieId}]`, err);
+    logger.error(`[PUT /users/me/watched/${movieId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to mark as watched" } });
   }
 });
@@ -121,7 +123,7 @@ userMoviesRouter.delete("/users/me/watched/:movieId", requireAuth, async (req, r
     await db.collection("users").doc(req.uid!).collection("watched").doc(movieId).delete();
     return res.status(204).send();
   } catch (err) {
-    console.error(`[DELETE /users/me/watched/${movieId}]`, err);
+    logger.error(`[DELETE /users/me/watched/${movieId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to remove from watched" } });
   }
 });
@@ -142,7 +144,7 @@ userMoviesRouter.patch("/users/me/watched/:movieId", requireAuth, async (req, re
     await ref.update({ visibility: req.body.visibility });
     return res.status(204).send();
   } catch (err) {
-    console.error(`[PATCH /users/me/watched/${movieId}]`, err);
+    logger.error(`[PATCH /users/me/watched/${movieId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to update visibility" } });
   }
 });
@@ -168,7 +170,7 @@ userMoviesRouter.get("/users/me/watched", requireAuth, async (req, res) => {
     const nextCursor = snap.docs.length === limit ? snap.docs[snap.docs.length - 1].id : null;
     return res.json({ items, nextCursor });
   } catch (err) {
-    console.error("[GET /users/me/watched]", err);
+    logger.error("[GET /users/me/watched]", err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load watched list" } });
   }
 });
@@ -199,7 +201,7 @@ userMoviesRouter.put("/users/me/likes/:movieId", requireAuth, async (req, res) =
     if ((err as { code?: string }).code === "MOVIE_NOT_FOUND") {
       return res.status(404).json({ error: { code: "MOVIE_NOT_FOUND", message: "No such movie" } });
     }
-    console.error(`[PUT /users/me/likes/${movieId}]`, err);
+    logger.error(`[PUT /users/me/likes/${movieId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to like movie" } });
   }
 });
@@ -221,7 +223,51 @@ userMoviesRouter.delete("/users/me/likes/:movieId", requireAuth, async (req, res
     });
     return res.status(204).send();
   } catch (err) {
-    console.error(`[DELETE /users/me/likes/${movieId}]`, err);
+    logger.error(`[DELETE /users/me/likes/${movieId}]`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to unlike movie" } });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Status bundle — Movie Detail needs the caller's relationship to one movie
+// across watchlist/watched/likes/reviews to render its action bar; one
+// request here instead of four.
+// ---------------------------------------------------------------------------
+
+userMoviesRouter.get("/users/me/movies/:movieId", requireAuth, async (req, res) => {
+  if (!db) return res.status(503).json({ error: { code: "FIRESTORE_NOT_CONFIGURED", message: "Firestore is not configured" } });
+  const { movieId } = req.params;
+  const uid = req.uid!;
+
+  try {
+    const userRef = db.collection("users").doc(uid);
+    const [watchlistSnap, watchedSnap, likeSnap, reviewSnap] = await Promise.all([
+      userRef.collection("watchlist").doc(movieId).get(),
+      userRef.collection("watched").doc(movieId).get(),
+      userRef.collection("likes").doc(movieId).get(),
+      db.collection("movies").doc(movieId).collection("reviews").doc(uid).get()
+    ]);
+
+    const reviewData = reviewSnap.exists ? reviewSnap.data() : null;
+    const status: MovieStatus = {
+      watchlisted: watchlistSnap.exists,
+      watched: watchedSnap.exists,
+      liked: likeSnap.exists,
+      review:
+        reviewData && !reviewData.deleted
+          ? {
+              rating: reviewData.rating,
+              reviewText: reviewData.reviewText ?? null,
+              isAnonymous: reviewData.isAnonymous,
+              createdAt: toIso(reviewData.createdAt),
+              updatedAt: toIso(reviewData.updatedAt)
+            }
+          : null
+    };
+
+    return res.json(status);
+  } catch (err) {
+    logger.error(`[GET /users/me/movies/${movieId}] uid=${uid}`, err);
+    return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load movie status" } });
   }
 });

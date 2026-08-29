@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { RecommendationItem } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
+import { logger } from "../lib/logger.js";
 
 export const recommendationsRouter = Router();
 
@@ -100,7 +101,7 @@ recommendationsRouter.get("/recommendations", requireAuth, async (req, res) => {
 
     return res.json({ items });
   } catch (err) {
-    console.error(`[GET /recommendations] uid=${uid}`, err);
+    logger.error(`[GET /recommendations] uid=${uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load recommendations" } });
   }
 });

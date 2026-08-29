@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 import { writeNotification } from "../lib/notify.js";
+import { logger } from "../lib/logger.js";
 
 export const followRouter = Router();
 
@@ -45,7 +46,7 @@ followRouter.put("/users/:uid/follow", requireAuth, async (req, res) => {
     }
     return res.json({ status: "pending" });
   } catch (err) {
-    console.error(`[PUT /users/${targetUid}/follow] caller=${callerUid}`, err);
+    logger.error(`[PUT /users/${targetUid}/follow] caller=${callerUid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to follow user" } });
   }
 });
@@ -65,7 +66,7 @@ followRouter.delete("/users/:uid/follow", requireAuth, async (req, res) => {
     await db.batch().delete(followingRef).delete(followersRef).delete(requestRef).commit();
     return res.status(204).send();
   } catch (err) {
-    console.error(`[DELETE /users/${targetUid}/follow] caller=${callerUid}`, err);
+    logger.error(`[DELETE /users/${targetUid}/follow] caller=${callerUid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to unfollow user" } });
   }
 });
@@ -88,7 +89,7 @@ followRouter.get("/users/me/followRequests", requireAuth, async (req, res) => {
     );
     return res.json({ items });
   } catch (err) {
-    console.error(`[GET /users/me/followRequests] uid=${req.uid}`, err);
+    logger.error(`[GET /users/me/followRequests] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load follow requests" } });
   }
 });
@@ -111,7 +112,7 @@ followRouter.post("/users/me/followRequests/:requesterUid/approve", requireAuth,
     await writeNotification(requesterUid, "followApproved", meUid, "user", meUid);
     return res.status(204).send();
   } catch (err) {
-    console.error(`[POST /users/me/followRequests/${requesterUid}/approve] uid=${meUid}`, err);
+    logger.error(`[POST /users/me/followRequests/${requesterUid}/approve] uid=${meUid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to approve follow request" } });
   }
 });
@@ -125,7 +126,7 @@ followRouter.post("/users/me/followRequests/:requesterUid/deny", requireAuth, as
     await db.collection("users").doc(meUid).collection("followRequests").doc(requesterUid).delete();
     return res.status(204).send();
   } catch (err) {
-    console.error(`[POST /users/me/followRequests/${requesterUid}/deny] uid=${meUid}`, err);
+    logger.error(`[POST /users/me/followRequests/${requesterUid}/deny] uid=${meUid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to deny follow request" } });
   }
 });

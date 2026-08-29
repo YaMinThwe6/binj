@@ -3,6 +3,7 @@ import type { Greeting, ActivityItem } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
 import { pickQuoteForMovieIds, pickRandomQuote } from "../data/movieQuotes.js";
+import { logger } from "../lib/logger.js";
 
 export const homeRouter = Router();
 
@@ -34,7 +35,7 @@ homeRouter.get("/home/greeting", requireAuth, async (req, res) => {
     };
     return res.json(greeting);
   } catch (err) {
-    console.error(`[GET /home/greeting] uid=${req.uid}`, err);
+    logger.error(`[GET /home/greeting] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load greeting" } });
   }
 });
@@ -84,7 +85,7 @@ homeRouter.get("/home/activity", requireAuth, async (req, res) => {
 
     return res.json({ items });
   } catch (err) {
-    console.error(`[GET /home/activity] uid=${req.uid}`, err);
+    logger.error(`[GET /home/activity] uid=${req.uid}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to load activity" } });
   }
 });

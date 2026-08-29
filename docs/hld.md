@@ -1,6 +1,6 @@
 # BINJ — High-Level Design (Working Notes)
 
-Living document from the HLD walkthrough. Captures components, traced request flows, decisions made, and things still open. See [PRD.md](PRD.md) for product scope and [imdb-data-analysis.md](imdb-data-analysis.md) for the IMDb dataset analysis.
+Living document from the HLD walkthrough. Captures components, traced request flows, decisions made, and things still open. See [PRD.md](PRD.md) for product scope, [imdb-data-analysis.md](imdb-data-analysis.md) for the IMDb dataset analysis, and [backend-conventions.md](backend-conventions.md) / [frontend-conventions.md](frontend-conventions.md) for tooling/logging/folder-structure/response-envelope conventions (separate from *what* the app does, which lives here).
 
 ---
 
@@ -693,6 +693,8 @@ Firestore transaction: read existing rating → sum -= rating, count -= 1 → so
 ```
 
 Anonymity (§11) is just one field on this same document, exactly as originally planned. The displayed BINJ average (§16.3 in the PRD) is always just `sum / count` — cheap to read regardless of review count.
+
+**Implementation note (added once this was actually built):** submit/edit/delete/list are real (`backend/src/routes/reviews.ts`). Resubmitting after a soft-delete is treated as first-time again (count increments), not an edit — a deleted review contributed nothing to the aggregate, so bringing it back is a fresh contribution. Anonymous reviews are redacted server-side in the public list (`authorId`/`displayName: null`) rather than left to the client, tightening the original api-contracts.md §3 sketch which said "withheld client-side." §22's moderation strikes/bans and disputes are deferred — they depend on the moderator-role system (§14), which doesn't exist yet; the account-restriction check this flow calls for above (§14b's `status` field) is real and already enforced, since that field already existed from onboarding.
 
 ---
 

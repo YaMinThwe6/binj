@@ -1,0 +1,16 @@
+{
+  "printWidth": 120,
+  "trailingComma": "none",
+  "semi": false,
+  "singleQuote": true,
+  "overrides": [
+    {
+      "comment": "backend + shared-types keep their existing style (semicolons, double quotes) — this file only formats going forward, it doesn't reformat everything that's already written",
+      "files": ["backend/**/*.ts", "packages/*/src/**/*.ts"],
+      "options": {
+        "semi": true,
+        "singleQuote": false
+      }
+    }
+  ]
+}

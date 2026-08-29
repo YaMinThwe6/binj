@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { auth } from "../lib/firebaseAdmin.js";
+import { logger } from "../lib/logger.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -39,7 +40,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.authClaims = decoded;
     return next();
   } catch (err) {
-    console.error("[requireAuth] token verification failed", err);
+    logger.error("[requireAuth] token verification failed", err);
     return res.status(401).json({
       error: { code: "UNAUTHENTICATED", message: "Invalid or expired token" }
     });

@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { UserProfile } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { requireAuth } from "../middleware/auth.js";
+import { logger } from "../lib/logger.js";
 
 export const usersRouter = Router();
 
@@ -86,7 +87,7 @@ usersRouter.get("/users/me", requireAuth, async (req, res) => {
     await ref.set(newUser);
     return res.status(200).json(toResponse(newUser, true));
   } catch (err) {
-    console.error(`[GET /users/me] uid=${uid}`, err);
+    logger.error(`[GET /users/me] uid=${uid}`, err);
     return res.status(502).json({
       error: { code: "FIRESTORE_ERROR", message: "Failed to load or create user profile" }
     });
@@ -114,7 +115,7 @@ usersRouter.get("/users/username-available", async (req, res) => {
     const snap = await db.collection("usernames").doc(username).get();
     return res.json({ available: !snap.exists });
   } catch (err) {
-    console.error(`[GET /users/username-available] username=${username}`, err);
+    logger.error(`[GET /users/username-available] username=${username}`, err);
     return res.status(502).json({ error: { code: "FIRESTORE_ERROR", message: "Failed to check username" } });
   }
 });
@@ -201,7 +202,7 @@ usersRouter.patch("/users/me", requireAuth, async (req, res) => {
     if ((err as { code?: string }).code === "USERNAME_TAKEN") {
       return res.status(409).json({ error: { code: "USERNAME_TAKEN", message: "That username is already taken" } });
     }
-    console.error(`[PATCH /users/me] uid=${uid}`, err);
+    logger.error(`[PATCH /users/me] uid=${uid}`, err);
     return res.status(502).json({
       error: { code: "FIRESTORE_ERROR", message: "Failed to update user profile" }
     });

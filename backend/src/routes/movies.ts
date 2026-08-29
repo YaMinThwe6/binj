@@ -1,9 +1,21 @@
 import { Router } from "express";
-import type { MovieDetail, MovieSummary } from "@binj/shared-types";
+import type { MovieDetail } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
 import { fetchMovieDetails, searchMovies, type TmdbMovie } from "../lib/tmdb.js";
+import { logger } from "../lib/logger.js";
 
 export const moviesRouter = Router();
+
+// A movie that's never been rated/liked has no reason to have binjRating/likeCount
+// actually written in Firestore — this normalizes the response so the client never
+// has to special-case "field is missing" vs. "field is zero".
+function withRatingDefaults(data: FirebaseFirestore.DocumentData): MovieDetail {
+  return {
+    ...data,
+    binjRating: data.binjRating ?? { sum: 0, count: 0 },
+    likeCount: data.likeCount ?? 0
+  } as MovieDetail;
+}
 
 // GET /movies/:movieId — cache (not yet built, see docs/schema.md §28) → Firestore → TMDB, hld.md §2
 moviesRouter.get("/movies/:movieId", async (req, res) => {
@@ -13,7 +25,7 @@ moviesRouter.get("/movies/:movieId", async (req, res) => {
     if (db) {
       const snap = await db.collection("movies").doc(movieId).get();
       if (snap.exists) {
-        return res.json(snap.data() as MovieDetail);
+        return res.json(withRatingDefaults(snap.data()!));
       }
     }
 
@@ -48,9 +60,9 @@ moviesRouter.get("/movies/:movieId", async (req, res) => {
       if (credits.length > 0) await batch.commit();
     }
 
-    return res.json(movieDoc satisfies MovieDetail);
+    return res.json(withRatingDefaults(movieDoc));
   } catch (err) {
-    console.error(`[GET /movies/${movieId}]`, err);
+    logger.error(`[GET /movies/${movieId}]`, err);
     return res.status(502).json({
       error: { code: "TMDB_UPSTREAM_ERROR", message: "Failed to fetch movie details" }
     });
@@ -71,7 +83,7 @@ moviesRouter.get("/search/movies", async (req, res) => {
     const items = await searchMovies(q);
     return res.json({ items, nextCursor: null });
   } catch (err) {
-    console.error(`[GET /search/movies?q=${q}]`, err);
+    logger.error(`[GET /search/movies?q=${q}]`, err);
     return res.status(502).json({
       error: { code: "TMDB_UPSTREAM_ERROR", message: "Failed to search movies" }
     });

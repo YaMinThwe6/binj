@@ -250,10 +250,11 @@ Firestore auto-indexes every single field; composite indexes are only needed whe
 | `movies` | `originalLanguage` (asc, `in`) + `voteAverage` (desc) | §13 onboarding's Watched-step candidates, language-only branch |
 | `events` | `visibility` (asc) + `geohash` (asc) | §9 nearby-events range query, filtered to public |
 | `events` | `visibility` (asc) + `datetime` (asc) | `GET /events/upcoming` (api-contracts.md §8) — Home's "Upcoming watch events" |
-| `events` | `movieId` (asc) + `visibility` (asc) + `datetime` (asc) | "Watch parties for this movie" — the movie detail screen's events entry point, replacing the old per-movie room concept (§16). Not yet queried (movie detail page isn't built) but declared now for when it is |
+| `events` | `movieId` (asc) + `visibility` (asc) + `datetime` (asc) | "Watch parties for this movie" — the movie detail screen's events entry point, replacing the old per-movie room concept (§16). Movie Detail itself now ships; this movie-scoped events section is still a later item, so the query itself isn't wired up yet |
 | `activity` | `uid` (`in`) + `createdAt` (desc) | `GET /home/activity` (api-contracts.md §7b) — "Friends are watching", fanned out across the caller's `following` list |
 | `reports` | `status` (asc) + `createdAt` (desc) | §14b moderator queue |
 | `users/{uid}/notifications` | `read` (asc) + `createdAt` (desc) | §17 in-app feed, unread-first |
+| `movies/{movieId}/reviews` | `deleted` (asc) + `createdAt` (desc) | `GET /movies/:movieId/reviews` (api-contracts.md §3) — public review list, newest first, excluding soft-deleted |
 
 Everything else (`movies` sorted only by `voteAverage`, `rooms/{roomId}/messages` ordered by `createdAt`, `tasteMatches` ordered by `score`, all the point-reads by known doc ID) is a single-field query or a direct key lookup — Firestore's automatic indexing already covers those, nothing to declare.
 

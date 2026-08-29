@@ -1,0 +1,7 @@
+dist/
+node_modules/
+coverage/
+.firebase/
+pnpm-lock.yaml
+firestore-debug.log
+firebase-debug.log

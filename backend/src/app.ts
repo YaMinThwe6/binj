@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { moviesRouter } from "./routes/movies.js";
 import { usersRouter } from "./routes/users.js";
 import { authRouter } from "./routes/auth.js";
@@ -11,11 +12,13 @@ import { followRouter } from "./routes/follow.js";
 import { eventsRouter } from "./routes/events.js";
 import { homeRouter } from "./routes/home.js";
 import { notificationsRouter } from "./routes/notifications.js";
+import { reviewsRouter } from "./routes/reviews.js";
 import { isFirebaseConfigured } from "./lib/firebaseAdmin.js";
 
 export function createApp(): Express {
   const app = express();
 
+  app.use(helmet());
   app.use(cors());
   app.use(express.json());
 
@@ -34,6 +37,7 @@ export function createApp(): Express {
   app.use(eventsRouter);
   app.use(homeRouter);
   app.use(notificationsRouter);
+  app.use(reviewsRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "No such route" } });
