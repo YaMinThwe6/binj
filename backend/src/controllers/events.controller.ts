@@ -41,3 +41,13 @@ export async function postDenyJoinRequest(req: Request, res: Response): Promise<
   await eventsService.denyJoinRequest(req.uid!, req.params.eventId, req.params.requesterUid);
   Responder.noContent(res);
 }
+
+export async function getEvent(req: Request, res: Response): Promise<void> {
+  const result = await eventsService.getEvent(req.params.eventId);
+  Responder.success(res, result);
+}
+
+export async function deleteEvent(req: Request, res: Response): Promise<void> {
+  await eventsService.deleteEvent(req.uid!, req.params.eventId);
+  Responder.noContent(res);
+}

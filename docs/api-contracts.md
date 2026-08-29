@@ -164,7 +164,12 @@ GET    /events/:eventId/joinRequests       → 200 { items: [{ uid, displayName 
 POST   /events/:eventId/joinRequests/:uid/approve → 204   // host only, re-checks capacity, 409 EVENT_FULL if it filled up while pending
 POST   /events/:eventId/joinRequests/:uid/deny    → 204   // host only
 
-GET    /events/:eventId                    → 200 { ...event fields, participantCount }   // not yet implemented
+GET    /events/:eventId                    → 200 { ...event fields, movieTitle, moviePoster }
+                                              // §21. Same UpcomingEvent shape as /upcoming and /nearby's items. No
+                                              // visibility-based access check — like PUT .../join, a private event is
+                                              // reachable by anyone who has the ID (protected by not being *listed*
+                                              // to them, not by blocking direct access). 404 EVENT_NOT_FOUND for a
+                                              // nonexistent OR soft-deleted event — indistinguishable from outside.
 GET    /events/nearby                      query: { lat, lng, radiusKm } → 200 { items: [{ ...event fields, movieTitle, moviePoster, distanceKm }] }
                                               // §9. radiusKm capped at 200. 400 INVALID_QUERY on missing/out-of-range
                                               // lat/lng/radiusKm. Composes with §7's visibility rules rather than
@@ -173,7 +178,15 @@ GET    /events/nearby                      query: { lat, lng, radiusKm } → 200
                                               // isn't surfaced here — that event is still reachable directly by ID,
                                               // just not via location search). Sorted by distanceKm ascending.
 PATCH  /events/:eventId                    body: { title?, datetime?, participantLimit?, ... } → 200   // §21, not yet implemented
-DELETE /events/:eventId                    → 204   // §21, not yet implemented
+DELETE /events/:eventId                    → 204   // §21. Host only (403 FORBIDDEN otherwise); 404 EVENT_NOT_FOUND
+                                              // for a nonexistent or already-deleted event (idempotent delete isn't
+                                              // supported — a second delete 404s rather than silently succeeding,
+                                              // since there's no host-visible difference between "gone" and "already
+                                              // gone" worth hiding). Soft delete only (deleted: true) — same §21
+                                              // policy as reviews/messages; excluded from /upcoming, /nearby, and
+                                              // GET /events/:eventId, and PUT .../join now 404s for it too. Existing
+                                              // participants aren't notified of the cancellation (see hld.md §11's
+                                              // still-open "event notifications" gap).
 ```
 
 **Implementation note (added once `/events/nearby` was actually built):** Firestore has no native radius query, so this runs a geohash-prefix range query (`backend/src/lib/geohash.ts`, no external dependency — a self-contained ~30-line encoder) at a precision chosen from `radiusKm`, then post-filters the candidates to an actual haversine distance and sorts by it. This is a known approximation, not an exact-recall search: an event whose geohash cell happens to fall just across a boundary from the query point's own cell can be missed even if it's genuinely within range — accepted per hld.md §9's own framing ("an approximation of a bounding box"), not treated as a bug. `POST /events` computes and stores the geohash at creation time for any in-person event with a resolved `location`; online events (and in-person events without one yet) simply aren't location-discoverable.

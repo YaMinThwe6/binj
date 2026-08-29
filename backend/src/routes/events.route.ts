@@ -9,7 +9,9 @@ import {
   deleteJoinEvent,
   getJoinRequests,
   postApproveJoinRequest,
-  postDenyJoinRequest
+  postDenyJoinRequest,
+  getEvent,
+  deleteEvent
 } from "../controllers/events.controller.js";
 
 export const eventsRouter = Router();
@@ -22,3 +24,7 @@ eventsRouter.delete("/events/:eventId/join", requireAuth, asyncHandler(deleteJoi
 eventsRouter.get("/events/:eventId/joinRequests", requireAuth, asyncHandler(getJoinRequests));
 eventsRouter.post("/events/:eventId/joinRequests/:requesterUid/approve", requireAuth, asyncHandler(postApproveJoinRequest));
 eventsRouter.post("/events/:eventId/joinRequests/:requesterUid/deny", requireAuth, asyncHandler(postDenyJoinRequest));
+// Kept last among GET routes: a param route registered before "/events/upcoming"
+// and "/events/nearby" would shadow them by matching "upcoming"/"nearby" as :eventId first.
+eventsRouter.get("/events/:eventId", requireAuth, asyncHandler(getEvent));
+eventsRouter.delete("/events/:eventId", requireAuth, asyncHandler(deleteEvent));

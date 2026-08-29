@@ -489,3 +489,121 @@ describe("GET /events/nearby", () => {
     expect(res.body.data.items.map((e: { title: string }) => e.title)).toEqual(["Close one", "Far one"]);
   });
 });
+
+describe("GET /events/:eventId", () => {
+  it("401s without a token", async () => {
+    const app = createApp();
+    const res = await request(app).get("/events/evt-1");
+    expect(res.status).toBe(401);
+  });
+
+  it("404s for a nonexistent event", async () => {
+    const app = createApp();
+    const res = await authed(app, "get", "/events/no-such-event");
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe("EVENT_NOT_FOUND");
+  });
+
+  it("returns the event joined with movie title/poster", async () => {
+    store.set("events/evt-1", {
+      hostId: "host-1",
+      movieId: "movie-1",
+      title: "Rooftop watch",
+      datetime: new Date("2099-06-01T20:00:00.000Z"),
+      mode: "online",
+      location: null,
+      visibility: "public",
+      joinCode: null,
+      participantLimit: 5,
+      participantCount: 1,
+      requiresApproval: false,
+      roomId: "room-1",
+      createdAt: new Date("2026-01-01T00:00:00.000Z")
+    });
+    const app = createApp();
+    const res = await authed(app, "get", "/events/evt-1");
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      eventId: "evt-1",
+      hostId: "host-1",
+      title: "Rooftop watch",
+      movieTitle: "Dune: Part Two",
+      moviePoster: "/dune.jpg",
+      participantCount: 1
+    });
+  });
+
+  it("404s for a soft-deleted event — same as not found", async () => {
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", deleted: true });
+    const app = createApp();
+    const res = await authed(app, "get", "/events/evt-1");
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe("EVENT_NOT_FOUND");
+  });
+
+  it("does not require the caller to be the host or invited — accessible by ID like PUT .../join already is", async () => {
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", visibility: "private", participantCount: 1, participantLimit: 5 });
+    currentUid = "stranger-1";
+    const app = createApp();
+    const res = await authed(app, "get", "/events/evt-1");
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("DELETE /events/:eventId", () => {
+  it("401s without a token", async () => {
+    const app = createApp();
+    const res = await request(app).delete("/events/evt-1");
+    expect(res.status).toBe(401);
+  });
+
+  it("404s for a nonexistent event", async () => {
+    const app = createApp();
+    const res = await authed(app, "delete", "/events/no-such-event");
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe("EVENT_NOT_FOUND");
+  });
+
+  it("403s for a non-host", async () => {
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1" });
+    currentUid = "guest-1";
+    const app = createApp();
+    const res = await authed(app, "delete", "/events/evt-1");
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("FORBIDDEN");
+  });
+
+  it("soft-deletes — the doc stays in Firestore with deleted:true, not removed", async () => {
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1" });
+    const app = createApp(); // currentUid stays "host-1"
+    const res = await authed(app, "delete", "/events/evt-1");
+    expect(res.status).toBe(204);
+    expect(store.get("events/evt-1")).toMatchObject({ hostId: "host-1", deleted: true });
+  });
+
+  it("is idempotent — deleting an already-deleted event 404s rather than double-processing", async () => {
+    store.set("events/evt-1", { hostId: "host-1", movieId: "movie-1", deleted: true });
+    const app = createApp();
+    const res = await authed(app, "delete", "/events/evt-1");
+    expect(res.status).toBe(404);
+  });
+
+  it("a deleted event is excluded from GET /events/:eventId, /upcoming, /nearby, and can no longer be joined", async () => {
+    const app = createApp();
+    const created = await authed(app, "post", "/events").send({ ...validBody, datetime: "2099-01-01T20:00:00.000Z" });
+    const eventId = created.body.data.eventId;
+
+    const del = await authed(app, "delete", `/events/${eventId}`);
+    expect(del.status).toBe(204);
+
+    const getRes = await authed(app, "get", `/events/${eventId}`);
+    expect(getRes.status).toBe(404);
+
+    const upcoming = await authed(app, "get", "/events/upcoming");
+    expect(upcoming.body.data.items.map((e: { eventId: string }) => e.eventId)).not.toContain(eventId);
+
+    currentUid = "guest-1";
+    const join = await authed(app, "put", `/events/${eventId}/join`);
+    expect(join.status).toBe(404);
+  });
+});
