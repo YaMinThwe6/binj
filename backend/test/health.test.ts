@@ -8,7 +8,12 @@ describe("GET /health", () => {
     const res = await request(app).get("/health");
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "ok", firebaseConfigured: false });
+    expect(res.body).toEqual({
+      success: true,
+      message: "OK",
+      data: { status: "ok", firebaseConfigured: false },
+      statusCode: 200
+    });
   });
 });
 
@@ -18,6 +23,6 @@ describe("unknown route", () => {
     const res = await request(app).get("/nope");
 
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("NOT_FOUND");
+    expect(res.body).toEqual({ success: false, message: "No such route", code: "NOT_FOUND", statusCode: 404 });
   });
 });

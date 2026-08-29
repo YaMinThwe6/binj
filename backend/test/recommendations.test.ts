@@ -68,6 +68,7 @@ const db = { collection: (name: string) => makeCollectionRef(name) };
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -99,7 +100,7 @@ describe("GET /recommendations", () => {
     const res = await req(app);
 
     expect(res.status).toBe(200);
-    expect(res.body.items.map((m: { movieId: string }) => m.movieId)).toEqual([
+    expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).toEqual([
       "interstellar",
       "whiplash",
       "dune",
@@ -114,7 +115,7 @@ describe("GET /recommendations", () => {
     const res = await req(app);
 
     expect(res.status).toBe(200);
-    expect(res.body.items.map((m: { movieId: string }) => m.movieId)).toEqual(["notebook"]);
+    expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).toEqual(["notebook"]);
   });
 
   it("derives preferred genres from watched-movie frequency when history exists", async () => {
@@ -124,7 +125,7 @@ describe("GET /recommendations", () => {
     const res = await req(app);
 
     expect(res.status).toBe(200);
-    const ids = res.body.items.map((m: { movieId: string }) => m.movieId);
+    const ids = res.body.data.items.map((m: { movieId: string }) => m.movieId);
     // Inception is Sci-Fi/Thriller — sci-fi titles should surface, romance should not
     expect(ids).toContain("dune");
     expect(ids).toContain("interstellar");
@@ -134,11 +135,11 @@ describe("GET /recommendations", () => {
   it("computes matchScore against the preference signal, null for the trending fallback", async () => {
     store.set("users/uid-1", { favoriteGenres: null });
     const trendingRes = await req(createApp());
-    expect(trendingRes.body.items.every((m: { matchScore: unknown }) => m.matchScore === null)).toBe(true);
+    expect(trendingRes.body.data.items.every((m: { matchScore: unknown }) => m.matchScore === null)).toBe(true);
 
     store.set("users/uid-1", { favoriteGenres: ["Romance"] });
     const preferredRes = await req(createApp());
-    const notebook = preferredRes.body.items.find((m: { movieId: string }) => m.movieId === "notebook");
+    const notebook = preferredRes.body.data.items.find((m: { movieId: string }) => m.movieId === "notebook");
     expect(notebook.matchScore).toBeGreaterThan(0);
     expect(notebook.matchScore).toBeLessThanOrEqual(100);
   });
@@ -150,7 +151,7 @@ describe("GET /recommendations", () => {
     const app = createApp();
     const res = await req(app);
 
-    const ids = res.body.items.map((m: { movieId: string }) => m.movieId);
+    const ids = res.body.data.items.map((m: { movieId: string }) => m.movieId);
     expect(ids).not.toContain("interstellar");
     expect(ids).not.toContain("whiplash");
   });

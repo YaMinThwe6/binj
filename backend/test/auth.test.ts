@@ -27,13 +27,18 @@ function makeDocRef(path: string) {
   };
 }
 
+const mockAuthAdmin = { verifyIdToken: vi.fn(), getUserByEmail, createUser, createCustomToken };
+const mockDb = {
+  collection: (name: string) => ({
+    doc: (id: string) => makeDocRef(`${name}/${id}`)
+  })
+};
+
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
-  auth: { verifyIdToken: vi.fn(), getUserByEmail, createUser, createCustomToken },
-  db: {
-    collection: (name: string) => ({
-      doc: (id: string) => makeDocRef(`${name}/${id}`)
-    })
-  },
+  auth: mockAuthAdmin,
+  db: mockDb,
+  requireDb: () => mockDb,
+  requireFirebaseAuth: () => mockAuthAdmin,
   isFirebaseConfigured: () => true
 }));
 
@@ -58,7 +63,7 @@ describe("POST /auth/email/start", () => {
     const res = await request(app).post("/auth/email/start").send({ email: "not-an-email" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_EMAIL");
+    expect(res.body.code).toBe("INVALID_EMAIL");
   });
 
   it("stores a hashed code (never the raw code) and emails it", async () => {
@@ -91,7 +96,7 @@ describe("POST /auth/email/verify", () => {
     const res = await request(app).post("/auth/email/verify").send({ email: "a@example.com", code: "123456" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("CODE_NOT_FOUND");
+    expect(res.body.code).toBe("CODE_NOT_FOUND");
   });
 
   it("400s and increments attempts on a wrong code", async () => {
@@ -104,7 +109,7 @@ describe("POST /auth/email/verify", () => {
     const res = await request(app).post("/auth/email/verify").send({ email: "a@example.com", code: "000000" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_CODE");
+    expect(res.body.code).toBe("INVALID_CODE");
     expect((store.get("authCodes/a@example.com") as { attempts: number }).attempts).toBe(1);
   });
 
@@ -118,7 +123,7 @@ describe("POST /auth/email/verify", () => {
     const res = await request(app).post("/auth/email/verify").send({ email: "a@example.com", code: "111111" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("CODE_EXPIRED");
+    expect(res.body.code).toBe("CODE_EXPIRED");
     expect(store.has("authCodes/a@example.com")).toBe(false);
   });
 
@@ -132,7 +137,7 @@ describe("POST /auth/email/verify", () => {
     const res = await request(app).post("/auth/email/verify").send({ email: "a@example.com", code: "111111" });
 
     expect(res.status).toBe(429);
-    expect(res.body.error.code).toBe("TOO_MANY_ATTEMPTS");
+    expect(res.body.code).toBe("TOO_MANY_ATTEMPTS");
   });
 
   it("mints a custom token and reuses an existing Firebase Auth user for the email", async () => {
@@ -149,7 +154,7 @@ describe("POST /auth/email/verify", () => {
       .send({ email: "existing@example.com", code: "222222" });
 
     expect(res.status).toBe(200);
-    expect(res.body.customToken).toBe("custom-token-for-existing-uid");
+    expect(res.body.data.customToken).toBe("custom-token-for-existing-uid");
     expect(createUser).not.toHaveBeenCalled();
     expect(createCustomToken).toHaveBeenCalledWith("existing-uid");
     expect(store.has("authCodes/existing@example.com")).toBe(false);
@@ -168,7 +173,7 @@ describe("POST /auth/email/verify", () => {
     const res = await request(app).post("/auth/email/verify").send({ email: "new@example.com", code: "333333" });
 
     expect(res.status).toBe(200);
-    expect(res.body.customToken).toBe("custom-token-for-new-uid");
+    expect(res.body.data.customToken).toBe("custom-token-for-new-uid");
     expect(createUser).toHaveBeenCalledWith({ email: "new@example.com" });
   });
 });

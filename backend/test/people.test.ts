@@ -47,6 +47,7 @@ const db = { collection: (name: string) => makeCollectionRef(name) };
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -75,7 +76,7 @@ describe("GET /users/me/tasteMatches", () => {
     const res = await request(app).get("/users/me/tasteMatches").set("Authorization", "Bearer good");
 
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([
+    expect(res.body.data.items).toEqual([
       { uid: "uid-3", displayName: "Meera", score: 91, relationship: "pending" },
       { uid: "uid-2", displayName: "Rohan", score: 84, relationship: "following" }
     ]);
@@ -85,7 +86,7 @@ describe("GET /users/me/tasteMatches", () => {
     const app = createApp();
     const res = await request(app).get("/users/me/tasteMatches").set("Authorization", "Bearer good");
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([]);
+    expect(res.body.data.items).toEqual([]);
   });
 });
 
@@ -94,7 +95,7 @@ describe("Followed celebrities", () => {
     const app = createApp();
     const res = await request(app).put("/users/me/followedCelebrities/6193").set("Authorization", "Bearer good");
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("PERSON_NOT_FOUND");
+    expect(res.body.code).toBe("PERSON_NOT_FOUND");
   });
 
   it("PUT follows a real person", async () => {
@@ -119,7 +120,7 @@ describe("Followed celebrities", () => {
     const app = createApp();
     const res = await request(app).get("/users/me/followedCelebrities").set("Authorization", "Bearer good");
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([{ personId: "6193", name: "Leonardo DiCaprio", photo: "/dicaprio.jpg" }]);
+    expect(res.body.data.items).toEqual([{ personId: "6193", name: "Leonardo DiCaprio", photo: "/dicaprio.jpg" }]);
   });
 });
 
@@ -128,7 +129,7 @@ describe("GET /onboarding/celebrity-suggestions", () => {
     const app = createApp();
     const res = await request(app).get("/onboarding/celebrity-suggestions").set("Authorization", "Bearer good");
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([]);
+    expect(res.body.data.items).toEqual([]);
   });
 
   it("ranks people by how many watched movies they appear in", async () => {
@@ -147,7 +148,7 @@ describe("GET /onboarding/celebrity-suggestions", () => {
     const res = await request(app).get("/onboarding/celebrity-suggestions").set("Authorization", "Bearer good");
 
     expect(res.status).toBe(200);
-    expect(res.body.items[0]).toEqual({ personId: "p1", name: "Actor One", photo: null, appearsIn: 2 });
-    expect(res.body.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
+    expect(res.body.data.items[0]).toEqual({ personId: "p1", name: "Actor One", photo: null, appearsIn: 2 });
+    expect(res.body.data.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
   });
 });

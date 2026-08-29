@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { auth } from "../lib/firebaseAdmin.js";
 import { logger } from "../lib/logger.js";
+import { Responder } from "../utils/responder.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -20,18 +21,14 @@ declare global {
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!auth) {
-    return res.status(503).json({
-      error: { code: "AUTH_NOT_CONFIGURED", message: "Firebase Auth is not configured on this server" }
-    });
+    return Responder.error(res, "AUTH_NOT_CONFIGURED", "Firebase Auth is not configured on this server", 503);
   }
 
   const header = req.header("Authorization") ?? "";
   const [scheme, token] = header.split(" ");
 
   if (scheme !== "Bearer" || !token) {
-    return res.status(401).json({
-      error: { code: "UNAUTHENTICATED", message: "Missing or malformed Authorization header" }
-    });
+    return Responder.error(res, "UNAUTHENTICATED", "Missing or malformed Authorization header", 401);
   }
 
   try {
@@ -41,8 +38,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return next();
   } catch (err) {
     logger.error("[requireAuth] token verification failed", err);
-    return res.status(401).json({
-      error: { code: "UNAUTHENTICATED", message: "Invalid or expired token" }
-    });
+    return Responder.error(res, "UNAUTHENTICATED", "Invalid or expired token", 401);
   }
 }

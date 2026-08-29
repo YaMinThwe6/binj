@@ -27,24 +27,35 @@ Every route's `catch` block logs through `logger.error(...)` instead of `console
 
 ## 2. Folder structure
 
-**Current state:** `backend/src/routes/*.ts` — one file per resource, each route handler doing HTTP concerns (params/body validation, status codes) *and* business logic (Firestore reads/writes, transactions) inline. `lib/` holds cross-cutting infrastructure (Firebase Admin SDK setup, TMDB client, mailer, OTP, notify, logger). `middleware/` holds Express middleware (`requireAuth`). `data/` holds static datasets (curated movie quotes).
+**Status (2026-08-29): done**, on `feature/architecture-restructure`. All 12 resources now follow a layered split modeled on the reference project's `controllers/` + `services/` + `routes/`:
+- `routes/*.route.ts` — thin: wires an HTTP method + path to a controller function via `asyncHandler` (see §3), nothing else.
+- `controllers/*.controller.ts` — translates between HTTP (req/res) and the service layer's plain function calls; builds the response via `Responder` (§3), never catches errors itself.
+- `services/*.service.ts` — the actual business logic and Firestore transactions, framework-agnostic (no `req`/`res`), independently testable without `supertest`; throws `AppError` for business-rule failures.
 
-**Target state (not yet migrated):** a layered split closer to the reference project's `controllers/` + `services/` + `routes/`:
-- `routes/*.ts` — thin: wires an HTTP method + path to a controller function, nothing else.
-- `controllers/*.ts` — translates between HTTP (req/res, status codes, the `{error:{code,message}}` envelope — see §3 on whether that survives) and the service layer's plain function calls.
-- `services/*.ts` — the actual business logic and Firestore transactions, framework-agnostic (no `req`/`res`), independently testable without `supertest`.
+`lib/` still holds cross-cutting infrastructure (Firebase Admin SDK setup — now also exporting `requireDb()`/`requireFirebaseAuth()`, see §3 — TMDB client, mailer, OTP, notify, logger). `middleware/` holds Express middleware (`requireAuth`, plus the new `errorHandler.ts`). `data/` holds static datasets (curated movie quotes). `utils/` is new: `AppError.ts`, `responder.ts`, `asyncHandler.ts`.
 
-**Decision — not migrating the ~15 existing route files retroactively right now.** It's a large, mechanical change touching every route and every existing test (141 of them), with no functional/behavioral difference to ship alongside — exactly the kind of change that deserves its own dedicated branch under the [[feedback_feature_branch_workflow]] convention, not bundled into an unrelated feature. Tracked here so the next dedicated session has a concrete target instead of re-litigating the shape.
+One deliberate resource split during the migration: the old `routes/people.ts` bundled `/onboarding/celebrity-suggestions` alongside the taste-matches/followed-celebrities endpoints even though it lives under the `/onboarding` URL namespace. It now lives in `onboarding.service.ts`/`onboarding.controller.ts` alongside `/onboarding/watched-candidates`, for URL-namespace/resource consistency — `people.service.ts` keeps only the `/users/me/tasteMatches` and `/users/me/followedCelebrities` endpoints.
 
 ---
 
 ## 3. Response envelope
 
-**Current state, live and tested:** `{ error: { code: string, message: string } }` on failure (matching HTTP status), raw JSON (no wrapper) on success. Documented in `docs/api-contracts.md`'s Conventions section, used by all 35+ existing endpoints, asserted on by all 141 backend tests, and parsed by frontend's `apiFetch` (`responseBody?.error?.message`).
+**Status (2026-08-29): done**, on `feature/architecture-restructure`. Every endpoint now responds through a single `Responder` (`backend/src/utils/responder.ts`):
+- Success: `{ success: true, message: string, data: T, statusCode: number }` — via `Responder.success(res, data, message?, statusCode?)`.
+- No-content (204): via `Responder.noContent(res)`.
+- Error: `{ success: false, message: string, code: string, statusCode: number }` — via `Responder.error(res, code, message, statusCode)`, called from the single `globalErrorHandler` (`backend/src/middleware/errorHandler.ts`), never from individual routes/controllers.
 
-**Target state (confirmed direction, not yet executed):** the reference project's `Responder` pattern — `{ success: boolean, message: string, data?: T, statusCode: number }` on *every* response, success or failure, built via `Responder.success(res, message, data, statusCode)` / `Responder.error(res, message, error, statusCode)` static helpers, paired with a single `globalErrorHandler` Express middleware that catches thrown errors instead of every route hand-rolling its own `try/catch` → `res.status(x).json({error:...})`.
+**Deliberate deviation from the reference project:** the reference pattern's error shape only carries a free-text `error` string. BINJ keeps a machine-readable `code` field (e.g. `MOVIE_NOT_FOUND`, `INVALID_RATING`) alongside `message` — dropping it would have been a real regression against the ~140 existing tests and the frontend, both of which branch on these codes, not against free-text messages.
 
-**Decision — this is a breaking change, done as its own dedicated branch, after Movie Detail/Reviews ships.** It touches every route's response construction, every test's assertions (`res.body.error.code` → `res.body.data`/`res.body.success`), `frontend/src/lib/api.ts`'s `apiFetch` error parsing, and `docs/api-contracts.md`'s Conventions section + every documented endpoint shape. Doing it well means: describe every scenario (each route's success/error responses under the new shape) before writing the failing tests, same TDD discipline as any other feature — not a mechanical find-replace that happens to pass existing tests by accident.
+**Mechanics:**
+- `AppError` (`backend/src/utils/AppError.ts`) — `new AppError(code, message, statusCode)`, thrown from any service for an expected/business-rule failure (not found, invalid input, forbidden, conflict, restricted account, etc.).
+- `globalErrorHandler` — the *only* place that turns a thrown error into an HTTP response. An `AppError` maps directly via its own `code`/`message`/`statusCode`; anything else (a real bug, a Firestore outage) is logged via `logger.error` and mapped to a generic `500`/`"INTERNAL_ERROR"`/`"An unexpected error occurred."` — raw error messages are never leaked to the client.
+- `asyncHandler` (`backend/src/utils/asyncHandler.ts`) — wraps every controller in every route registration. BINJ's backend runs **Express 4**, which does not auto-forward a rejected async handler's error to error middleware; without this wrapper a thrown `AppError` becomes an unhandled rejection instead of a response.
+- `requireDb()` / `requireFirebaseAuth()` (`backend/src/lib/firebaseAdmin.ts`) — replace the old per-route `if (!db) return res.status(503).json(...)` boilerplate. A service calls `const db = requireDb();` and gets a non-null `Firestore`, or an `AppError("FIRESTORE_NOT_CONFIGURED"/"FIREBASE_NOT_CONFIGURED", ..., 503)` is thrown automatically.
+
+**Simplification made along the way:** the old per-route generic `catch (err) { ... return res.status(502).json({error:{code:"FIRESTORE_ERROR",...}}) }` wrapper was dropped everywhere except where a test specifically depends on it (only `movies.test.ts`'s TMDB-upstream-failure case, which keeps its own explicit `AppError("TMDB_UPSTREAM_ERROR", ..., 502)`). Every other unexpected error now bubbles to `globalErrorHandler`'s generic 500 fallback — services no longer need defensive generic try/catch blocks.
+
+`docs/api-contracts.md`'s Conventions section and per-endpoint response shapes still need updating to match this envelope — tracked as a follow-up doc pass, not blocking.
 
 ---
 

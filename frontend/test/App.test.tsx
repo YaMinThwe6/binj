@@ -19,6 +19,10 @@ const { default: App } = await import('../src/App')
 
 const originalFetch = globalThis.fetch
 
+function envelope(data: unknown) {
+  return { success: true, message: 'OK', statusCode: 200, data }
+}
+
 afterEach(() => {
   globalThis.fetch = originalFetch
   vi.restoreAllMocks()
@@ -33,7 +37,8 @@ describe('App search flow', () => {
       if (url.includes('/users/me')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({
+          status: 200,
+          json: async () => envelope({
             uid: 'uid-1',
             displayName: 'Arjun',
             email: 'arjun@example.com',
@@ -45,24 +50,27 @@ describe('App search flow', () => {
       if (url.includes('/search/movies')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({
+          status: 200,
+          json: async () => envelope({
             items: [{ movieId: '634649', title: 'Spider-Man: No Way Home', poster: null, year: 2021 }],
           }),
         })
       }
       if (url.includes('/movies/634649/reviews')) {
-        return Promise.resolve({ ok: true, json: async () => ({ items: [], nextCursor: null }) })
+        return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: [], nextCursor: null }) })
       }
       if (url.includes('/users/me/movies/634649')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ watchlisted: false, watched: false, liked: false, review: null }),
+          status: 200,
+          json: async () => envelope({ watchlisted: false, watched: false, liked: false, review: null }),
         })
       }
       if (url.includes('/movies/634649')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({
+          status: 200,
+          json: async () => envelope({
             movieId: '634649',
             title: 'Spider-Man: No Way Home',
             poster: null,
@@ -90,7 +98,7 @@ describe('App search flow', () => {
         url.includes('/home/activity') ||
         url.includes('/users/me/notifications')
       ) {
-        return Promise.resolve({ ok: true, json: async () => ({ items: [] }) })
+        return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: [] }) })
       }
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch

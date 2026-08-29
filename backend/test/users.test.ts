@@ -41,6 +41,7 @@ const db = {
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -57,7 +58,7 @@ describe("GET /users/me", () => {
     const res = await request(app).get("/users/me");
 
     expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+    expect(res.body.code).toBe("UNAUTHENTICATED");
   });
 
   it("401s when the token fails verification", async () => {
@@ -66,7 +67,7 @@ describe("GET /users/me", () => {
     const res = await request(app).get("/users/me").set("Authorization", "Bearer nope");
 
     expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+    expect(res.body.code).toBe("UNAUTHENTICATED");
   });
 
   it("creates a new user doc on first authenticated request, with documented defaults", async () => {
@@ -80,7 +81,7 @@ describe("GET /users/me", () => {
     const res = await request(app).get("/users/me").set("Authorization", "Bearer good");
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
+    expect(res.body.data).toMatchObject({
       uid: "uid-1",
       displayName: "Arjun Kumar",
       email: "arjun@example.com",
@@ -121,10 +122,10 @@ describe("GET /users/me", () => {
     const res = await request(app).get("/users/me").set("Authorization", "Bearer good");
 
     expect(res.status).toBe(200);
-    expect(res.body.displayName).toBe("Custom Name");
-    expect(res.body.listVisible).toBe(false);
-    expect(res.body.favoriteGenres).toEqual(["Sci-Fi"]);
-    expect(res.body.isNewUser).toBe(false);
+    expect(res.body.data.displayName).toBe("Custom Name");
+    expect(res.body.data.listVisible).toBe(false);
+    expect(res.body.data.favoriteGenres).toEqual(["Sci-Fi"]);
+    expect(res.body.data.isNewUser).toBe(false);
   });
 });
 
@@ -133,7 +134,7 @@ describe("GET /users/username-available", () => {
     const app = createApp();
     const res = await request(app).get("/users/username-available?username=a");
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_USERNAME");
+    expect(res.body.code).toBe("INVALID_USERNAME");
   });
 
   it("is unauthenticated — no token required", async () => {
@@ -147,10 +148,10 @@ describe("GET /users/username-available", () => {
     const app = createApp();
 
     const freeRes = await request(app).get("/users/username-available?username=free");
-    expect(freeRes.body).toEqual({ available: true });
+    expect(freeRes.body.data).toEqual({ available: true });
 
     const takenRes = await request(app).get("/users/username-available?username=taken");
-    expect(takenRes.body).toEqual({ available: false });
+    expect(takenRes.body.data).toEqual({ available: false });
   });
 });
 
@@ -171,7 +172,7 @@ describe("PATCH /users/me", () => {
       .send({ email: "should-be-ignored@example.com" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("NO_UPDATABLE_FIELDS");
+    expect(res.body.code).toBe("NO_UPDATABLE_FIELDS");
   });
 
   it("updates only the recognized, patchable fields", async () => {
@@ -189,8 +190,8 @@ describe("PATCH /users/me", () => {
       .send({ displayName: "New Name", accentTheme: "pink", uid: "someone-elses-uid" });
 
     expect(res.status).toBe(200);
-    expect(res.body.displayName).toBe("New Name");
-    expect(res.body.accentTheme).toBe("pink");
+    expect(res.body.data.displayName).toBe("New Name");
+    expect(res.body.data.accentTheme).toBe("pink");
     expect(store.get("users/uid-4")?.uid).toBe("uid-4");
   });
 
@@ -204,7 +205,7 @@ describe("PATCH /users/me", () => {
       .send({ preferredLanguages: ["en", "ta", "ko"] });
 
     expect(res.status).toBe(200);
-    expect(res.body.preferredLanguages).toEqual(["en", "ta", "ko"]);
+    expect(res.body.data.preferredLanguages).toEqual(["en", "ta", "ko"]);
   });
 
   it("self-heals when the profile doc doesn't exist yet (PATCH before any GET)", async () => {
@@ -217,9 +218,9 @@ describe("PATCH /users/me", () => {
       .send({ displayName: "Late Bootstrap" });
 
     expect(res.status).toBe(200);
-    expect(res.body.displayName).toBe("Late Bootstrap");
-    expect(res.body.email).toBe("late@example.com");
-    expect(res.body.status).toBe("active");
+    expect(res.body.data.displayName).toBe("Late Bootstrap");
+    expect(res.body.data.email).toBe("late@example.com");
+    expect(res.body.data.status).toBe("active");
     expect(store.get("users/uid-12")).toMatchObject({ uid: "uid-12", displayName: "Late Bootstrap" });
   });
 
@@ -233,7 +234,7 @@ describe("PATCH /users/me", () => {
       .send({ onboardingComplete: true });
 
     expect(res.status).toBe(200);
-    expect(res.body.onboardingComplete).toBe(true);
+    expect(res.body.data.onboardingComplete).toBe(true);
   });
 
   describe("username", () => {
@@ -247,7 +248,7 @@ describe("PATCH /users/me", () => {
         .send({ username: "a" });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_USERNAME");
+      expect(res.body.code).toBe("INVALID_USERNAME");
     });
 
     it("claims a free username and creates the reservation doc", async () => {
@@ -260,7 +261,7 @@ describe("PATCH /users/me", () => {
         .send({ username: "Arjun.Movies" });
 
       expect(res.status).toBe(200);
-      expect(res.body.username).toBe("arjun.movies");
+      expect(res.body.data.username).toBe("arjun.movies");
       expect(store.get("usernames/arjun.movies")).toEqual({ uid: "uid-8" });
     });
 
@@ -275,7 +276,7 @@ describe("PATCH /users/me", () => {
         .send({ username: "taken" });
 
       expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe("USERNAME_TAKEN");
+      expect(res.body.code).toBe("USERNAME_TAKEN");
       expect(store.get("users/uid-9")).toEqual({ uid: "uid-9", username: null });
     });
 
@@ -302,8 +303,8 @@ describe("PATCH /users/me", () => {
         .send({ username: "late_bootstrap" });
 
       expect(res.status).toBe(200);
-      expect(res.body.username).toBe("late_bootstrap");
-      expect(res.body.email).toBe("late2@example.com");
+      expect(res.body.data.username).toBe("late_bootstrap");
+      expect(res.body.data.email).toBe("late2@example.com");
       expect(store.get("usernames/late_bootstrap")).toEqual({ uid: "uid-13" });
     });
 

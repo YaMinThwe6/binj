@@ -93,6 +93,7 @@ let currentUid = "uid-1";
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: currentUid })) },
   db,
+  requireDb: () => db,
   isFirebaseConfigured: () => true
 }));
 
@@ -120,7 +121,7 @@ describe("PUT /movies/:movieId/reviews/me", () => {
     const app = createApp();
     const res = await authed(app, "put", "/movies/no-such-movie/reviews/me").send({ rating: 5, isAnonymous: false });
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("MOVIE_NOT_FOUND");
+    expect(res.body.code).toBe("MOVIE_NOT_FOUND");
   });
 
   it("403s when the caller's account is restricted", async () => {
@@ -128,14 +129,14 @@ describe("PUT /movies/:movieId/reviews/me", () => {
     const app = createApp();
     const res = await authed(app, "put", "/movies/movie-1/reviews/me").send({ rating: 5, isAnonymous: false });
     expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("ACCOUNT_RESTRICTED");
+    expect(res.body.code).toBe("ACCOUNT_RESTRICTED");
   });
 
   it("400s when rating is missing or out of range", async () => {
     const app = createApp();
     const missing = await authed(app, "put", "/movies/movie-1/reviews/me").send({ isAnonymous: false });
     expect(missing.status).toBe(400);
-    expect(missing.body.error.code).toBe("INVALID_RATING");
+    expect(missing.body.code).toBe("INVALID_RATING");
 
     const tooHigh = await authed(app, "put", "/movies/movie-1/reviews/me").send({ rating: 6, isAnonymous: false });
     expect(tooHigh.status).toBe(400);
@@ -148,15 +149,15 @@ describe("PUT /movies/:movieId/reviews/me", () => {
     const app = createApp();
     const res = await authed(app, "put", "/movies/movie-1/reviews/me").send({ rating: 5 });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_BODY");
+    expect(res.body.code).toBe("INVALID_BODY");
   });
 
   it("first-time submit creates the review and updates the movie's aggregate", async () => {
     const app = createApp();
     const res = await authed(app, "put", "/movies/movie-1/reviews/me").send({ rating: 4, isAnonymous: false });
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ rating: 4, reviewText: null, isAnonymous: false });
-    expect(res.body).not.toHaveProperty("authorId");
+    expect(res.body.data).toMatchObject({ rating: 4, reviewText: null, isAnonymous: false });
+    expect(res.body.data).not.toHaveProperty("authorId");
 
     const movie = store.get("movies/movie-1") as { binjRating: { sum: number; count: number } };
     expect(movie.binjRating).toEqual({ sum: 4, count: 1 });
@@ -197,7 +198,7 @@ describe("PUT /movies/:movieId/reviews/me", () => {
   it("omitting reviewText stores null", async () => {
     const app = createApp();
     const res = await authed(app, "put", "/movies/movie-1/reviews/me").send({ rating: 5, isAnonymous: false });
-    expect(res.body.reviewText).toBeNull();
+    expect(res.body.data.reviewText).toBeNull();
   });
 });
 
@@ -212,7 +213,7 @@ describe("DELETE /movies/:movieId/reviews/me", () => {
     const app = createApp();
     const res = await authed(app, "delete", "/movies/movie-1/reviews/me");
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("REVIEW_NOT_FOUND");
+    expect(res.body.code).toBe("REVIEW_NOT_FOUND");
   });
 
   it("404s when the caller's review is already soft-deleted", async () => {
@@ -256,7 +257,7 @@ describe("GET /movies/:movieId/reviews", () => {
     const app = createApp();
     const res = await request(app).get("/movies/movie-1/reviews");
     expect(res.status).toBe(200);
-    expect(res.body.items.map((r: { authorId: string }) => r.authorId)).toEqual(["uid-3", "uid-2"]);
+    expect(res.body.data.items.map((r: { authorId: string }) => r.authorId)).toEqual(["uid-3", "uid-2"]);
   });
 
   it("redacts authorId and displayName server-side for anonymous reviews", async () => {
@@ -268,8 +269,8 @@ describe("GET /movies/:movieId/reviews", () => {
 
     const app = createApp();
     const res = await request(app).get("/movies/movie-1/reviews");
-    expect(res.body.items[0].authorId).toBeNull();
-    expect(res.body.items[0].displayName).toBeNull();
+    expect(res.body.data.items[0].authorId).toBeNull();
+    expect(res.body.data.items[0].displayName).toBeNull();
   });
 
   it("includes real authorId and displayName for non-anonymous reviews", async () => {
@@ -281,6 +282,6 @@ describe("GET /movies/:movieId/reviews", () => {
 
     const app = createApp();
     const res = await request(app).get("/movies/movie-1/reviews");
-    expect(res.body.items[0]).toMatchObject({ authorId: "uid-2", displayName: "Meera" });
+    expect(res.body.data.items[0]).toMatchObject({ authorId: "uid-2", displayName: "Meera" });
   });
 });
