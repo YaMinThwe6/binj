@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { getNearbyEvents, joinEvent, type NearbyEvent } from '../services/homeApi'
+import { NearbyEventsMap } from './NearbyEventsMap'
+import { mapsConfigured } from '../../../lib/maps'
 
 const DEFAULT_RADIUS_KM = 25
 
@@ -23,6 +25,7 @@ interface Props {
 export function NearbyEvents({ onOpenChat }: Props) {
   const [status, setStatus] = useState<Status>('idle')
   const [items, setItems] = useState<NearbyEvent[]>([])
+  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null)
   const [error, setError] = useState('')
   const [joinStatus, setJoinStatus] = useState<Record<string, 'joined' | 'pending'>>({})
 
@@ -36,6 +39,7 @@ export function NearbyEvents({ onOpenChat }: Props) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setStatus('loading')
+        setCenter({ lat: position.coords.latitude, lng: position.coords.longitude })
         getNearbyEvents(position.coords.latitude, position.coords.longitude, DEFAULT_RADIUS_KM)
           .then((res) => {
             setItems(res.items)
@@ -77,6 +81,10 @@ export function NearbyEvents({ onOpenChat }: Props) {
       {status === 'denied' && <p>Enable location access to see watch parties near you.</p>}
       {status === 'error' && <p role="alert">{error}</p>}
       {status === 'loaded' && items.length === 0 && <p>No watch parties nearby right now.</p>}
+
+      {status === 'loaded' && mapsConfigured && center && items.length > 0 && (
+        <NearbyEventsMap center={center} items={items} joinStatus={joinStatus} onJoin={handleJoin} />
+      )}
 
       {status === 'loaded' && items.length > 0 && (
         <ul className="event-list">

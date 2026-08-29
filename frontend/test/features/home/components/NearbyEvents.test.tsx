@@ -5,6 +5,21 @@ const getNearbyEvents = vi.fn()
 const joinEvent = vi.fn()
 vi.mock('../../../../src/features/home/services/homeApi', () => ({ getNearbyEvents, joinEvent }))
 
+// mapsConfigured defaults to false here (no VITE_GOOGLE_MAPS_API_KEY in the
+// test env) — overridden per-test below for the map-enabled case. The real
+// map component is mocked at this module boundary; NearbyEventsMap.test.tsx
+// covers its own internals.
+let mapsConfiguredValue = false
+vi.mock('../../../../src/lib/maps', () => ({
+  get mapsConfigured() {
+    return mapsConfiguredValue
+  }
+}))
+const NearbyEventsMapMock = vi.fn((_props: { center: { lat: number; lng: number }; items: unknown[] }) => (
+  <div data-testid="nearby-events-map" />
+))
+vi.mock('../../../../src/features/home/components/NearbyEventsMap', () => ({ NearbyEventsMap: NearbyEventsMapMock }))
+
 const { NearbyEvents } = await import('../../../../src/features/home/components/NearbyEvents')
 
 const event = {
@@ -30,6 +45,8 @@ const originalGeolocation = navigator.geolocation
 afterEach(() => {
   getNearbyEvents.mockReset()
   joinEvent.mockReset()
+  NearbyEventsMapMock.mockClear()
+  mapsConfiguredValue = false
   Object.defineProperty(navigator, 'geolocation', { value: originalGeolocation, configurable: true })
 })
 
@@ -129,6 +146,45 @@ describe('NearbyEvents', () => {
     render(<NearbyEvents onOpenChat={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
     expect(screen.getByRole('alert')).toHaveTextContent(/not available/i)
+  })
+
+  it('does not render the map when Maps is not configured (no API key)', async () => {
+    mapsConfiguredValue = false
+    getNearbyEvents.mockResolvedValue({ items: [event] })
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: (onSuccess: (pos: { coords: { latitude: number; longitude: number } }) => void) => {
+          onSuccess({ coords: { latitude: 12.9716, longitude: 77.5946 } })
+        }
+      }
+    })
+
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
+    await screen.findByText('Rooftop Watch Party')
+
+    expect(screen.queryByTestId('nearby-events-map')).not.toBeInTheDocument()
+  })
+
+  it('renders the map once located, when Maps is configured', async () => {
+    mapsConfiguredValue = true
+    getNearbyEvents.mockResolvedValue({ items: [event] })
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: (onSuccess: (pos: { coords: { latitude: number; longitude: number } }) => void) => {
+          onSuccess({ coords: { latitude: 12.9716, longitude: 77.5946 } })
+        }
+      }
+    })
+
+    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
+
+    await waitFor(() => expect(screen.getByTestId('nearby-events-map')).toBeInTheDocument())
+    const props = NearbyEventsMapMock.mock.calls[0][0]
+    expect(props).toMatchObject({ center: { lat: 12.9716, lng: 77.5946 }, items: [event] })
   })
 
   it('shows an empty-state message when nothing is nearby', async () => {
