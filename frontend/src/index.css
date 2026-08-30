@@ -25,6 +25,22 @@
   --color-gold: #ffc107;
 
   --color-accent: var(--accent);
+
+  /* Placeholder logo treatment for the Welcome screen — a real animated
+     wordmark is coming once it's designed (see Welcome.tsx); this is just
+     a gentle glow-pulse stand-in, not the final motion design. */
+  --animate-logo-pulse: logo-pulse 3s ease-in-out infinite;
+}
+
+@keyframes logo-pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    opacity: 0.88;
+    filter: drop-shadow(0 0 18px rgba(var(--accent-rgb), 0.55));
+  }
 }
 
 :root {

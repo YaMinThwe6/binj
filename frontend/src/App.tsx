@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getMe, type Me } from './lib/api'
 import { useAuth } from './lib/AuthContext'
 import { applyAccentTheme } from './lib/theme'
-import { Login } from './features/auth/components/Login'
+import { Welcome } from './features/auth/components/Welcome'
 import { OnboardingWizard } from './features/onboarding/components/OnboardingWizard'
 import { Home } from './features/home/components/Home'
 import { MovieSearch } from './features/movie/components/MovieSearch'
@@ -37,7 +37,7 @@ function App() {
   }
 
   if (!user) {
-    return <Login />
+    return <Welcome />
   }
 
   if (me && (me.isNewUser || !me.onboardingComplete)) {

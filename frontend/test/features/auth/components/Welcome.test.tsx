@@ -16,7 +16,7 @@ vi.mock('../../../../src/lib/AuthContext', () => ({
   })
 }))
 
-const { Login } = await import('../../../../src/features/auth/components/Login')
+const { Welcome } = await import('../../../../src/features/auth/components/Welcome')
 
 const originalFetch = globalThis.fetch
 
@@ -28,21 +28,47 @@ afterEach(() => {
   signInWithToken.mockClear()
 })
 
-describe('Login — OAuth providers', () => {
+describe('Welcome — splash', () => {
+  it('shows the logo, tagline, Get Started, and a Log in link', () => {
+    render(<Welcome />)
+    expect(screen.getByText('BINJ')).toBeInTheDocument()
+    expect(screen.getByText(/find your movie/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^get started$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /already have an account/i })).toBeInTheDocument()
+  })
+
+  it('opens the sign-in form with signup framing when Get Started is clicked', () => {
+    render(<Welcome />)
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
+    expect(screen.getByText(/create your account/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
+  })
+
+  it('opens the same sign-in form with login framing when "Log in" is clicked', () => {
+    render(<Welcome />)
+    fireEvent.click(screen.getByRole('button', { name: /already have an account/i }))
+    expect(screen.getByText(/welcome back/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
+  })
+})
+
+describe('Welcome — OAuth providers', () => {
   it('calls signInWithGoogle when "Continue with Google" is clicked', () => {
-    render(<Login />)
+    render(<Welcome />)
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
     fireEvent.click(screen.getByRole('button', { name: /continue with google/i }))
     expect(signInWithGoogle).toHaveBeenCalledTimes(1)
   })
 
   it('calls signInWithMicrosoft when "Continue with Microsoft" is clicked', () => {
-    render(<Login />)
+    render(<Welcome />)
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
     fireEvent.click(screen.getByRole('button', { name: /continue with microsoft/i }))
     expect(signInWithMicrosoft).toHaveBeenCalledTimes(1)
   })
 })
 
-describe('Login — Email + OTP flow', () => {
+describe('Welcome — Email + OTP flow', () => {
   it('walks through send-code then verify-code, then signs in with the returned custom token', async () => {
     globalThis.fetch = vi.fn((url: string) => {
       if (url.includes('/auth/email/start')) {
@@ -58,7 +84,8 @@ describe('Login — Email + OTP flow', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    render(<Login />)
+    render(<Welcome />)
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
 
     fireEvent.change(screen.getByLabelText(/email address/i), {
       target: { value: 'a@example.com' },
@@ -100,7 +127,8 @@ describe('Login — Email + OTP flow', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    render(<Login />)
+    render(<Welcome />)
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
 
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: /send me a code/i }))
