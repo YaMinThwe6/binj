@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { searchMovies, getRecentMovies, type MovieSummary } from '../services/movieApi'
+import { posterUrl } from '../../../lib/images'
 import { MovieDetail } from './MovieDetail'
 
 interface Props {
@@ -13,11 +14,21 @@ interface Props {
 }
 
 function MovieCard({ movie, onOpen }: { movie: MovieSummary; onOpen: () => void }) {
+  const poster = posterUrl(movie.poster)
   return (
     <li>
-      <button type="button" onClick={onOpen} className="w-full rounded-xl border border-border bg-surface p-3 text-left">
-        <div className="text-[13px] font-semibold text-text">{movie.title}</div>
-        {movie.year && <div className="mt-0.5 text-[11.5px] text-text-muted">({movie.year})</div>}
+      <button type="button" onClick={onOpen} className="w-full overflow-hidden rounded-xl border border-border bg-surface text-left">
+        <div className="aspect-[2/3] w-full bg-surface-alt">
+          {poster ? (
+            <img src={poster} alt="" loading="lazy" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[11px] text-text-faint">No poster</div>
+          )}
+        </div>
+        <div className="p-3">
+          <div className="text-[13px] font-semibold text-text">{movie.title}</div>
+          {movie.year && <div className="mt-0.5 text-[11.5px] text-text-muted">({movie.year})</div>}
+        </div>
       </button>
     </li>
   )

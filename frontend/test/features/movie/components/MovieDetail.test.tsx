@@ -147,6 +147,23 @@ describe('MovieDetail', () => {
     await waitFor(() => expect(likeMovie).toHaveBeenCalledWith('movie-1'))
   })
 
+  it('renders the poster image when the movie has one', async () => {
+    getMovie.mockResolvedValueOnce({ ...movie, poster: '/dune2.jpg' })
+    getMovieStatus.mockResolvedValue(emptyStatus)
+    getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
+    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+
+    await waitFor(() => expect(document.querySelector('img.poster')).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w500/dune2.jpg'))
+  })
+
+  it('renders no poster image when the movie has none', async () => {
+    mockDefaults() // fixture's poster is null
+    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
+    expect(document.querySelector('img.poster')).not.toBeInTheDocument()
+  })
+
   it('renders streaming providers, synopsis, and cast', async () => {
     mockDefaults()
     render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)

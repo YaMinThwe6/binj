@@ -18,6 +18,7 @@ import {
 import { WatchedByFriends } from './WatchedByFriends'
 import { Profile } from '../../profile/components/Profile'
 import { useAuth } from '../../../lib/AuthContext'
+import { posterUrl } from '../../../lib/images'
 
 interface Props {
   movieId: string
@@ -167,6 +168,7 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
       <button type="button" onClick={onBack}>← Back</button>
 
       <header>
+        {posterUrl(movie.poster) && <img src={posterUrl(movie.poster, 'w500')!} alt="" className="poster" />}
         <h1>{movie.title}</h1>
         <p>
           {movie.year} · {movie.genres.join(', ')} · {formatRuntime(movie.runtime)}

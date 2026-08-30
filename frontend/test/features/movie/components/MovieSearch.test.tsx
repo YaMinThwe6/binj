@@ -67,6 +67,29 @@ describe('MovieSearch — search', () => {
     expect(await screen.findByText('Dune: Part Two')).toBeInTheDocument()
   })
 
+  it('renders the poster image from TMDB\'s CDN when a result has one', async () => {
+    searchMovies.mockResolvedValue({ items: [{ movieId: 'm1', title: 'Dune: Part Two', poster: '/abc123.jpg', year: 2024 }] })
+    render(<MovieSearch onRequireAuth={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
+
+    await screen.findByText('Dune: Part Two')
+    const img = document.querySelector('img') as HTMLImageElement
+    expect(img.src).toBe('https://image.tmdb.org/t/p/w342/abc123.jpg')
+  })
+
+  it('shows a "No poster" placeholder when a result has none', async () => {
+    searchMovies.mockResolvedValue({ items: [{ movieId: 'm1', title: 'Dune: Part Two', poster: null, year: 2024 }] })
+    render(<MovieSearch onRequireAuth={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
+
+    await screen.findByText('Dune: Part Two')
+    expect(screen.getByText(/no poster/i)).toBeInTheDocument()
+  })
+
   it('shows an error message when search fails', async () => {
     searchMovies.mockRejectedValue(new Error('Search failed'))
     render(<MovieSearch onRequireAuth={vi.fn()} />)
