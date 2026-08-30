@@ -26,6 +26,11 @@ Triggers the cache → Firestore → TMDB fallback chain server-side (§2); stre
 
 **Implementation note (added once this was actually built):** `binjRating`/`likeCount` are normalized in the response to `{sum:0,count:0}`/`0` when absent from storage (a movie nobody's rated or liked yet has no reason to have those fields actually written) — the client never has to special-case "missing" vs. "zero". `isAdult` from the original sketch above isn't currently returned (it's fetched from TMDB and stored, just not surfaced in the response yet — no feature depends on it client-side).
 
+```
+GET /movies/recent   → 200 { items: [{ movieId, title, poster, year }] }
+```
+Powers the public Discover page's default "recently released" section — the browse-without-a-query view shown below the search bar. TMDB's `now_playing` list (theatrical releases currently in cinemas), region-scoped to the same hardcoded India region as §8's streaming availability. Unauthenticated, same as `GET /search/movies`. Not cached in Firestore like `GET /movies/:movieId` is — "now playing" is a moving window that would go stale sitting in the movies cache, so this always hits TMDB live. 502 `TMDB_UPSTREAM_ERROR` on failure, matching search's own error shape.
+
 ## 2. Watchlist & Watched (§3, §5a) 🔒
 
 ```

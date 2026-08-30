@@ -97,8 +97,9 @@ describe('App search flow', () => {
           }),
         })
       }
-      // Home's own sections and MovieDetail's WatchedByFriends — benign empty
-      // responses, this test only cares about Search.
+      // Home's own sections, MovieDetail's WatchedByFriends, and MovieSearch's
+      // default "recently released" section — benign empty responses, this
+      // test only cares about Search.
       if (
         url.includes('/home/greeting') ||
         url.includes('/recommendations') ||
@@ -106,7 +107,8 @@ describe('App search flow', () => {
         url.includes('/events/upcoming') ||
         url.includes('/home/activity') ||
         url.includes('/users/me/notifications') ||
-        url.includes('/watchedBy')
+        url.includes('/watchedBy') ||
+        url.includes('/movies/recent')
       ) {
         return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: [] }) })
       }

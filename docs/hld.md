@@ -659,7 +659,7 @@ User selects a result → triggers §2's detail-ingestion flow for that specific
 
 **Fallback if Vertex AI Search proves too costly/complex for the remaining timeline: Firestore word-prefix indexing.** Same bulk-seeding idea, stored directly in Firestore's `movies` collection instead of a dedicated search product — each title indexed as an array of word-level prefixes (e.g. "Avengers" → `["a","av","ave",...,"avengers"]`), queried via `array-contains`. Weaker typo tolerance than a real search engine, but genuinely free and needs zero new products — still fully Google-native since it's just Firestore.
 
----
+**Implementation note (added once this was actually built — a real deviation from the decision above, not yet reconciled in this doc):** neither Vertex AI Search nor the Firestore-prefix fallback was actually built. `GET /search/movies` (`backend/src/services/movies.service.ts`) hits TMDB's own `/search/movie` live, on every request — the exact thing the framing at the top of this section called "not acceptable." Given the prototype's timeline, this was a pragmatic shortcut (TMDB's search is already fast and typo-tolerant, and stands up a working search box with zero new infrastructure) rather than a considered reversal of the decision above — a real gap against this section's own design, tracked here rather than silently diverging. `GET /movies/recent` (api-contracts.md §1), added for the public Discover page's "recently released" section, follows the same live-TMDB shortcut (`now_playing`), for the same reason.
 
 ## 19. Flow: Block / Mute
 

@@ -41,8 +41,9 @@ vi.mock("../src/lib/firebaseAdmin.js", () => ({
 
 const fetchMovieDetails = vi.fn();
 const searchMovies = vi.fn();
+const getRecentMovies = vi.fn();
 
-vi.mock("../src/lib/tmdb.js", () => ({ fetchMovieDetails, searchMovies }));
+vi.mock("../src/lib/tmdb.js", () => ({ fetchMovieDetails, searchMovies, getRecentMovies }));
 
 const { createApp } = await import("../src/app.js");
 
@@ -51,6 +52,7 @@ beforeEach(() => {
   batchOps.length = 0;
   fetchMovieDetails.mockReset();
   searchMovies.mockReset();
+  getRecentMovies.mockReset();
 });
 
 describe("GET /movies/:movieId", () => {
@@ -120,6 +122,33 @@ describe("GET /movies/:movieId", () => {
     fetchMovieDetails.mockRejectedValueOnce(new Error("boom"));
     const app = createApp();
     const res = await request(app).get("/movies/9999");
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("TMDB_UPSTREAM_ERROR");
+  });
+});
+
+describe("GET /movies/recent", () => {
+  it("is unauthenticated — no token required", async () => {
+    getRecentMovies.mockResolvedValueOnce([])
+    const app = createApp();
+    const res = await request(app).get("/movies/recent");
+    expect(res.status).toBe(200);
+  });
+
+  it("returns TMDB's now-playing list, not routed to GET /movies/:movieId", async () => {
+    getRecentMovies.mockResolvedValueOnce([{ movieId: "27205", title: "Inception", poster: null, year: 2010 }]);
+    const app = createApp();
+    const res = await request(app).get("/movies/recent");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([{ movieId: "27205", title: "Inception", poster: null, year: 2010 }]);
+    expect(fetchMovieDetails).not.toHaveBeenCalled(); // would fire if "recent" fell through to :movieId
+  });
+
+  it("502s when TMDB fails", async () => {
+    getRecentMovies.mockRejectedValueOnce(new Error("boom"));
+    const app = createApp();
+    const res = await request(app).get("/movies/recent");
     expect(res.status).toBe(502);
     expect(res.body.code).toBe("TMDB_UPSTREAM_ERROR");
   });

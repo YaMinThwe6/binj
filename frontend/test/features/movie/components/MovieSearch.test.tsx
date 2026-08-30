@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const searchMovies = vi.fn()
-vi.mock('../../../../src/features/movie/services/movieApi', () => ({ searchMovies }))
+const getRecentMovies = vi.fn()
+vi.mock('../../../../src/features/movie/services/movieApi', () => ({ searchMovies, getRecentMovies }))
 
 let authUser: { uid: string } | null = { uid: 'uid-1' }
 vi.mock('../../../../src/lib/AuthContext', () => ({
@@ -13,7 +14,14 @@ const { MovieSearch } = await import('../../../../src/features/movie/components/
 
 afterEach(() => {
   searchMovies.mockReset()
+  getRecentMovies.mockReset()
   authUser = { uid: 'uid-1' }
+})
+
+// Every test below gets an empty "recently released" section by default —
+// its own tests further down set specific responses.
+beforeEach(() => {
+  getRecentMovies.mockResolvedValue({ items: [] })
 })
 
 describe('MovieSearch — signed-in usage (via Home)', () => {
@@ -67,5 +75,37 @@ describe('MovieSearch — search', () => {
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Search failed'))
+  })
+})
+
+describe('MovieSearch — recently released (default browse view)', () => {
+  it('fetches and shows recently released movies on mount, before any search', async () => {
+    getRecentMovies.mockResolvedValue({ items: [{ movieId: 'r1', title: 'Fresh Release', poster: null, year: 2026 }] })
+    render(<MovieSearch onRequireAuth={vi.fn()} />)
+
+    expect(await screen.findByText('Fresh Release')).toBeInTheDocument()
+    expect(screen.getByText(/recently released/i)).toBeInTheDocument()
+  })
+
+  it('switches to search results once a search is submitted, hiding recently released', async () => {
+    getRecentMovies.mockResolvedValue({ items: [{ movieId: 'r1', title: 'Fresh Release', poster: null, year: 2026 }] })
+    searchMovies.mockResolvedValue({ items: [{ movieId: 'm1', title: 'Dune: Part Two', poster: null, year: 2024 }] })
+    render(<MovieSearch onRequireAuth={vi.fn()} />)
+
+    await screen.findByText('Fresh Release')
+    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
+
+    expect(await screen.findByText('Dune: Part Two')).toBeInTheDocument()
+    expect(screen.queryByText('Fresh Release')).not.toBeInTheDocument()
+    expect(screen.queryByText(/recently released/i)).not.toBeInTheDocument()
+  })
+
+  it('does not break the rest of the page when recently-released fails to load', async () => {
+    getRecentMovies.mockRejectedValue(new Error('boom'))
+    render(<MovieSearch onRequireAuth={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText(/couldn't load recent releases/i)).toBeInTheDocument())
+    expect(screen.getByLabelText(/search for a movie/i)).toBeInTheDocument()
   })
 })

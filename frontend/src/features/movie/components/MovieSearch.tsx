@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { searchMovies, type MovieSummary } from '../services/movieApi'
+import { useEffect, useState } from 'react'
+import { searchMovies, getRecentMovies, type MovieSummary } from '../services/movieApi'
 import { MovieDetail } from './MovieDetail'
 
 interface Props {
@@ -12,12 +12,39 @@ interface Props {
   onRequireAuth?: () => void
 }
 
+function MovieCard({ movie, onOpen }: { movie: MovieSummary; onOpen: () => void }) {
+  return (
+    <li>
+      <button type="button" onClick={onOpen} className="w-full rounded-xl border border-border bg-surface p-3 text-left">
+        <div className="text-[13px] font-semibold text-text">{movie.title}</div>
+        {movie.year && <div className="mt-0.5 text-[11.5px] text-text-muted">({movie.year})</div>}
+      </button>
+    </li>
+  )
+}
+
 export function MovieSearch({ onBack, onRequireAuth }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MovieSummary[]>([])
+  const [hasSearched, setHasSearched] = useState(false)
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+
+  // "Recently released" — the default, browse-without-a-query view (api-contracts.md
+  // §1's GET /movies/recent), shown below the search bar until the caller actually
+  // searches for something.
+  const [recent, setRecent] = useState<MovieSummary[]>([])
+  const [recentStatus, setRecentStatus] = useState<'loading' | 'idle' | 'error'>('loading')
+
+  useEffect(() => {
+    getRecentMovies()
+      .then((res) => {
+        setRecent(res.items)
+        setRecentStatus('idle')
+      })
+      .catch(() => setRecentStatus('error')) // non-critical section — fails quietly, search still works
+  }, [])
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -27,6 +54,7 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
     try {
       const { items } = await searchMovies(query.trim())
       setResults(items)
+      setHasSearched(true)
       setStatus('idle')
     } catch (err) {
       setStatus('error')
@@ -83,24 +111,29 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
             {errorMessage}
           </p>
         )}
-        {status === 'idle' && results.length === 0 && query === '' && (
-          <p className="mt-8 text-center text-sm text-text-muted">Search for a title to get started.</p>
-        )}
 
-        <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {results.map((movie) => (
-            <li key={movie.movieId}>
-              <button
-                type="button"
-                onClick={() => setSelectedMovieId(movie.movieId)}
-                className="w-full rounded-xl border border-border bg-surface p-3 text-left"
-              >
-                <div className="text-[13px] font-semibold text-text">{movie.title}</div>
-                {movie.year && <div className="mt-0.5 text-[11.5px] text-text-muted">({movie.year})</div>}
-              </button>
-            </li>
-          ))}
-        </ul>
+        {hasSearched && status !== 'loading' ? (
+          <>
+            {results.length === 0 && status === 'idle' && <p className="mt-8 text-center text-sm text-text-muted">No results for "{query}".</p>}
+            <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {results.map((movie) => (
+                <MovieCard key={movie.movieId} movie={movie} onOpen={() => setSelectedMovieId(movie.movieId)} />
+              ))}
+            </ul>
+          </>
+        ) : (
+          <section className="mt-8">
+            <h2 className="text-[15px] font-semibold text-text">Recently released</h2>
+            {recentStatus === 'loading' && <p className="mt-3 text-sm text-text-muted">Loading…</p>}
+            {recentStatus === 'error' && <p className="mt-3 text-sm text-text-muted">Couldn't load recent releases right now.</p>}
+            {recentStatus === 'idle' && recent.length === 0 && <p className="mt-3 text-sm text-text-muted">Nothing new to show right now.</p>}
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {recent.map((movie) => (
+                <MovieCard key={movie.movieId} movie={movie} onOpen={() => setSelectedMovieId(movie.movieId)} />
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </main>
   )

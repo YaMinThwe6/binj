@@ -6,6 +6,10 @@ export function searchMovies(query: string): Promise<{ items: MovieSummary[] }> 
   return apiFetch(`/search/movies?q=${encodeURIComponent(query)}`)
 }
 
+export function getRecentMovies(): Promise<{ items: MovieSummary[] }> {
+  return apiFetch('/movies/recent')
+}
+
 export function getMovie(movieId: string): Promise<MovieDetail> {
   return apiFetch(`/movies/${encodeURIComponent(movieId)}`)
 }

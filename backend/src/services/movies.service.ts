@@ -1,6 +1,6 @@
 import type { MovieDetail, MovieSummary } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
-import { fetchMovieDetails, searchMovies as tmdbSearchMovies, type TmdbMovie } from "../lib/tmdb.js";
+import { fetchMovieDetails, searchMovies as tmdbSearchMovies, getRecentMovies as tmdbGetRecentMovies, type TmdbMovie } from "../lib/tmdb.js";
 import { AppError } from "../utils/AppError.js";
 
 // A movie that's never been rated/liked has no reason to have binjRating/likeCount
@@ -59,6 +59,20 @@ export async function getMovieDetail(movieId: string): Promise<MovieDetail> {
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new AppError("TMDB_UPSTREAM_ERROR", "Failed to fetch movie details", 502);
+  }
+}
+
+// GET /movies/recent — powers the public Discover page's "recently released"
+// section (the default browse-without-a-query view). TMDB live, same as
+// search — not cached in Firestore, since "now playing" is a moving window
+// that would go stale sitting in the movies cache.
+export async function getRecentMoviesService(): Promise<{ items: MovieSummary[] }> {
+  try {
+    const items = await tmdbGetRecentMovies();
+    return { items };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError("TMDB_UPSTREAM_ERROR", "Failed to fetch recent movies", 502);
   }
 }
 

@@ -121,6 +121,20 @@ export async function fetchMovieDetails(tmdbId: string): Promise<TmdbMovie> {
   };
 }
 
+// GET /movies/recent — TMDB's "now playing" list (theatrical releases
+// currently in cinemas), region-scoped to match STREAMING_REGION's existing
+// hardcoded-India convention (hld.md §8). Same MovieSummary shape as search
+// results — the frontend's Discover page renders both with the same card.
+export async function getRecentMovies(): Promise<MovieSummary[]> {
+  const data = await tmdbFetch(`/movie/now_playing?region=${STREAMING_REGION}`);
+  return (data.results ?? []).map((r: any) => ({
+    movieId: String(r.id),
+    title: r.title,
+    poster: r.poster_path || null,
+    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null
+  }));
+}
+
 export async function searchMovies(query: string): Promise<MovieSummary[]> {
   const data = await tmdbFetch(`/search/movie?query=${encodeURIComponent(query)}`);
   return (data.results ?? []).map((r: any) => ({
