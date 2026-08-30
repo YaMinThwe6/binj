@@ -63,11 +63,22 @@ export async function getMovieDetail(movieId: string): Promise<MovieDetail> {
 }
 
 // GET /movies/recent — powers the public Discover page's "recently released"
-// section (the default browse-without-a-query view). TMDB live, same as
-// search — not cached in Firestore, since "now playing" is a moving window
-// that would go stale sitting in the movies cache.
+// section (the default browse-without-a-query view).
+//
+// Reads discover/recentMovies, refreshed periodically by
+// scripts/refreshRecentMovies.ts (a real Cloud Scheduler job is the eventual
+// upgrade path, same shortcut as §5b's taste matches) — falls back to a live
+// TMDB call when that cache doc doesn't exist yet (before the script has ever
+// run) or Firestore isn't configured, so this endpoint works either way
+// rather than depending on the script having been run first.
 export async function getRecentMoviesService(): Promise<{ items: MovieSummary[] }> {
   try {
+    if (db) {
+      const snap = await db.collection("discover").doc("recentMovies").get();
+      if (snap.exists) {
+        return { items: (snap.data()?.items as MovieSummary[] | undefined) ?? [] };
+      }
+    }
     const items = await tmdbGetRecentMovies();
     return { items };
   } catch (err) {

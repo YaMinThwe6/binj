@@ -145,6 +145,19 @@ describe("GET /movies/recent", () => {
     expect(fetchMovieDetails).not.toHaveBeenCalled(); // would fire if "recent" fell through to :movieId
   });
 
+  it("reads the discover/recentMovies cache instead of hitting TMDB, once refreshRecentMovies.ts has populated it", async () => {
+    store.set("discover/recentMovies", {
+      items: [{ movieId: "cached-1", title: "Cached Movie", poster: null, year: 2026 }],
+      updatedAt: new Date()
+    });
+    const app = createApp();
+    const res = await request(app).get("/movies/recent");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([{ movieId: "cached-1", title: "Cached Movie", poster: null, year: 2026 }]);
+    expect(getRecentMovies).not.toHaveBeenCalled();
+  });
+
   it("502s when TMDB fails", async () => {
     getRecentMovies.mockRejectedValueOnce(new Error("boom"));
     const app = createApp();

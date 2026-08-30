@@ -29,7 +29,9 @@ Triggers the cache → Firestore → TMDB fallback chain server-side (§2); stre
 ```
 GET /movies/recent   → 200 { items: [{ movieId, title, poster, year }] }
 ```
-Powers the public Discover page's default "recently released" section — the browse-without-a-query view shown below the search bar. TMDB's `now_playing` list (theatrical releases currently in cinemas), region-scoped to the same hardcoded India region as §8's streaming availability. Unauthenticated, same as `GET /search/movies`. Not cached in Firestore like `GET /movies/:movieId` is — "now playing" is a moving window that would go stale sitting in the movies cache, so this always hits TMDB live. 502 `TMDB_UPSTREAM_ERROR` on failure, matching search's own error shape.
+Powers the public Discover page's default "recently released" section — the browse-without-a-query view shown below the search bar. TMDB's `now_playing` list (theatrical releases currently in cinemas), region-scoped to the same hardcoded India region as §8's streaming availability. Unauthenticated, same as `GET /search/movies`. 502 `TMDB_UPSTREAM_ERROR` on failure, matching search's own error shape.
+
+**Implementation note (caching, added once this was actually built):** reads `discover/recentMovies` (schema.md §1) instead of hitting TMDB live on every request — refreshed periodically by `backend/scripts/refreshRecentMovies.ts` (`pnpm --filter binj-backend run refresh-recent-movies`), run manually for now rather than on a real Cloud Scheduler trigger, same shortcut hld.md §5b already uses for taste matches. Falls back to a live TMDB call when the cache doc doesn't exist yet (before the script has ever run) or Firestore isn't configured, so the endpoint still works either way.
 
 ## 2. Watchlist & Watched (§3, §5a) 🔒
 

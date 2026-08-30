@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint --config ../eslint.config.js .",
-    "compute-taste-matches": "tsx --env-file=.env scripts/computeTasteMatches.ts"
+    "compute-taste-matches": "tsx --env-file=.env scripts/computeTasteMatches.ts",
+    "refresh-recent-movies": "tsx --env-file=.env scripts/refreshRecentMovies.ts"
   },
   "dependencies": {
     "@binj/shared-types": "workspace:*",
