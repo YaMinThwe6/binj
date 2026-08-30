@@ -135,6 +135,27 @@ export async function getRecentMovies(): Promise<MovieSummary[]> {
   }));
 }
 
+// scripts/seedSearchCatalog.ts — bulk-seeds the local search index (hld.md
+// §18) with a broad slice of well-known titles, not just whatever's been
+// incidentally viewed or searched. TMDB's `/movie/popular`, paginated (20
+// movies/page); `pages` is the caller's choice of how much catalog breadth
+// to pull in one run.
+export async function getPopularMovies(pages: number): Promise<MovieSummary[]> {
+  const results: MovieSummary[] = [];
+  for (let page = 1; page <= pages; page++) {
+    const data = await tmdbFetch(`/movie/popular?region=${STREAMING_REGION}&page=${page}`);
+    for (const r of data.results ?? []) {
+      results.push({
+        movieId: String(r.id),
+        title: r.title,
+        poster: r.poster_path || null,
+        year: r.release_date ? Number(r.release_date.slice(0, 4)) : null
+      });
+    }
+  }
+  return results;
+}
+
 export async function searchMovies(query: string): Promise<MovieSummary[]> {
   const data = await tmdbFetch(`/search/movie?query=${encodeURIComponent(query)}`);
   return (data.results ?? []).map((r: any) => ({

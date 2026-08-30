@@ -31,7 +31,7 @@ GET /movies/recent   → 200 { items: [{ movieId, title, poster, year }] }
 ```
 Powers the public Discover page's default "recently released" section — the browse-without-a-query view shown below the search bar. TMDB's `now_playing` list (theatrical releases currently in cinemas), region-scoped to the same hardcoded India region as §8's streaming availability. Unauthenticated, same as `GET /search/movies`. 502 `TMDB_UPSTREAM_ERROR` on failure, matching search's own error shape.
 
-**Implementation note (caching, added once this was actually built):** reads `discover/recentMovies` (schema.md §1) instead of hitting TMDB live on every request — refreshed periodically by `backend/scripts/refreshRecentMovies.ts` (`pnpm --filter binj-backend run refresh-recent-movies`), run manually for now rather than on a real Cloud Scheduler trigger, same shortcut hld.md §5b already uses for taste matches. Falls back to a live TMDB call when the cache doc doesn't exist yet (before the script has ever run) or Firestore isn't configured, so the endpoint still works either way.
+**Implementation note (caching, added once this was actually built):** reads `discover/recentMovies` (schema.md §1) instead of hitting TMDB live on every request — refreshed periodically by `backend/scripts/refreshRecentMovies.ts` (`pnpm --filter binj-backend run refresh-recent-movies`), run manually for now rather than on a real Cloud Scheduler trigger, same shortcut hld.md §5b already uses for taste matches. Falls back to a live TMDB call when the cache doc doesn't exist yet (before the script has ever run) or Firestore isn't configured, so the endpoint still works either way. The same script also indexes each recent title for §7's search (`titleSearchTerms`), so a just-released movie is searchable immediately, not only listed here.
 
 ## 2. Watchlist & Watched (§3, §5a) 🔒
 
@@ -133,8 +133,9 @@ GET /recommendations                       → 200 { items: [{ movieId, title, p
 
 ```
 GET /search/movies?q=:query                → 200 { items: [{ movieId, title, poster, year }], nextCursor }
-                                              // hits Vertex AI Search index only, never TMDB live
 ```
+
+**Implementation note (added once this was actually built — the original sketch above assumed Vertex AI Search, which was never built; see hld.md §18's own implementation note for the full picture):** results come from a local Firestore search index — a `titleSearchTerms` field, computed once per movie at write time, unioning real title-word prefixes with precomputed single-typo variants (`backend/src/lib/searchIndex.ts`) — with a bounded real-time fuzzy scan as a second-tier fallback and live TMDB only as the last resort (whose results get written back into the index for next time). Ranked by relevance, not just "did it match": `backend/src/lib/searchRanking.ts` classifies every candidate into a match-type tier (exact > alias > prefix > token > single-typo > deeper-fuzzy) and scores within that tier — exact/prefix matches always outrank fuzzy ones, and popularity only ever breaks a tie between equally-relevant results, never overrides a stronger textual match. `nextCursor` is always `null` — pagination was never built for this endpoint, every tier returns its full ranked result set (capped at 20) in one response.
 
 ## 7b. Home 🔒
 

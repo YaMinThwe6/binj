@@ -16,13 +16,31 @@
 
 import { requireDb } from "../src/lib/firebaseAdmin.js";
 import { getRecentMovies } from "../src/lib/tmdb.js";
+import { buildSearchTerms } from "../src/lib/searchIndex.js";
 import { pathToFileURL } from "node:url";
 
 async function main() {
   const db = requireDb();
   const items = await getRecentMovies();
   await db.collection("discover").doc("recentMovies").set({ items, updatedAt: new Date() });
-  console.log(`Refreshed recently-released movies cache: ${items.length} items.`);
+
+  // Also upsert each into movies/{movieId} with its search-index terms, so a
+  // recently-released title is immediately searchable (hld.md §18) rather
+  // than only appearing in the "recently released" section until someone
+  // happens to search or open it first.
+  if (items.length > 0) {
+    const batch = db.batch();
+    for (const item of items) {
+      batch.set(
+        db.collection("movies").doc(item.movieId),
+        { title: item.title, poster: item.poster, year: item.year, titleSearchTerms: buildSearchTerms(item.title) },
+        { merge: true }
+      );
+    }
+    await batch.commit();
+  }
+
+  console.log(`Refreshed recently-released movies cache: ${items.length} items (also indexed for search).`);
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

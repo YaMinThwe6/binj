@@ -63,6 +63,11 @@ movies/{movieId}                         // doc ID = TMDB id, as string
   streamingProviders: array<{ name: string, type: "subscription"|"rent"|"buy", logo: string }>
   streamingLastFetched: timestamp | null
   lastFetched: timestamp | null          // full-detail fetch marker, §2
+  titleSearchTerms: array<string> | undefined  // §18 local search index — every title word's real prefixes
+                                                // unioned with its precomputed single-typo variants (backend/src/lib/searchIndex.ts),
+                                                // computed once at write time (detail ingestion, a search upsert, or a bulk-seed
+                                                // script), not per search. Absent on any movie doc written before this existed —
+                                                // GET /search/movies treats a missing field the same as an empty array
 ```
 
 ```
