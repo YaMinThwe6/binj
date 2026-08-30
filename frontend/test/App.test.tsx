@@ -1,11 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
+let currentUser: { uid: string; displayName: string; email: string } | null = {
+  uid: 'uid-1',
+  displayName: 'Arjun',
+  email: 'arjun@example.com'
+}
 vi.mock('../src/lib/AuthContext', () => ({
   useAuth: () => ({
-    user: { uid: 'uid-1', displayName: 'Arjun', email: 'arjun@example.com' },
+    user: currentUser,
     loading: false,
     signInWithGoogle: vi.fn(),
+    signInWithMicrosoft: vi.fn(),
+    signInWithToken: vi.fn(),
     signOutUser: vi.fn()
   })
 }))
@@ -26,6 +33,7 @@ function envelope(data: unknown) {
 afterEach(() => {
   globalThis.fetch = originalFetch
   vi.restoreAllMocks()
+  currentUser = { uid: 'uid-1', displayName: 'Arjun', email: 'arjun@example.com' }
 })
 
 describe('App search flow', () => {
@@ -89,14 +97,16 @@ describe('App search flow', () => {
           }),
         })
       }
-      // Home's own sections — benign empty responses, this test only cares about Search.
+      // Home's own sections and MovieDetail's WatchedByFriends — benign empty
+      // responses, this test only cares about Search.
       if (
         url.includes('/home/greeting') ||
         url.includes('/recommendations') ||
         url.includes('/users/me/tasteMatches') ||
         url.includes('/events/upcoming') ||
         url.includes('/home/activity') ||
-        url.includes('/users/me/notifications')
+        url.includes('/users/me/notifications') ||
+        url.includes('/watchedBy')
       ) {
         return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: [] }) })
       }
@@ -125,5 +135,29 @@ describe('App search flow', () => {
     )
     expect(screen.getByText('8.1')).toBeInTheDocument()
     expect(screen.getByText('Tom Holland')).toBeInTheDocument()
+  })
+})
+
+describe('App — signed-out root ("/")', () => {
+  it('shows public movie discovery, not an auth wall, when signed out', async () => {
+    currentUser = null
+    render(<App />)
+
+    expect(await screen.findByText(/discover movies/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^get started$/i })).toBeInTheDocument()
+    expect(screen.queryByText(/find your movie/i)).not.toBeInTheDocument() // Welcome splash, not shown yet
+  })
+
+  it('opens Welcome when Get Started is clicked, and Back returns to Discover', async () => {
+    currentUser = null
+    render(<App />)
+
+    await screen.findByText(/discover movies/i)
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
+
+    expect(await screen.findByText(/find your movie/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /back to discover/i }))
+    expect(await screen.findByText(/discover movies/i)).toBeInTheDocument()
   })
 })

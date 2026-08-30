@@ -13,10 +13,15 @@ function App() {
   const [me, setMe] = useState<Me | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [view, setView] = useState<'home' | 'search'>('home')
+  // Root "/" for a signed-out visitor is public movie discovery, not an
+  // auth wall — Welcome only opens once they actually choose to sign in
+  // (Get Started, Log in, or an auth-gated action on a movie's page).
+  const [guestView, setGuestView] = useState<'discover' | 'welcome'>('discover')
 
   useEffect(() => {
     if (!user) {
       setMe(null)
+      setGuestView('discover')
       return
     }
     getMe()
@@ -37,7 +42,10 @@ function App() {
   }
 
   if (!user) {
-    return <Welcome />
+    if (guestView === 'welcome') {
+      return <Welcome onBack={() => setGuestView('discover')} />
+    }
+    return <MovieSearch onRequireAuth={() => setGuestView('welcome')} />
   }
 
   if (me && (me.isNewUser || !me.onboardingComplete)) {

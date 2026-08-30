@@ -17,10 +17,16 @@ import {
 } from '../services/movieApi'
 import { WatchedByFriends } from './WatchedByFriends'
 import { Profile } from '../../profile/components/Profile'
+import { useAuth } from '../../../lib/AuthContext'
 
 interface Props {
   movieId: string
   onBack: () => void
+  // Present only when MovieDetail is reached by a signed-out visitor
+  // (the public Discover flow, hld.md §3's "public search/browse does not
+  // require auth" extended to detail view) — lets a guest opt into signing
+  // in from here instead of the action bar/review form just failing.
+  onRequireAuth?: () => void
 }
 
 const EMPTY_STATUS: MovieStatus = { watchlisted: false, watched: false, liked: false, review: null }
@@ -32,7 +38,9 @@ function formatRuntime(minutes: number | null): string {
   return h > 0 ? `${h}h ${m}m (${minutes} min)` : `${minutes} min`
 }
 
-export function MovieDetail({ movieId, onBack }: Props) {
+export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
+  const { user } = useAuth()
+  const isGuest = !user
   const [movie, setMovie] = useState<MovieDetailData | null>(null)
   const [movieError, setMovieError] = useState('')
 
@@ -74,7 +82,7 @@ export function MovieDetail({ movieId, onBack }: Props) {
 
   useEffect(() => {
     loadMovie()
-    loadStatus()
+    if (!isGuest) loadStatus() // status/review-ownership is per-caller — nothing to fetch signed out
     loadReviews()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId])
@@ -171,26 +179,37 @@ export function MovieDetail({ movieId, onBack }: Props) {
 
       {statusError && <p role="alert">{statusError}</p>}
       {actionError && <p role="alert">{actionError}</p>}
-      <div className="action-bar">
-        <button type="button" aria-pressed={status.watchlisted} onClick={() => toggle('watchlisted')}>
-          Watchlist
-        </button>
-        <button type="button" aria-pressed={status.watched} onClick={() => toggle('watched')}>
-          Watched
-        </button>
-        <button type="button" aria-pressed={status.liked} onClick={() => toggle('liked')}>
-          Like
-        </button>
-      </div>
+      {isGuest ? (
+        <div className="action-bar">
+          <button type="button" onClick={onRequireAuth}>
+            Sign in to save, rate &amp; review
+          </button>
+        </div>
+      ) : (
+        <div className="action-bar">
+          <button type="button" aria-pressed={status.watchlisted} onClick={() => toggle('watchlisted')}>
+            Watchlist
+          </button>
+          <button type="button" aria-pressed={status.watched} onClick={() => toggle('watched')}>
+            Watched
+          </button>
+          <button type="button" aria-pressed={status.liked} onClick={() => toggle('liked')}>
+            Like
+          </button>
+        </div>
+      )}
 
-      <WatchedByFriends movieId={movieId} onOpenProfile={setOpenProfileUid} />
+      {!isGuest && <WatchedByFriends movieId={movieId} onOpenProfile={setOpenProfileUid} />}
 
       {movie.streamingProviders.length > 0 && (
         <section>
           <h2>Where can I watch?</h2>
           <ul>
-            {movie.streamingProviders.map((p) => (
-              <li key={p.name}>{p.name}</li>
+            {movie.streamingProviders.map((p, i) => (
+              // TMDB can list the same provider more than once under different
+              // offer types (e.g. "Apple TV Store" as both rent and buy) — name
+              // alone isn't a unique key, so index disambiguates duplicates.
+              <li key={`${p.name}-${i}`}>{p.name}</li>
             ))}
           </ul>
         </section>
@@ -228,11 +247,17 @@ export function MovieDetail({ movieId, onBack }: Props) {
           ))}
         </ul>
 
-        <button type="button" onClick={openForm}>
-          {status.review ? 'Edit your review' : 'Write a review'}
-        </button>
+        {isGuest ? (
+          <button type="button" onClick={onRequireAuth}>
+            Sign in to write a review
+          </button>
+        ) : (
+          <button type="button" onClick={openForm}>
+            {status.review ? 'Edit your review' : 'Write a review'}
+          </button>
+        )}
 
-        {formOpen && (
+        {!isGuest && formOpen && (
           <form onSubmit={handleSubmit} className="review-form">
             <div role="group" aria-label="Rating">
               {[1, 2, 3, 4, 5].map((star) => (

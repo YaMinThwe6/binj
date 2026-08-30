@@ -42,6 +42,13 @@ function MailIcon() {
   )
 }
 
+interface Props {
+  // Present only when reached from the public Discover flow (root "/" for a
+  // signed-out visitor) — shows a back arrow on the splash stage so a guest
+  // who was just browsing can return there instead of being stuck on Welcome.
+  onBack?: () => void
+}
+
 // hld.md §13 — the combined login/signup entry point (was two separate
 // ideas crammed under "Login"; renamed since one screen genuinely serves
 // both). Three stages: the Get-Started splash (design canvas's
@@ -49,7 +56,7 @@ function MailIcon() {
 // and OTP verification (SignupEmailOTP.dc.html's verify state) — all one
 // component since they share the same auth handlers and only the first
 // stage's copy depends on which button the visitor arrived through.
-export function Welcome() {
+export function Welcome({ onBack }: Props) {
   const { signInWithGoogle, signInWithMicrosoft, signInWithToken } = useAuth()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -117,6 +124,19 @@ export function Welcome() {
           className="pointer-events-none absolute inset-0"
           style={{ background: 'radial-gradient(90% 55% at 75% 12%, rgba(var(--accent-rgb), 0.16), transparent 60%)' }}
         />
+
+        {stage === 'welcome' && onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to Discover"
+            className="relative mt-5 ml-6 flex h-[38px] w-[38px] items-center justify-center rounded-full border border-border-soft bg-surface-alt"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        )}
 
         {stage === 'welcome' && (
           <div className="relative mt-auto flex flex-col items-center px-8 pb-14 text-center">

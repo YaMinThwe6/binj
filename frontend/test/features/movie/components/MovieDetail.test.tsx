@@ -32,6 +32,17 @@ vi.mock('../../../../src/features/movie/services/movieApi', () => ({
   getMovieWatchedBy
 }))
 
+// Every test below exercises the signed-in path unless it opts into
+// mockAuthUser(null) itself — that matches this file's existing tests, which
+// all predate guest mode and assert signed-in behavior throughout.
+let authUser: { uid: string } | null = { uid: 'uid-1' }
+function mockAuthUser(user: { uid: string } | null) {
+  authUser = user
+}
+vi.mock('../../../../src/lib/AuthContext', () => ({
+  useAuth: () => ({ user: authUser, loading: false, signInWithGoogle: vi.fn(), signInWithMicrosoft: vi.fn(), signInWithToken: vi.fn(), signOutUser: vi.fn() })
+}))
+
 const { MovieDetail } = await import('../../../../src/features/movie/components/MovieDetail')
 
 const movie = {
@@ -62,6 +73,7 @@ function mockDefaults() {
 
 afterEach(() => {
   vi.clearAllMocks()
+  authUser = { uid: 'uid-1' }
 })
 
 describe('MovieDetail', () => {
@@ -253,5 +265,45 @@ describe('MovieDetail', () => {
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     // Movie itself and reviews still render fine even though status failed independently.
     expect(screen.queryByText(/status failed/i)).toBeInTheDocument()
+  })
+})
+
+describe('MovieDetail — signed-out visitor (public Discover)', () => {
+  it('never calls getMovieStatus or getMovieWatchedBy for a guest', async () => {
+    mockAuthUser(null)
+    mockDefaults()
+    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} onRequireAuth={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
+    expect(getMovieStatus).not.toHaveBeenCalled()
+    expect(getMovieWatchedBy).not.toHaveBeenCalled()
+  })
+
+  it('shows a sign-in prompt instead of the action bar, calling onRequireAuth', async () => {
+    mockAuthUser(null)
+    mockDefaults()
+    const onRequireAuth = vi.fn()
+    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} onRequireAuth={onRequireAuth} />)
+
+    await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^watchlist$/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /sign in to save, rate & review/i }))
+    expect(onRequireAuth).toHaveBeenCalledTimes(1)
+  })
+
+  it('still shows the public reviews list, but "Write a review" prompts sign-in instead of opening the form', async () => {
+    mockAuthUser(null)
+    getMovie.mockResolvedValue(movie)
+    getMovieReviews.mockResolvedValue({
+      items: [{ authorId: 'u2', displayName: 'Meera', rating: 5, reviewText: 'Incredible film', isAnonymous: false, createdAt: '', updatedAt: '' }],
+      nextCursor: null
+    })
+    const onRequireAuth = vi.fn()
+    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} onRequireAuth={onRequireAuth} />)
+
+    await waitFor(() => expect(screen.getByText('Meera')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^write a review$/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /sign in to write a review/i }))
+    expect(onRequireAuth).toHaveBeenCalledTimes(1)
   })
 })
