@@ -95,7 +95,7 @@ beforeEach(() => {
 
 describe("GET /movies/:movieId", () => {
   it("returns the cached Firestore doc without hitting TMDB when it already exists", async () => {
-    store.set("movies/27205", { title: "Inception (cached)" });
+    store.set("movies/27205", { title: "Inception (cached)", genres: ["Sci-Fi"] });
     const app = createApp();
     const res = await request(app).get("/movies/27205");
 
@@ -105,7 +105,7 @@ describe("GET /movies/:movieId", () => {
   });
 
   it("always includes binjRating and likeCount, defaulting to zero when absent from storage", async () => {
-    store.set("movies/27205", { title: "Inception (cached), never rated or liked" });
+    store.set("movies/27205", { title: "Inception (cached), never rated or liked", genres: ["Sci-Fi"] });
     const app = createApp();
     const res = await request(app).get("/movies/27205");
     expect(res.body.data.binjRating).toEqual({ sum: 0, count: 0 });
@@ -113,11 +113,61 @@ describe("GET /movies/:movieId", () => {
   });
 
   it("preserves real binjRating and likeCount when they're already stored", async () => {
-    store.set("movies/27205", { title: "Inception (rated)", binjRating: { sum: 12, count: 3 }, likeCount: 7 });
+    store.set("movies/27205", { title: "Inception (rated)", genres: ["Sci-Fi"], binjRating: { sum: 12, count: 3 }, likeCount: 7 });
     const app = createApp();
     const res = await request(app).get("/movies/27205");
     expect(res.body.data.binjRating).toEqual({ sum: 12, count: 3 });
     expect(res.body.data.likeCount).toBe(7);
+  });
+
+  it("backfills from TMDB when the cached doc is a lightweight search-index-only doc (no genres)", async () => {
+    // Exactly the shape seedSearchCatalog.ts/refreshRecentMovies.ts/a live
+    // search's upsertSearchable write — title/poster/year/titleSearchTerms
+    // only, never the full detail fields.
+    store.set("movies/27205", {
+      title: "Inception",
+      poster: "/poster.jpg",
+      year: 2010,
+      titleSearchTerms: buildSearchTerms("Inception")
+    });
+    fetchMovieDetails.mockResolvedValueOnce({
+      movieId: "27205",
+      title: "Inception",
+      originalLanguage: "en",
+      genres: ["Sci-Fi"],
+      cast: [],
+      crew: [],
+      credits: []
+    });
+
+    const app = createApp();
+    const res = await request(app).get("/movies/27205");
+
+    expect(res.status).toBe(200);
+    expect(fetchMovieDetails).toHaveBeenCalledWith("27205");
+    expect(res.body.data.genres).toEqual(["Sci-Fi"]);
+
+    const movieDoc = store.get("movies/27205") as { genres?: string[] };
+    expect(movieDoc.genres).toEqual(["Sci-Fi"]);
+  });
+
+  it("preserves an existing rating aggregate on a lightweight doc when backfilling its detail", async () => {
+    store.set("movies/27205", { title: "Inception", binjRating: { sum: 9, count: 2 }, likeCount: 4 });
+    fetchMovieDetails.mockResolvedValueOnce({
+      movieId: "27205",
+      title: "Inception",
+      originalLanguage: "en",
+      genres: ["Sci-Fi"],
+      cast: [],
+      crew: [],
+      credits: []
+    });
+
+    const app = createApp();
+    const res = await request(app).get("/movies/27205");
+
+    expect(res.body.data.binjRating).toEqual({ sum: 9, count: 2 });
+    expect(res.body.data.likeCount).toBe(4);
   });
 
   it("on a cache miss: fetches TMDB, stores the movie doc without the credits field, and upserts people docs", async () => {

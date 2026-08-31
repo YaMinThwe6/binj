@@ -19,27 +19,44 @@ function withRatingDefaults(data: FirebaseFirestore.DocumentData): MovieDetail {
 // cache (not yet built, see docs/schema.md §28) → Firestore → TMDB, hld.md §2
 export async function getMovieDetail(movieId: string): Promise<MovieDetail> {
   try {
+    let existingData: FirebaseFirestore.DocumentData | undefined;
     if (db) {
       const snap = await db.collection("movies").doc(movieId).get();
       if (snap.exists) {
-        return withRatingDefaults(snap.data()!);
+        existingData = snap.data()!;
+        // hld.md §18's search index seeding (seedSearchCatalog.ts,
+        // refreshRecentMovies.ts, and a live search's upsertSearchable) only
+        // ever writes title/poster/year/titleSearchTerms — never the full
+        // detail fields below. `genres` is always written (possibly []) by
+        // the full-detail path this function itself runs, so its absence is
+        // the signal this doc still needs backfilling from TMDB rather than
+        // being served as-is (which would hand the frontend a movie missing
+        // genres/cast/crew/synopsis/runtime/etc.).
+        if (existingData.genres !== undefined) {
+          return withRatingDefaults(existingData);
+        }
       }
     }
 
     const movie: TmdbMovie = await fetchMovieDetails(movieId);
     const { credits, ...movieDoc } = movie;
 
+    // Preserve any rating aggregate a lightweight doc already accumulated
+    // rather than resetting it — backfilling detail shouldn't erase real data.
+    const toStore = {
+      ...movieDoc,
+      binjRating: existingData?.binjRating ?? { sum: 0, count: 0 },
+      ...(existingData?.likeCount !== undefined ? { likeCount: existingData.likeCount } : {}),
+      streamingLastFetched: new Date(),
+      lastFetched: new Date(),
+      // A movie discovered via detail view (someone opened it directly, not
+      // via search) becomes locally searchable too — hld.md §18's local
+      // index isn't only populated by searching.
+      titleSearchTerms: buildSearchTerms(movieDoc.title)
+    };
+
     if (db) {
-      await db.collection("movies").doc(movieId).set({
-        ...movieDoc,
-        binjRating: { sum: 0, count: 0 },
-        streamingLastFetched: new Date(),
-        lastFetched: new Date(),
-        // A movie discovered via detail view (someone opened it directly, not
-        // via search) becomes locally searchable too — hld.md §18's local
-        // index isn't only populated by searching.
-        titleSearchTerms: buildSearchTerms(movieDoc.title)
-      });
+      await db.collection("movies").doc(movieId).set(toStore);
 
       // Upsert people/{personId} for everyone credited on this movie — lazy
       // "create on first need" ingestion, same as the movie itself (schema.md §1).
@@ -61,7 +78,7 @@ export async function getMovieDetail(movieId: string): Promise<MovieDetail> {
       if (credits.length > 0) await batch.commit();
     }
 
-    return withRatingDefaults(movieDoc);
+    return withRatingDefaults(toStore);
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new AppError("TMDB_UPSTREAM_ERROR", "Failed to fetch movie details", 502);
