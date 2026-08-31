@@ -74,6 +74,13 @@ describe('App search flow', () => {
           json: async () => envelope({ watchlisted: false, watched: false, liked: false, review: null }),
         })
       }
+      // Must come before the general '/movies/634649' branch below — '/movies/634649/watchedBy'
+      // also contains '/movies/634649' as a substring, so without this the movie-detail
+      // response (no `items` field) gets matched instead, and WatchedByFriends eventually
+      // crashes on `items.length` when its state update lands before the test's own unmount.
+      if (url.includes('/watchedBy')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: [] }) })
+      }
       if (url.includes('/movies/634649')) {
         return Promise.resolve({
           ok: true,
@@ -107,7 +114,6 @@ describe('App search flow', () => {
         url.includes('/events/upcoming') ||
         url.includes('/home/activity') ||
         url.includes('/users/me/notifications') ||
-        url.includes('/watchedBy') ||
         url.includes('/movies/recent')
       ) {
         return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: [] }) })
