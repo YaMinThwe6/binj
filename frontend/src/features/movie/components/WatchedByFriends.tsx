@@ -25,13 +25,16 @@ export function WatchedByFriends({ movieId, onOpenProfile }: Props) {
   if (loading || error || items.length === 0) return null
 
   return (
-    <section className="watched-by-friends">
-      <h2>People you follow who watched this</h2>
-      <ul>
+    <section>
+      <h2 className="mb-3 text-[15px] font-bold text-text">People you follow who watched this</h2>
+      <ul className="flex gap-4 overflow-x-auto pb-0.5">
         {items.map((person) => (
-          <li key={person.uid}>
-            <button type="button" className="person-name-button" onClick={() => onOpenProfile(person.uid)}>
-              {person.displayName}
+          <li key={person.uid} className="w-16 flex-none text-center">
+            <button type="button" onClick={() => onOpenProfile(person.uid)} className="flex w-full flex-col items-center gap-1.5">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(124,140,166,0.32)] bg-[rgba(124,140,166,0.14)] text-[13px] font-bold text-[#9BABC4]">
+                {person.displayName.charAt(0)}
+              </span>
+              <span className="text-[11px] font-semibold text-text">{person.displayName}</span>
             </button>
           </li>
         ))}

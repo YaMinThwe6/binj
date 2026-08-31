@@ -4,11 +4,13 @@ import { LANGUAGE_OPTIONS } from '../constants'
 
 interface Props {
   onDone: (languages: string[]) => void
+  onBack?: () => void
 }
 
-export function LanguageStep({ onDone }: Props) {
+export function LanguageStep({ onDone, onBack }: Props) {
   return (
     <MultiSelectStep
+      step={3}
       title="What do you watch?"
       subtitle="Select the languages/regions of cinema you watch (optional) — not a dubbing preference"
       options={LANGUAGE_OPTIONS.map((l) => ({ value: l.code, label: l.label }))}
@@ -17,6 +19,7 @@ export function LanguageStep({ onDone }: Props) {
         onDone(selected)
       }}
       onSkip={() => onDone([])}
+      onBack={onBack}
     />
   )
 }

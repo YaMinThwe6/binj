@@ -17,6 +17,7 @@ interface Props {
 
 export function OnboardingWizard({ initialDisplayName, email, onComplete }: Props) {
   const [step, setStep] = useState<Step>('username')
+  const [displayName, setDisplayName] = useState(initialDisplayName)
   const [genres, setGenres] = useState<string[]>([])
   const [languages, setLanguages] = useState<string[]>([])
   const [greeting, setGreeting] = useState<string | null>(null)
@@ -27,7 +28,10 @@ export function OnboardingWizard({ initialDisplayName, email, onComplete }: Prop
         <UsernameStep
           initialDisplayName={initialDisplayName}
           email={email}
-          onDone={() => setStep('genres')}
+          onDone={(name) => {
+            setDisplayName(name)
+            setStep('genres')
+          }}
         />
       )
     case 'genres':
@@ -37,6 +41,7 @@ export function OnboardingWizard({ initialDisplayName, email, onComplete }: Prop
             setGenres(selected)
             setStep('language')
           }}
+          onBack={() => setStep('username')}
         />
       )
     case 'language':
@@ -46,6 +51,7 @@ export function OnboardingWizard({ initialDisplayName, email, onComplete }: Prop
             setLanguages(selected)
             setStep('watched')
           }}
+          onBack={() => setStep('genres')}
         />
       )
     case 'watched':
@@ -58,11 +64,18 @@ export function OnboardingWizard({ initialDisplayName, email, onComplete }: Prop
             setStep('celebrities')
           }}
           onSkip={() => setStep('celebrities')}
+          onBack={() => setStep('language')}
         />
       )
     case 'celebrities':
-      return <CelebritiesStep onContinue={() => setStep('success')} onSkip={() => setStep('success')} />
+      return (
+        <CelebritiesStep
+          onContinue={() => setStep('success')}
+          onSkip={() => setStep('success')}
+          onBack={() => setStep('watched')}
+        />
+      )
     case 'success':
-      return <SuccessStep greeting={greeting} onComplete={onComplete} />
+      return <SuccessStep greeting={greeting} displayName={displayName} onComplete={onComplete} />
   }
 }

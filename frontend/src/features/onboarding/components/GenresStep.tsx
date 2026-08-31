@@ -4,11 +4,13 @@ import { GENRE_OPTIONS } from '../constants'
 
 interface Props {
   onDone: (genres: string[]) => void
+  onBack?: () => void
 }
 
-export function GenresStep({ onDone }: Props) {
+export function GenresStep({ onDone, onBack }: Props) {
   return (
     <MultiSelectStep
+      step={2}
       title="What are you into?"
       subtitle="Select your favorite genres (optional)"
       options={GENRE_OPTIONS.map((g) => ({ value: g, label: g }))}
@@ -17,6 +19,7 @@ export function GenresStep({ onDone }: Props) {
         onDone(selected)
       }}
       onSkip={() => onDone([])}
+      onBack={onBack}
     />
   )
 }

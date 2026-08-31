@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { checkUsernameAvailable } from '../services/onboardingApi'
 import { updateMe } from '../../../lib/api'
 import { generateUsernameSuggestions } from '../usernameSuggestions'
+import { OnboardingShell } from './OnboardingShell'
 
 const USERNAME_RE = /^[a-z0-9._]{3,20}$/
 const DEBOUNCE_MS = 400
@@ -10,7 +11,7 @@ const MAX_SUGGESTIONS = 4
 interface Props {
   initialDisplayName: string
   email: string
-  onDone: () => void
+  onDone: (displayName: string) => void
 }
 
 type AvailabilityState = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
@@ -93,8 +94,9 @@ export function UsernameStep({ initialDisplayName, email, onDone }: Props) {
     setError('')
     setSubmitting(true)
     try {
-      await updateMe({ displayName: displayName.trim(), username: username.trim().toLowerCase() })
-      onDone()
+      const trimmedName = displayName.trim()
+      await updateMe({ displayName: trimmedName, username: username.trim().toLowerCase() })
+      onDone(trimmedName)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
@@ -103,53 +105,96 @@ export function UsernameStep({ initialDisplayName, email, onDone }: Props) {
   }
 
   const canSubmit = availability === 'available' && displayName.trim().length > 0 && !submitting
+  const isAvailable = availability === 'available'
 
   return (
-    <form onSubmit={handleSubmit} className="onboarding-step">
-      <h2>Create your profile</h2>
-      <p>This is how people on BINJ will find and recognize you.</p>
+    <OnboardingShell step={1}>
+      <form onSubmit={handleSubmit} className="flex flex-1 flex-col px-7 pt-8 pb-10">
+        <h1 className="font-serif text-[26px] font-semibold text-white">Create your profile</h1>
+        <p className="mt-2 mb-7 text-[13.5px] text-text-muted">This is how people on BINJ will find and recognize you.</p>
 
-      <label htmlFor="onboarding-name">Full name</label>
-      <input
-        id="onboarding-name"
-        type="text"
-        value={displayName}
-        onChange={(e) => setDisplayName(e.target.value)}
-        placeholder="Your name"
-      />
+        <label htmlFor="onboarding-name" className="mb-2 text-xs font-semibold text-text-secondary">
+          Full name
+        </label>
+        <input
+          id="onboarding-name"
+          type="text"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="Your name"
+          className="mb-5 rounded-xl border border-border bg-surface-alt px-4 py-3.5 text-sm text-text outline-none focus:border-accent"
+        />
 
-      <label htmlFor="onboarding-username">Username</label>
-      <input
-        id="onboarding-username"
-        type="text"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="username"
-      />
-      {availability === 'checking' && <p>Checking…</p>}
-      {availability === 'available' && <p>This username is available</p>}
-      {availability === 'taken' && <p role="alert">That username is taken</p>}
-      {availability === 'invalid' && (
-        <p role="alert">3-20 characters: lowercase letters, numbers, dots, underscores</p>
-      )}
-
-      {suggestionsLoading && <p>Finding suggestions…</p>}
-      {!suggestionsLoading && suggestions.length > 0 && (
-        <div className="username-suggestions">
-          <p>Suggestions:</p>
-          {suggestions.map((s) => (
-            <button key={s} type="button" onClick={() => pickSuggestion(s)}>
-              {s}
-            </button>
-          ))}
+        <label htmlFor="onboarding-username" className="mb-2 text-xs font-semibold text-text-secondary">
+          Username
+        </label>
+        <div
+          className={`flex items-center gap-2 rounded-xl border bg-surface-alt px-4 py-3.5 ${isAvailable ? 'border-[rgba(61,220,132,0.5)]' : 'border-border'}`}
+        >
+          <span className="text-sm text-text-faint">@</span>
+          <input
+            id="onboarding-username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="username"
+            className="flex-1 bg-transparent text-sm text-text outline-none"
+          />
+          {isAvailable && (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3DDC84" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          )}
         </div>
-      )}
 
-      {error && <p role="alert">{error}</p>}
+        {availability === 'checking' && <p className="mt-2 text-[11.5px] text-text-muted">Checking…</p>}
+        {availability === 'available' && <p className="mt-2 text-[11.5px] text-[#3DDC84]">This username is available</p>}
+        {availability === 'taken' && (
+          <p role="alert" className="mt-2 text-[11.5px] text-red-400">
+            That username is taken
+          </p>
+        )}
+        {availability === 'invalid' && (
+          <p role="alert" className="mt-2 text-[11.5px] text-red-400">
+            3-20 characters: lowercase letters, numbers, dots, underscores
+          </p>
+        )}
 
-      <button type="submit" disabled={!canSubmit}>
-        {submitting ? 'Saving…' : 'Continue'}
-      </button>
-    </form>
+        {suggestionsLoading && <p className="mt-4 text-[13px] text-text-muted">Finding suggestions…</p>}
+        {!suggestionsLoading && suggestions.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-[12px] text-text-muted">Suggestions:</p>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => pickSuggestion(s)}
+                  className="rounded-full border border-border bg-surface-alt px-3.5 py-2 text-[12.5px] font-semibold text-text-secondary"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <p role="alert" className="mt-4 text-[13px] text-red-400">
+            {error}
+          </p>
+        )}
+
+        <div className="flex-1" />
+
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg disabled:opacity-40"
+        >
+          {submitting ? 'Saving…' : 'Continue'}
+        </button>
+      </form>
+    </OnboardingShell>
   )
 }

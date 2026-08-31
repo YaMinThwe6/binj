@@ -10,7 +10,7 @@ const options = [
 describe('MultiSelectStep', () => {
   it('toggles chip selection and passes selected values to onContinue', async () => {
     const onContinue = vi.fn().mockResolvedValue(undefined)
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
 
     fireEvent.click(screen.getByText('Alpha'))
     expect(screen.getByText('Alpha')).toHaveAttribute('aria-pressed', 'true')
@@ -20,7 +20,7 @@ describe('MultiSelectStep', () => {
   })
 
   it('deselects a chip on second click', () => {
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={vi.fn()} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={vi.fn()} />)
 
     const alpha = screen.getByText('Alpha')
     fireEvent.click(alpha)
@@ -30,7 +30,7 @@ describe('MultiSelectStep', () => {
 
   it('calls onSkip without requiring a selection', () => {
     const onSkip = vi.fn()
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={onSkip} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={onSkip} />)
 
     fireEvent.click(screen.getByRole('button', { name: /skip/i }))
     expect(onSkip).toHaveBeenCalled()
@@ -38,7 +38,7 @@ describe('MultiSelectStep', () => {
 
   it('shows an error message when onContinue rejects', async () => {
     const onContinue = vi.fn().mockRejectedValue(new Error('boom'))
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('boom'))
