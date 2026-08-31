@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { searchMovies, getRecentMovies, type MovieSummary } from '../services/movieApi'
 import { posterUrl } from '../../../lib/images'
 import { MovieDetail } from './MovieDetail'
+
+const DEBOUNCE_MS = 350
+const MIN_QUERY_LENGTH = 2 // below this, a query is mostly noise against a broad catalog
 
 interface Props {
   // Signed-in usage (via Home): go back to Home.
@@ -57,20 +60,66 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
       .catch(() => setRecentStatus('error')) // non-critical section — fails quietly, search still works
   }, [])
 
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    if (!query.trim()) return
+  // Bumped on every search kickoff so a slow, superseded response can't
+  // overwrite a newer one that already came back — a real risk once search
+  // fires per keystroke instead of once per submit.
+  const requestIdRef = useRef(0)
+
+  async function runSearch(q: string) {
+    const trimmed = q.trim()
+    if (!trimmed) return
+    const thisRequestId = ++requestIdRef.current
     setStatus('loading')
     setSelectedMovieId(null)
     try {
-      const { items } = await searchMovies(query.trim())
+      const { items } = await searchMovies(trimmed)
+      if (requestIdRef.current !== thisRequestId) return // a newer search already superseded this one
       setResults(items)
       setHasSearched(true)
       setStatus('idle')
     } catch (err) {
+      if (requestIdRef.current !== thisRequestId) return
       setStatus('error')
       setErrorMessage(err instanceof Error ? err.message : 'Search failed')
     }
+  }
+
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Search-as-you-type: debounced so typing "Dune" fires one request, not
+  // four — most of those resolve against the local Firestore index (movies
+  // service.ts's tier 1/2), not TMDB live, which is what makes firing per
+  // keystroke reasonable rather than wasteful. Below MIN_QUERY_LENGTH, or
+  // once the box is cleared, this steps back to the recently-released view
+  // instead of searching.
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+
+    const trimmed = query.trim()
+    if (trimmed.length === 0) {
+      requestIdRef.current++ // invalidate any in-flight search — its result should never land now
+      setHasSearched(false)
+      setResults([])
+      setStatus('idle')
+      return
+    }
+    if (trimmed.length < MIN_QUERY_LENGTH) return
+
+    debounceTimerRef.current = setTimeout(() => {
+      void runSearch(trimmed)
+    }, DEBOUNCE_MS)
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault()
+    // An explicit submit (Enter/Search button) shouldn't leave a debounced
+    // call still pending to fire again a moment later.
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    await runSearch(query)
   }
 
   if (selectedMovieId) {
