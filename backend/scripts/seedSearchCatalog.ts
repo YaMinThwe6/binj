@@ -19,7 +19,13 @@ import { buildSearchTerms } from "../src/lib/searchIndex.js";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_PAGES = 25;
-const BATCH_SIZE = 400; // Firestore's per-batch write cap is 500 — leave headroom
+// Firestore's per-batch write cap is 500 *operations*, but there's a separate
+// ~10 MiB per-batch *payload* cap that bites first here: titleSearchTerms can
+// run to several hundred variant strings per movie (searchIndex.ts's typo
+// variants alone are ~27x a word's length), so 400 docs/batch (sized only for
+// the operation cap) was enough to blow past the payload cap in practice —
+// hit live running this script. 50 keeps real headroom under either limit.
+const BATCH_SIZE = 50;
 
 async function main() {
   const db = requireDb();
@@ -28,6 +34,10 @@ async function main() {
   const movies = await getPopularMovies(pages);
   console.log(`Fetched ${movies.length} popular movies across ${pages} page(s). Writing to Firestore...`);
 
+  // set({merge:true}) is idempotent, so re-running this script after a
+  // partial failure is safe — already-written movies just get rewritten
+  // with the same data, nothing duplicates.
+  let written = 0;
   for (let i = 0; i < movies.length; i += BATCH_SIZE) {
     const chunk = movies.slice(i, i + BATCH_SIZE);
     const batch = db.batch();
@@ -39,6 +49,8 @@ async function main() {
       );
     }
     await batch.commit();
+    written += chunk.length;
+    console.log(`  ${written}/${movies.length} written...`);
   }
 
   console.log(`Seeded search index for ${movies.length} movies.`);
