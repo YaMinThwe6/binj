@@ -31,8 +31,12 @@ afterEach(() => {
 describe('Welcome — splash', () => {
   it('shows the logo, tagline, Get Started, and a Log in link', () => {
     render(<Welcome />)
-    expect(screen.getByText('BINJ')).toBeInTheDocument()
-    expect(screen.getByText(/find your movie/i)).toBeInTheDocument()
+    // Mobile and desktop each render their own copy of the wordmark/tagline,
+    // toggled by CSS breakpoint (md:hidden / hidden md:block) — both exist in
+    // the DOM regardless of viewport since jsdom doesn't evaluate media
+    // queries, so at least one match is what a real viewport would show.
+    expect(screen.getAllByText('BINJ').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/find your movie/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /^get started$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /already have an account/i })).toBeInTheDocument()
   })

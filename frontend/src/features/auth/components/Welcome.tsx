@@ -116,6 +116,118 @@ export function Welcome({ onBack }: Props) {
     }
   }
 
+  if (stage === 'welcome') {
+    // Getting Started — matches the design canvas's Welcome.dc.html /
+    // WelcomeDesktop.dc.html exactly: full-bleed atmosphere photo (a
+    // distinct crop per breakpoint, not one image scaled), an accent glow
+    // and a bottom fade-to-black over it, content anchored to the bottom.
+    // Desktop swaps the small wordmark-as-heading for a fixed top-left
+    // wordmark plus a large headline + subtitle, and the button gains an
+    // arrow — mobile stays copy-only.
+    return (
+      <main className="relative flex h-svh flex-col overflow-hidden bg-bg text-text">
+        <div className="pointer-events-none absolute inset-0">
+          <img
+            src="/images/welcome-bg-mobile.jpg"
+            alt=""
+            className="h-full w-full object-cover md:hidden"
+            style={{ objectPosition: 'center 30%' }}
+          />
+          <img
+            src="/images/welcome-bg-desktop.jpg"
+            alt=""
+            className="hidden h-full w-full object-cover md:block"
+            style={{ objectPosition: 'center 25%' }}
+          />
+          <div
+            className="absolute inset-0 md:hidden"
+            style={{ background: 'radial-gradient(90% 55% at 75% 12%, rgba(var(--accent-rgb), 0.12), transparent 60%)' }}
+          />
+          <div
+            className="absolute inset-0 hidden md:block"
+            style={{ background: 'radial-gradient(45% 60% at 78% 10%, rgba(var(--accent-rgb), 0.10), transparent 60%)' }}
+          />
+          <div
+            className="absolute inset-0 md:hidden"
+            style={{ background: 'linear-gradient(180deg, rgba(14,13,16,0) 0%, rgba(14,13,16,0.35) 55%, #0E0D10 96%)' }}
+          />
+          <div
+            className="absolute inset-0 hidden md:block"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(14,13,16,0) 0%, rgba(14,13,16,0.15) 45%, rgba(14,13,16,0.55) 70%, rgba(10,9,11,0.94) 100%)'
+            }}
+          />
+        </div>
+
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to Discover"
+            className="relative z-10 mt-5 ml-6 flex h-[38px] w-[38px] items-center justify-center rounded-full border border-border-soft bg-surface-alt md:hidden"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        )}
+
+        {/* Desktop-only: fixed top-left wordmark + a Discover-return control
+            in the same spot the mobile back arrow occupies, since desktop's
+            bottom content block has no wordmark of its own to double as one. */}
+        <div className="absolute top-10 left-14 z-10 hidden items-center gap-4 md:flex">
+          <span className="font-serif text-2xl font-bold text-accent">BINJ</span>
+        </div>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to Discover"
+            className="absolute top-9 right-14 z-10 hidden h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface-alt/80 md:flex"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        )}
+
+        <div className="relative z-10 mt-auto flex flex-col items-center px-8 pb-14 text-center md:px-10 md:pb-14">
+          <span className="font-serif text-5xl font-bold text-accent animate-logo-pulse md:hidden">BINJ</span>
+          <p className="mt-3.5 mb-10 max-w-sm text-[15px] leading-relaxed text-text-secondary md:hidden">
+            Find your movie.
+            <br />
+            Find your people.
+          </p>
+
+          <span className="hidden font-serif text-5xl font-bold tracking-wide text-white md:block">
+            Find your movie.
+            <br />
+            Find your people.
+          </span>
+          <p className="mt-4.5 mb-8 hidden max-w-[460px] text-[15px] leading-relaxed text-text-secondary md:block">
+            Discover films worth watching, and the people who want to watch them with you.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => openForm('signup')}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-sm font-bold text-bg shadow-[0_0_24px_rgba(var(--accent-rgb),0.35)] md:w-auto md:px-10 md:shadow-[0_0_28px_rgba(var(--accent-rgb),0.4)]"
+          >
+            Get Started
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="hidden md:block" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </button>
+
+          <button type="button" onClick={() => openForm('login')} className="mt-5 text-[13px] text-text-muted md:mt-4.5 md:text-[13.5px]">
+            Already have an account? <span className="font-bold text-accent">Log in</span>
+          </button>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="relative flex min-h-svh flex-1 flex-col overflow-hidden bg-bg text-text">
       <div className="relative mx-auto flex w-full max-w-sm flex-1 flex-col">
@@ -124,44 +236,6 @@ export function Welcome({ onBack }: Props) {
           className="pointer-events-none absolute inset-0"
           style={{ background: 'radial-gradient(90% 55% at 75% 12%, rgba(var(--accent-rgb), 0.16), transparent 60%)' }}
         />
-
-        {stage === 'welcome' && onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to Discover"
-            className="relative mt-5 ml-6 flex h-[38px] w-[38px] items-center justify-center rounded-full border border-border-soft bg-surface-alt"
-          >
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-        )}
-
-        {stage === 'welcome' && (
-          <div className="relative mt-auto flex flex-col items-center px-8 pb-14 text-center">
-            {/* Placeholder logo treatment — a real animated wordmark is coming
-                once it's designed; this is a simple glow-pulse stand-in. */}
-            <span className="font-serif text-5xl font-bold text-accent animate-logo-pulse">BINJ</span>
-            <p className="mt-3.5 mb-10 text-[15px] leading-relaxed text-text-secondary">
-              Find your movie.
-              <br />
-              Find your people.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => openForm('signup')}
-              className="flex w-full items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg shadow-[0_0_24px_rgba(var(--accent-rgb),0.35)]"
-            >
-              Get Started
-            </button>
-
-            <button type="button" onClick={() => openForm('login')} className="mt-5 text-[13px] text-text-muted">
-              Already have an account? <span className="font-bold text-accent">Log in</span>
-            </button>
-          </div>
-        )}
 
         {stage === 'form' && (
           <div className="relative flex flex-1 flex-col px-7 pt-9 pb-10">

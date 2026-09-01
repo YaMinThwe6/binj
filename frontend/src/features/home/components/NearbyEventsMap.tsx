@@ -46,14 +46,19 @@ export function NearbyEventsMap({ center, items, joinStatus, onJoin }: Props) {
         ))}
 
         {selected && (
+          // Google's InfoWindow chrome is always a light bubble regardless of
+          // page theme, so this content stays dark-on-light rather than
+          // using the app's usual light-on-dark palette — matching the
+          // white background it actually renders on, not fighting it.
           <InfoWindow position={{ lat: selected.location.lat, lng: selected.location.lng }} onCloseClick={() => setSelectedEventId(null)}>
-            <div className="map-info-window">
-              <strong>{selected.title ?? selected.movieTitle ?? 'Watch party'}</strong>
-              <p>{selected.distanceKm} km away</p>
+            <div className="min-w-[160px] p-1 font-sans">
+              <strong className="block text-[13px] font-bold text-[#161419]">{selected.title ?? selected.movieTitle ?? 'Watch party'}</strong>
+              <p className="mt-1 mb-2.5 text-[11.5px] text-[#5A5766]">{selected.distanceKm} km away</p>
               <button
                 type="button"
                 disabled={!!joinStatus[selected.eventId]}
                 onClick={() => onJoin(selected.eventId)}
+                className="w-full rounded-lg bg-accent py-1.5 text-[12px] font-bold text-bg disabled:opacity-60"
               >
                 {joinLabel(joinStatus[selected.eventId])}
               </button>

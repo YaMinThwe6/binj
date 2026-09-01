@@ -25,7 +25,9 @@ describe('PeopleYouMightVibeWith', () => {
     })
     render(<PeopleYouMightVibeWith onOpenProfile={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
+    // Mobile and desktop each render their own copy of the name/score,
+    // toggled by CSS breakpoint — both exist in jsdom regardless of viewport.
+    await waitFor(() => expect(screen.getAllByText('Rohan').length).toBeGreaterThan(0))
     expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Following' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Requested' })).toBeInTheDocument()
@@ -60,7 +62,8 @@ describe('PeopleYouMightVibeWith', () => {
     const onOpenProfile = vi.fn()
     render(<PeopleYouMightVibeWith onOpenProfile={onOpenProfile} />)
 
-    fireEvent.click(await screen.findByText('Rohan'))
+    await waitFor(() => expect(screen.getAllByText('Rohan').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText('Rohan')[0])
     expect(onOpenProfile).toHaveBeenCalledWith('u1')
     expect(followUser).not.toHaveBeenCalled()
   })

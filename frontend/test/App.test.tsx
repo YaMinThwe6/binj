@@ -163,9 +163,12 @@ describe('App — signed-out root ("/")', () => {
     await screen.findByText(/discover movies/i)
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
 
-    expect(await screen.findByText(/find your movie/i)).toBeInTheDocument()
+    // Mobile and desktop each render their own copy of the tagline/back
+    // button, toggled by CSS breakpoint — both exist in jsdom regardless of
+    // viewport since it doesn't evaluate media queries.
+    await waitFor(() => expect(screen.getAllByText(/find your movie/i).length).toBeGreaterThan(0))
 
-    fireEvent.click(screen.getByRole('button', { name: /back to discover/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /back to discover/i })[0])
     expect(await screen.findByText(/discover movies/i)).toBeInTheDocument()
   })
 })

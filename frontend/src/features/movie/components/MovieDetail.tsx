@@ -191,246 +191,281 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
   const binjAverage = movie.binjRating.count > 0 ? (movie.binjRating.sum / movie.binjRating.count).toFixed(1) : null
   const poster = posterUrl(movie.poster, 'w500')
 
+  const actionBar = isGuest ? (
+    <div className="px-5 pt-5 lg:px-0 lg:pt-0">
+      <button type="button" onClick={onRequireAuth} className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-bg lg:w-auto lg:px-8">
+        Sign in to save, rate &amp; review
+      </button>
+    </div>
+  ) : (
+    <div className="flex justify-around px-4 pt-5 lg:justify-start lg:gap-3 lg:px-0 lg:pt-0">
+      <ActionButton
+        label="Watchlist"
+        active={status.watchlisted}
+        onClick={() => toggle('watchlisted')}
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
+          </svg>
+        }
+      />
+      <ActionButton
+        label="Watched"
+        active={status.watched}
+        onClick={() => toggle('watched')}
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M8.5 12.5l2.3 2.3 4.7-5.1" />
+          </svg>
+        }
+      />
+      <ActionButton
+        label="Like"
+        active={status.liked}
+        onClick={() => toggle('liked')}
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+          </svg>
+        }
+      />
+    </div>
+  )
+
   return (
     <main className="min-h-svh bg-bg text-text">
-      {/* Hero backdrop */}
-      <div
-        className="relative h-[224px] w-full overflow-hidden"
-        style={{
-          background:
-            'radial-gradient(120% 90% at 85% 5%, rgba(150,170,200,0.14), transparent 55%), radial-gradient(100% 80% at 5% 95%, rgba(var(--accent-rgb),0.18), transparent 55%), linear-gradient(180deg, #1B1720 0%, #100E12 100%)'
-        }}
-      >
-        <div className="absolute inset-x-0 top-0 h-[90px] bg-gradient-to-b from-black/55 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-[120px] bg-gradient-to-b from-transparent to-bg" />
-        <div className="absolute top-4 left-4">
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back"
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-black/55"
-          >
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F3F1ED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Poster + title glass card, overlapping the hero */}
-      <div className="relative mx-5 -mt-14 flex items-end gap-3.5 rounded-[20px] border border-white/10 bg-surface/55 p-4 shadow-[0_14px_34px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-        <div className="h-36 w-[100px] flex-none overflow-hidden rounded-xl bg-surface-alt shadow-[0_6px_16px_rgba(0,0,0,0.4)]">
-          {poster && <img src={poster} alt="" className="poster h-full w-full object-cover" />}
-        </div>
-        <div className="min-w-0 flex-1 pb-0.5">
-          <h1 className="font-serif text-[21px] leading-tight font-semibold text-white">{movie.title}</h1>
-          <p className="mt-1.5 mb-2.5 text-[11.5px] text-text-secondary">
-            {movie.year} · {movie.genres.join(', ')} · {formatRuntime(movie.runtime)}
-          </p>
-          <div className="flex items-center gap-3 text-[13px] font-bold">
-            <span className="flex items-center gap-1 text-text">
-              <StarIcon filled className="text-text" />
-              {movie.voteAverage.toFixed(1)}
-            </span>
-            {binjAverage ? (
-              <span className="flex items-center gap-1 text-accent">
-                <StarIcon filled className="text-[#FFC107]" />
-                {binjAverage}
-              </span>
-            ) : (
-              <span className="text-[11.5px] font-semibold text-text-muted">No ratings yet</span>
-            )}
+      <div className="lg:mx-auto lg:max-w-5xl lg:px-8 lg:pt-8">
+        {/* Hero backdrop — mobile only; desktop drops the backdrop treatment
+            for a plain two-column poster+info row (Desktop.dc.html). */}
+        <div
+          className="relative h-[224px] w-full overflow-hidden lg:hidden"
+          style={{
+            background:
+              'radial-gradient(120% 90% at 85% 5%, rgba(150,170,200,0.14), transparent 55%), radial-gradient(100% 80% at 5% 95%, rgba(var(--accent-rgb),0.18), transparent 55%), linear-gradient(180deg, #1B1720 0%, #100E12 100%)'
+          }}
+        >
+          <div className="absolute inset-x-0 top-0 h-[90px] bg-gradient-to-b from-black/55 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-[120px] bg-gradient-to-b from-transparent to-bg" />
+          <div className="absolute top-4 left-4">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back"
+              className="flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-black/55"
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F3F1ED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
           </div>
         </div>
-      </div>
 
-      {statusError && (
-        <p role="alert" className="mt-4 px-5 text-[13px] text-red-400">
-          {statusError}
-        </p>
-      )}
-      {actionError && (
-        <p role="alert" className="mt-2 px-5 text-[13px] text-red-400">
-          {actionError}
-        </p>
-      )}
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back"
+          className="hidden h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface-alt lg:mb-6 lg:flex"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
 
-      {isGuest ? (
-        <div className="px-5 pt-5">
-          <button type="button" onClick={onRequireAuth} className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-bg">
-            Sign in to save, rate &amp; review
-          </button>
-        </div>
-      ) : (
-        <div className="flex justify-around px-4 pt-5">
-          <ActionButton
-            label="Watchlist"
-            active={status.watchlisted}
-            onClick={() => toggle('watchlisted')}
-            icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
-              </svg>
-            }
-          />
-          <ActionButton
-            label="Watched"
-            active={status.watched}
-            onClick={() => toggle('watched')}
-            icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M8.5 12.5l2.3 2.3 4.7-5.1" />
-              </svg>
-            }
-          />
-          <ActionButton
-            label="Like"
-            active={status.liked}
-            onClick={() => toggle('liked')}
-            icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
-              </svg>
-            }
-          />
-        </div>
-      )}
-
-      <div className="flex flex-col gap-7 px-5 py-7">
-        {!isGuest && <WatchedByFriends movieId={movieId} onOpenProfile={setOpenProfileUid} />}
-
-        {movie.streamingProviders.length > 0 && (
-          <section>
-            <h2 className="mb-3 text-[15px] font-bold text-text">Where can I watch?</h2>
-            <ul className="flex flex-wrap gap-2.5">
-              {movie.streamingProviders.map((p, i) => (
-                // TMDB can list the same provider more than once under different
-                // offer types (e.g. "Apple TV Store" as both rent and buy) — name
-                // alone isn't a unique key, so index disambiguates duplicates.
-                <li key={`${p.name}-${i}`} className="rounded-full border border-border bg-input px-3.5 py-2 text-[12.5px] font-semibold text-text">
-                  {p.name}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section>
-          <h2 className="mb-2.5 text-[15px] font-bold text-text">About</h2>
-          <p className="text-sm leading-relaxed text-text-secondary">{movie.synopsis}</p>
-        </section>
-
-        {movie.cast.length > 0 && (
-          <section>
-            <h2 className="mb-3 text-[15px] font-bold text-text">Cast</h2>
-            <ul className="flex gap-4 overflow-x-auto pb-0.5">
-              {movie.cast.map((c) => (
-                <li key={c.personId} className="w-16 flex-none text-center">
-                  <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full border border-[rgba(124,140,166,0.32)] bg-[rgba(124,140,166,0.14)] font-serif text-base text-[#9BABC4]">
-                    {c.name.charAt(0)}
-                  </div>
-                  <div className="text-[11px] font-semibold text-text">{c.name}</div>
-                  <div className="text-[10px] text-text-muted">{c.character}</div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section>
-          <h2 className="mb-3 text-[15px] font-bold text-text">Reviews</h2>
-          {reviewsError && (
-            <p role="alert" className="mb-3 text-[13px] text-red-400">
-              {reviewsError}
+        {/* Poster + title glass card, overlapping the hero on mobile; a
+            plain two-column row on desktop. */}
+        <div className="relative mx-5 -mt-14 flex items-end gap-3.5 rounded-[20px] border border-white/10 bg-surface/55 p-4 shadow-[0_14px_34px_rgba(0,0,0,0.4)] backdrop-blur-xl lg:mx-0 lg:mt-0 lg:items-stretch lg:gap-6 lg:rounded-none lg:border-none lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
+          <div className="h-36 w-[100px] flex-none overflow-hidden rounded-xl bg-surface-alt shadow-[0_6px_16px_rgba(0,0,0,0.4)] lg:h-80 lg:w-55 lg:rounded-2xl">
+            {poster && <img src={poster} alt="" className="poster h-full w-full object-cover" />}
+          </div>
+          <div className="min-w-0 flex-1 pb-0.5 lg:flex lg:flex-col lg:justify-end lg:pb-1.5">
+            <h1 className="font-serif text-[21px] leading-tight font-semibold text-white lg:text-[38px]">{movie.title}</h1>
+            <p className="mt-1.5 mb-2.5 text-[11.5px] text-text-secondary lg:mt-2 lg:mb-4 lg:text-sm">
+              {movie.year} · {movie.genres.join(', ')} · {formatRuntime(movie.runtime)}
             </p>
-          )}
-          <ul className="flex flex-col gap-3">
-            {reviews.map((r, i) => (
-              <li key={r.authorId ?? `anon-${i}`} className="rounded-2xl border border-border bg-input p-3.5">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-text">{r.isAnonymous ? 'Anonymous' : r.displayName}</span>
-                  <span className="flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <StarIcon key={n} filled={n <= r.rating} className={n <= r.rating ? 'text-[#FFC107]' : 'text-border'} />
-                    ))}
+            <div className="flex items-center gap-3 text-[13px] font-bold lg:mb-5 lg:gap-8">
+              <span className="flex items-center gap-1 text-text lg:flex-col lg:items-start lg:gap-0">
+                <span className="flex items-center gap-1">
+                  <StarIcon filled className="text-text" />
+                  <span className="lg:text-xl">{movie.voteAverage.toFixed(1)}</span>
+                </span>
+                <span className="hidden text-[11px] font-normal text-text-muted lg:block">TMDB rating</span>
+              </span>
+              {binjAverage ? (
+                <span className="flex items-center gap-1 text-accent lg:flex-col lg:items-start lg:gap-0">
+                  <span className="flex items-center gap-1">
+                    <StarIcon filled className="text-[#FFC107]" />
+                    <span className="lg:text-xl">{binjAverage}</span>
                   </span>
-                </div>
-                {r.reviewText && <p className="text-[13.5px] leading-relaxed text-text-secondary">{r.reviewText}</p>}
-              </li>
-            ))}
-          </ul>
+                  <span className="hidden text-[11px] font-normal text-text-muted lg:block">BINJ rating</span>
+                </span>
+              ) : (
+                <span className="text-[11.5px] font-semibold text-text-muted">No ratings yet</span>
+              )}
+            </div>
+            <div className="hidden lg:block">{actionBar}</div>
+          </div>
+        </div>
 
-          {isGuest ? (
-            <button type="button" onClick={onRequireAuth} className="mt-3 w-full rounded-xl border border-border bg-surface-alt py-3 text-[13.5px] font-bold text-text">
-              Sign in to write a review
-            </button>
-          ) : (
-            <button type="button" onClick={openForm} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-[13.5px] font-bold text-bg">
-              {status.review ? 'Edit your review' : 'Write a review'}
-            </button>
+        {statusError && (
+          <p role="alert" className="mt-4 px-5 text-[13px] text-red-400 lg:px-0">
+            {statusError}
+          </p>
+        )}
+        {actionError && (
+          <p role="alert" className="mt-2 px-5 text-[13px] text-red-400 lg:px-0">
+            {actionError}
+          </p>
+        )}
+
+        <div className="lg:hidden">{actionBar}</div>
+
+        <div className="flex flex-col gap-7 px-5 py-7 lg:px-0 lg:pt-9 lg:pb-16">
+          {movie.streamingProviders.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-[15px] font-bold text-text">Where can I watch?</h2>
+              <ul className="flex flex-wrap gap-2.5">
+                {movie.streamingProviders.map((p, i) => (
+                  // TMDB can list the same provider more than once under different
+                  // offer types (e.g. "Apple TV Store" as both rent and buy) — name
+                  // alone isn't a unique key, so index disambiguates duplicates.
+                  <li key={`${p.name}-${i}`} className="rounded-full border border-border bg-input px-3.5 py-2 text-[12.5px] font-semibold text-text">
+                    {p.name}
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
-          {!isGuest && formOpen && (
-            <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3.5 rounded-2xl border border-border bg-surface-alt p-4">
-              <div role="group" aria-label="Rating" className="flex gap-2">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    aria-pressed={star <= rating}
-                    aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                    onClick={() => setRating(star)}
-                    className={star <= rating ? 'text-2xl text-accent' : 'text-2xl text-border'}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
+          <div className="flex flex-col gap-7 lg:flex-row lg:gap-8">
+            {!isGuest && (
+              <section className="lg:flex-1">
+                <WatchedByFriends movieId={movieId} onOpenProfile={setOpenProfileUid} />
+              </section>
+            )}
+            <section className="lg:flex-1">
+              <h2 className="mb-2.5 text-[15px] font-bold text-text">About</h2>
+              <p className="text-sm leading-relaxed text-text-secondary">{movie.synopsis}</p>
+            </section>
+          </div>
 
-              <div>
-                <label htmlFor="review-text" className="mb-1.5 block text-xs font-semibold text-text-secondary">
-                  Review
-                </label>
-                <textarea
-                  id="review-text"
-                  aria-label="Review"
-                  value={reviewText}
-                  onChange={(e) => setReviewText(e.target.value)}
-                  placeholder="Share your thoughts (optional)…"
-                  rows={3}
-                  className="w-full resize-none rounded-xl border border-border bg-input px-3.5 py-3 text-sm text-text outline-none focus:border-accent"
-                />
-              </div>
+          <div className="flex flex-col gap-7 lg:flex-row lg:gap-8">
+            {movie.cast.length > 0 && (
+              <section className="lg:flex-1">
+                <h2 className="mb-3 text-[15px] font-bold text-text">Cast</h2>
+                <ul className="flex gap-4 overflow-x-auto pb-0.5 lg:flex-wrap">
+                  {movie.cast.map((c) => (
+                    <li key={c.personId} className="w-16 flex-none text-center">
+                      <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full border border-[rgba(124,140,166,0.32)] bg-[rgba(124,140,166,0.14)] font-serif text-base text-[#9BABC4]">
+                        {c.name.charAt(0)}
+                      </div>
+                      <div className="text-[11px] font-semibold text-text">{c.name}</div>
+                      <div className="text-[10px] text-text-muted">{c.character}</div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-              <label className="flex items-center gap-2 text-[13px] text-text-secondary">
-                <input
-                  type="checkbox"
-                  aria-label="Post anonymously"
-                  checked={isAnonymous}
-                  onChange={(e) => setIsAnonymous(e.target.checked)}
-                  className="h-4 w-4 accent-[var(--accent)]"
-                />
-                Post anonymously
-              </label>
-
-              {formError && (
-                <p role="alert" className="text-[13px] text-red-400">
-                  {formError}
+            <section className="lg:flex-1">
+              <h2 className="mb-3 text-[15px] font-bold text-text">Reviews</h2>
+              {reviewsError && (
+                <p role="alert" className="mb-3 text-[13px] text-red-400">
+                  {reviewsError}
                 </p>
               )}
+              <ul className="flex flex-col gap-3">
+                {reviews.map((r, i) => (
+                  <li key={r.authorId ?? `anon-${i}`} className="rounded-2xl border border-border bg-input p-3.5">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[13px] font-semibold text-text">{r.isAnonymous ? 'Anonymous' : r.displayName}</span>
+                      <span className="flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <StarIcon key={n} filled={n <= r.rating} className={n <= r.rating ? 'text-[#FFC107]' : 'text-border'} />
+                        ))}
+                      </span>
+                    </div>
+                    {r.reviewText && <p className="text-[13.5px] leading-relaxed text-text-secondary">{r.reviewText}</p>}
+                  </li>
+                ))}
+              </ul>
 
-              <button type="submit" disabled={rating < 1} className="rounded-xl bg-accent py-3 text-sm font-bold text-bg disabled:opacity-40">
-                Post Review
-              </button>
-              {status.review && (
-                <button type="button" onClick={handleDelete} className="text-[13px] font-semibold text-red-400">
-                  Delete review
+              {isGuest ? (
+                <button type="button" onClick={onRequireAuth} className="mt-3 w-full rounded-xl border border-border bg-surface-alt py-3 text-[13.5px] font-bold text-text lg:w-auto lg:px-6">
+                  Sign in to write a review
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openForm}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-[13.5px] font-bold text-bg lg:w-auto lg:px-6"
+                >
+                  {status.review ? 'Edit your review' : 'Write a review'}
                 </button>
               )}
-            </form>
-          )}
-        </section>
+
+              {!isGuest && formOpen && (
+                <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3.5 rounded-2xl border border-border bg-surface-alt p-4">
+                  <div role="group" aria-label="Rating" className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        aria-pressed={star <= rating}
+                        aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                        onClick={() => setRating(star)}
+                        className={star <= rating ? 'text-2xl text-accent' : 'text-2xl text-border'}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+
+                  <div>
+                    <label htmlFor="review-text" className="mb-1.5 block text-xs font-semibold text-text-secondary">
+                      Review
+                    </label>
+                    <textarea
+                      id="review-text"
+                      aria-label="Review"
+                      value={reviewText}
+                      onChange={(e) => setReviewText(e.target.value)}
+                      placeholder="Share your thoughts (optional)…"
+                      rows={3}
+                      className="w-full resize-none rounded-xl border border-border bg-input px-3.5 py-3 text-sm text-text outline-none focus:border-accent"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 text-[13px] text-text-secondary">
+                    <input
+                      type="checkbox"
+                      aria-label="Post anonymously"
+                      checked={isAnonymous}
+                      onChange={(e) => setIsAnonymous(e.target.checked)}
+                      className="h-4 w-4 accent-[var(--accent)]"
+                    />
+                    Post anonymously
+                  </label>
+
+                  {formError && (
+                    <p role="alert" className="text-[13px] text-red-400">
+                      {formError}
+                    </p>
+                  )}
+
+                  <button type="submit" disabled={rating < 1} className="rounded-xl bg-accent py-3 text-sm font-bold text-bg disabled:opacity-40">
+                    Post Review
+                  </button>
+                  {status.review && (
+                    <button type="button" onClick={handleDelete} className="text-[13px] font-semibold text-red-400">
+                      Delete review
+                    </button>
+                  )}
+                </form>
+              )}
+            </section>
+          </div>
+        </div>
       </div>
     </main>
   )

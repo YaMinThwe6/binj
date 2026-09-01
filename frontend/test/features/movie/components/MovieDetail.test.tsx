@@ -104,9 +104,9 @@ describe('MovieDetail', () => {
     getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
     render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /watchlist/i })).toHaveAttribute('aria-pressed', 'true'))
-    expect(screen.getByRole('button', { name: /^watched$/i })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: /^like$/i })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toHaveAttribute('aria-pressed', 'true'))
+    expect(screen.getAllByRole('button', { name: /^watched$/i })[0]).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getAllByRole('button', { name: /^like$/i })[0]).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('toggling watchlist calls addToWatchlist optimistically and updates pressed state', async () => {
@@ -114,10 +114,10 @@ describe('MovieDetail', () => {
     addToWatchlist.mockResolvedValue(undefined)
     render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /watchlist/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /watchlist/i }))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /watchlist/i })[0])
 
-    expect(screen.getByRole('button', { name: /watchlist/i })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toHaveAttribute('aria-pressed', 'true')
     await waitFor(() => expect(addToWatchlist).toHaveBeenCalledWith('movie-1'))
   })
 
@@ -126,10 +126,10 @@ describe('MovieDetail', () => {
     addToWatchlist.mockRejectedValue(new Error('network error'))
     render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /watchlist/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /watchlist/i }))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /watchlist/i })[0])
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /watchlist/i })).toHaveAttribute('aria-pressed', 'false'))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toHaveAttribute('aria-pressed', 'false'))
     expect(screen.getByRole('alert')).toHaveTextContent('network error')
   })
 
@@ -139,9 +139,9 @@ describe('MovieDetail', () => {
     likeMovie.mockResolvedValue(undefined)
     render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /^watched$/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /^watched$/i }))
-    fireEvent.click(screen.getByRole('button', { name: /^like$/i }))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^watched$/i })[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /^watched$/i })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /^like$/i })[0])
 
     await waitFor(() => expect(markWatched).toHaveBeenCalledWith('movie-1'))
     await waitFor(() => expect(likeMovie).toHaveBeenCalledWith('movie-1'))
@@ -304,7 +304,7 @@ describe('MovieDetail — signed-out visitor (public Discover)', () => {
 
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /^watchlist$/i })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /sign in to save, rate & review/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /sign in to save, rate & review/i })[0])
     expect(onRequireAuth).toHaveBeenCalledTimes(1)
   })
 
