@@ -87,13 +87,13 @@ export function Profile({ uid, onBack }: Props) {
     <main className="min-h-svh bg-bg text-text">
       {/* banner */}
       <div
-        className="relative h-24 w-full overflow-hidden"
+        className="relative h-24 w-full overflow-hidden lg:h-45"
         style={{
           background:
             'radial-gradient(120% 90% at 85% 5%, rgba(150,170,200,0.14), transparent 55%), radial-gradient(100% 80% at 15% 95%, rgba(var(--accent-rgb),0.2), transparent 55%), linear-gradient(180deg, #1B1720 0%, #100E12 100%)'
         }}
       >
-        <div className="absolute top-4 left-4">
+        <div className="absolute top-4 left-4 lg:top-6 lg:left-8">
           <button
             type="button"
             onClick={onBack}
@@ -107,91 +107,98 @@ export function Profile({ uid, onBack }: Props) {
         </div>
       </div>
 
-      {/* identity, centered */}
-      <div className="-mt-13 flex flex-col items-center px-6 text-center">
-        <div className="flex h-[104px] w-[104px] items-center justify-center overflow-hidden rounded-full border-4 border-bg bg-[rgba(var(--accent-rgb),0.16)]">
-          {profile.photoURL ? (
-            <img src={profile.photoURL} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="font-serif text-[32px] font-semibold text-accent">{profile.displayName.charAt(0).toUpperCase()}</span>
+      <div className="mx-auto lg:max-w-4xl lg:px-8">
+        {/* identity — centered stack on mobile, a left-aligned row on desktop */}
+        <div className="-mt-13 flex flex-col items-center px-6 text-center lg:mt-0 lg:flex-row lg:items-end lg:justify-between lg:px-0 lg:pt-5 lg:text-left">
+          <div className="flex flex-col items-center text-center lg:flex-row lg:items-end lg:gap-5 lg:text-left">
+            <div className="flex h-[104px] w-[104px] flex-none items-center justify-center overflow-hidden rounded-full border-4 border-bg bg-[rgba(var(--accent-rgb),0.16)] lg:h-30 lg:w-30">
+              {profile.photoURL ? (
+                <img src={profile.photoURL} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="font-serif text-[32px] font-semibold text-accent lg:text-[38px]">{profile.displayName.charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="lg:pb-1.5">
+              <h1 className="mt-3.5 font-serif text-[23px] font-semibold text-white lg:mt-0 lg:text-[27px]">{profile.displayName}</h1>
+              {profile.username && <p className="mt-0.5 text-[12.5px] text-text-muted lg:text-[13px]">@{profile.username}</p>}
+            </div>
+          </div>
+
+          {profile.relationship !== 'self' && (
+            <button
+              type="button"
+              onClick={toggleConnect}
+              className={
+                connectButton === 'Connect'
+                  ? 'mt-4.5 min-w-[172px] rounded-xl bg-accent px-6 py-3 text-[13.5px] font-bold text-bg lg:mt-0'
+                  : 'mt-4.5 min-w-[172px] rounded-xl border border-border bg-surface-alt px-6 py-3 text-[13.5px] font-bold text-text lg:mt-0'
+              }
+            >
+              {connectButton}
+            </button>
           )}
         </div>
 
-        <h1 className="mt-3.5 font-serif text-[23px] font-semibold text-white">{profile.displayName}</h1>
-        {profile.username && <p className="mt-0.5 text-[12.5px] text-text-muted">@{profile.username}</p>}
-
-        {profile.relationship !== 'self' && (
-          <button
-            type="button"
-            onClick={toggleConnect}
-            className={
-              connectButton === 'Connect'
-                ? 'mt-4.5 min-w-[172px] rounded-xl bg-accent px-6 py-3 text-[13.5px] font-bold text-bg'
-                : 'mt-4.5 min-w-[172px] rounded-xl border border-border bg-surface-alt px-6 py-3 text-[13.5px] font-bold text-text'
-            }
-          >
-            {connectButton}
-          </button>
-        )}
-
-        <div className="mt-5 flex w-full border-t border-b border-border-soft py-3.5">
-          <div className="flex-1 border-r border-border-soft">
-            <div className="text-[15px] font-bold text-text">{profile.followerCount}</div>
-            <div className="mt-0.5 text-[9.5px] text-text-muted">Followers</div>
+        <div className="mt-5 flex w-full border-t border-b border-border-soft px-6 py-3.5 lg:mt-6 lg:w-auto lg:gap-11 lg:border-none lg:px-0 lg:py-0">
+          <div className="flex-1 border-r border-border-soft lg:flex-none lg:border-none">
+            <div className="text-[15px] font-bold text-text lg:text-[19px]">{profile.followerCount}</div>
+            <div className="mt-0.5 text-[9.5px] text-text-muted lg:text-[11px]">Followers</div>
           </div>
-          <div className="flex-1">
-            <div className="text-[15px] font-bold text-text">{profile.followingCount}</div>
-            <div className="mt-0.5 text-[9.5px] text-text-muted">Following</div>
+          <div className="flex-1 lg:flex-none">
+            <div className="text-[15px] font-bold text-text lg:text-[19px]">{profile.followingCount}</div>
+            <div className="mt-0.5 text-[9.5px] text-text-muted lg:text-[11px]">Following</div>
           </div>
         </div>
-      </div>
 
-      {error && (
-        <p role="alert" className="mt-4 px-6 text-center text-[13px] text-red-400">
-          {error}
-        </p>
-      )}
-
-      {(profile.favoriteGenres?.length || profile.preferredLanguages?.length) && (
-        <section className="px-6 pt-6 text-left">
-          {profile.favoriteGenres?.length ? (
-            <p className="mb-2 text-[12.5px] text-text-secondary">
-              <span className="font-semibold text-text">Favorite genres: </span>
-              {profile.favoriteGenres.join(', ')}
-            </p>
-          ) : null}
-          {profile.preferredLanguages?.length ? (
-            <p className="text-[12.5px] text-text-secondary">
-              <span className="font-semibold text-text">Preferred languages: </span>
-              {profile.preferredLanguages.join(', ')}
-            </p>
-          ) : null}
-        </section>
-      )}
-
-      <section className="px-6 py-7">
-        <h2 className="mb-3 text-[15px] font-bold text-text">Recently watched</h2>
-        {!profile.watchedListVisible && <p className="text-sm text-text-muted">This user's watched list is private.</p>}
-        {profile.watchedListVisible && profile.watched.length === 0 && <p className="text-sm text-text-muted">No public watched movies yet.</p>}
-        {profile.watchedListVisible && profile.watched.length > 0 && (
-          <ul className="flex flex-col gap-3">
-            {profile.watched.map((entry) => {
-              const poster = posterUrl(entry.poster, 'w185')
-              return (
-                <li key={entry.movieId} className="flex items-center gap-3">
-                  <div className="h-12 w-9 flex-none overflow-hidden rounded-md bg-surface-alt">
-                    {poster && <img src={poster} alt="" className="h-full w-full object-cover" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-text">{entry.title ?? 'Untitled'}</span>
-                    <span className="text-[11px] text-text-muted">{formatWatchedAt(entry.watchedAt)}</span>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+        {error && (
+          <p role="alert" className="mt-4 px-6 text-center text-[13px] text-red-400 lg:px-0 lg:text-left">
+            {error}
+          </p>
         )}
-      </section>
+
+        <div className="lg:flex lg:gap-10 lg:border-t lg:border-border-soft lg:pt-6">
+          {(profile.favoriteGenres?.length || profile.preferredLanguages?.length) && (
+            <section className="px-6 pt-6 text-left lg:w-64 lg:flex-none lg:px-0 lg:pt-0">
+              {profile.favoriteGenres?.length ? (
+                <p className="mb-2 text-[12.5px] text-text-secondary">
+                  <span className="font-semibold text-text">Favorite genres: </span>
+                  {profile.favoriteGenres.join(', ')}
+                </p>
+              ) : null}
+              {profile.preferredLanguages?.length ? (
+                <p className="text-[12.5px] text-text-secondary">
+                  <span className="font-semibold text-text">Preferred languages: </span>
+                  {profile.preferredLanguages.join(', ')}
+                </p>
+              ) : null}
+            </section>
+          )}
+
+          <section className="px-6 py-7 lg:flex-1 lg:px-0 lg:py-0">
+            <h2 className="mb-3 text-[15px] font-bold text-text">Recently watched</h2>
+            {!profile.watchedListVisible && <p className="text-sm text-text-muted">This user's watched list is private.</p>}
+            {profile.watchedListVisible && profile.watched.length === 0 && <p className="text-sm text-text-muted">No public watched movies yet.</p>}
+            {profile.watchedListVisible && profile.watched.length > 0 && (
+              <ul className="flex flex-col gap-3 lg:grid lg:grid-cols-6 lg:gap-4">
+                {profile.watched.map((entry) => {
+                  const poster = posterUrl(entry.poster, 'w185')
+                  return (
+                    <li key={entry.movieId} className="flex items-center gap-3 lg:block">
+                      <div className="h-12 w-9 flex-none overflow-hidden rounded-md bg-surface-alt lg:h-auto lg:w-full lg:aspect-[2/3] lg:rounded-xl">
+                        {poster && <img src={poster} alt="" className="h-full w-full object-cover" />}
+                      </div>
+                      <div className="min-w-0 flex-1 lg:mt-2">
+                        <span className="block truncate text-[13px] font-medium text-text lg:text-[12px]">{entry.title ?? 'Untitled'}</span>
+                        <span className="text-[11px] text-text-muted">{formatWatchedAt(entry.watchedAt)}</span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
+      </div>
     </main>
   )
 }
