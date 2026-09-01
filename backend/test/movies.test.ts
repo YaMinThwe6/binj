@@ -257,6 +257,13 @@ describe("GET /movies/recent", () => {
   });
 });
 
+// hld.md §18 (redesigned 2026-08-31 — see project notes): local index + live
+// TMDB are now queried together on every search, merged and ranked as one
+// pool through searchRanking.ts — never a cascade where TMDB only gets asked
+// if the local index came up empty. The old "broader real-time Levenshitein
+// scan over up to 2000 local docs" fallback tier is dropped (its job — catch
+// what the indexed lookup's precomputed typo variants miss — is TMDB's job
+// now, since TMDB always runs).
 describe("GET /search/movies", () => {
   it("400s with no query", async () => {
     const app = createApp();
@@ -264,66 +271,66 @@ describe("GET /search/movies", () => {
     expect(res.status).toBe(400);
   });
 
-  it("matches via exact prefix, from Firestore, without calling TMDB", async () => {
+  it("queries the local index and TMDB together, merging both into one result set", async () => {
     store.set("movies/157336", { title: "Interstellar", poster: null, year: 2014, titleSearchTerms: buildSearchTerms("Interstellar") });
+    searchMovies.mockResolvedValueOnce([{ movieId: "27205", title: "Inception", poster: null, year: 2010, voteCount: 500 }]);
+
     const app = createApp();
-    const res = await request(app).get("/search/movies?q=inter");
+    const res = await request(app).get("/search/movies?q=interstellar%20inception");
 
     expect(res.status).toBe(200);
-    expect(res.body.data.items).toEqual([{ movieId: "157336", title: "Interstellar", poster: null, year: 2014 }]);
-    expect(searchMovies).not.toHaveBeenCalled();
+    expect(searchMovies).toHaveBeenCalledWith("interstellar inception");
+    const titles = res.body.data.items.map((m: { title: string }) => m.title);
+    expect(titles).toEqual(expect.arrayContaining(["Interstellar", "Inception"]));
   });
 
-  it("matches via a precomputed single-typo variant, from Firestore, without calling TMDB", async () => {
+  it("matches via a precomputed single-typo variant from the local index — TMDB alone has no typo tolerance", async () => {
     store.set("movies/157336", { title: "Interstellar", poster: null, year: 2014, titleSearchTerms: buildSearchTerms("Interstellar") });
+    searchMovies.mockResolvedValueOnce([]); // TMDB itself finds nothing for the misspelling — confirmed behavior, not a stub of convenience
+
     const app = createApp();
     const res = await request(app).get("/search/movies?q=intersteller"); // the exact motivating example
 
     expect(res.status).toBe(200);
     expect(res.body.data.items).toEqual([{ movieId: "157336", title: "Interstellar", poster: null, year: 2014 }]);
-    expect(searchMovies).not.toHaveBeenCalled();
   });
 
-  it("ranks an exact-prefix match above a typo-variant-only match", async () => {
-    // "cot" is a real prefix of nothing here, but is a substitution-typo variant of "cat" —
-    // and separately a real prefix of "Cotton Club". Exact should outrank typo.
-    store.set("movies/1", { title: "Cotton Club", poster: null, year: 1984, titleSearchTerms: buildSearchTerms("Cotton Club") });
-    store.set("movies/2", { title: "Cat People", poster: null, year: 1982, titleSearchTerms: buildSearchTerms("Cat People") });
+  it("prefers TMDB's fresher data over a stale local doc when the same movie comes back from both sides", async () => {
+    store.set("movies/157336", { title: "Interstellar", poster: "/old-stale-poster.jpg", year: 2014, titleSearchTerms: buildSearchTerms("Interstellar") });
+    searchMovies.mockResolvedValueOnce([{ movieId: "157336", title: "Interstellar", poster: "/fresh-poster.jpg", year: 2014, voteCount: 1000 }]);
+
     const app = createApp();
-    const res = await request(app).get("/search/movies?q=cot");
+    const res = await request(app).get("/search/movies?q=interstellar");
 
     expect(res.status).toBe(200);
-    expect(res.body.data.items[0].title).toBe("Cotton Club"); // exact prefix match, ranked first
+    expect(res.body.data.items).toHaveLength(1); // deduped by movieId, not doubled
+    expect(res.body.data.items[0].poster).toBe("/fresh-poster.jpg");
   });
 
-  it("falls back to real-time Levenshtein over the local catalog when the indexed lookup finds nothing", async () => {
-    // Two substitutions away from "interstellar" (i->e at the start, a->o near
-    // the end) -- edit distance 2, outside what the precomputed single-typo
-    // variants (edit distance 1 only) cover.
+  it("upserts TMDB's results into the local index for next time, even when the local index already had a match", async () => {
     store.set("movies/157336", { title: "Interstellar", poster: null, year: 2014, titleSearchTerms: buildSearchTerms("Interstellar") });
+    searchMovies.mockResolvedValueOnce([{ movieId: "27205", title: "Inception", poster: null, year: 2010, voteCount: 500 }]);
+
     const app = createApp();
-    const res = await request(app).get("/search/movies?q=enterstellor");
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.items).toEqual([{ movieId: "157336", title: "Interstellar", poster: null, year: 2014 }]);
-    expect(searchMovies).not.toHaveBeenCalled();
-  });
-
-  it("falls back to live TMDB when nothing matches locally at all, and upserts the result for next time", async () => {
-    searchMovies.mockResolvedValueOnce([{ movieId: "27205", title: "Inception", poster: null, year: 2010 }]);
-    const app = createApp();
-    const res = await request(app).get("/search/movies?q=zzzznotarealtitle");
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.items).toEqual([{ movieId: "27205", title: "Inception", poster: null, year: 2010 }]);
-    expect(searchMovies).toHaveBeenCalledWith("zzzznotarealtitle");
+    await request(app).get("/search/movies?q=interstellar");
 
     const upserted = store.get("movies/27205") as { title: string; titleSearchTerms: string[] };
     expect(upserted.title).toBe("Inception");
     expect(upserted.titleSearchTerms).toEqual(expect.arrayContaining(["i", "in", "inception"]));
   });
 
-  it("502s when TMDB fails on the live fallback", async () => {
+  it("degrades to local-only results, without erroring, when TMDB fails but the local index still has a match", async () => {
+    store.set("movies/157336", { title: "Interstellar", poster: null, year: 2014, titleSearchTerms: buildSearchTerms("Interstellar") });
+    searchMovies.mockRejectedValueOnce(new Error("boom"));
+
+    const app = createApp();
+    const res = await request(app).get("/search/movies?q=interstellar");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([{ movieId: "157336", title: "Interstellar", poster: null, year: 2014 }]);
+  });
+
+  it("502s when TMDB fails and the local index has nothing either", async () => {
     searchMovies.mockRejectedValueOnce(new Error("boom"));
     const app = createApp();
     const res = await request(app).get("/search/movies?q=zzzznotarealtitle");
@@ -337,6 +344,7 @@ describe("GET /search/movies", () => {
     // Batman has no textual relation to "dark knight" beyond nothing at all here — given
     // a huge popularity edge, to prove it still can't out-rank an actual textual match.
     store.set("movies/268", { title: "Batman", poster: null, year: 1989, voteCount: 1_000_000, titleSearchTerms: buildSearchTerms("Batman") });
+    searchMovies.mockResolvedValueOnce([]);
 
     const app = createApp();
     const res = await request(app).get("/search/movies?q=dark%20knight");
@@ -346,5 +354,14 @@ describe("GET /search/movies", () => {
     expect(titles[0]).toBe("The Dark Knight");
     expect(titles[1]).toBe("The Dark Knight Rises");
     expect(titles).not.toContain("Batman"); // no textual match at all -> excluded, popularity doesn't buy it a spot
+  });
+
+  it("excludes a TMDB result with no textual relevance to the query, even though it came back from a live source", async () => {
+    searchMovies.mockResolvedValueOnce([{ movieId: "19995", title: "Avatar", poster: null, year: 2009, voteCount: 30_000 }]);
+    const app = createApp();
+    const res = await request(app).get("/search/movies?q=interstellar");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]); // no textual match -> dropped, not just deprioritized
   });
 });

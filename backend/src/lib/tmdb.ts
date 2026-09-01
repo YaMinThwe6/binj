@@ -156,12 +156,21 @@ export async function getPopularMovies(pages: number): Promise<MovieSummary[]> {
   return results;
 }
 
-export async function searchMovies(query: string): Promise<MovieSummary[]> {
+// hld.md §18 — the local index + live TMDB are merged and ranked together
+// on every search (movies.service.ts's searchMoviesService), so TMDB's
+// results need a popularity signal for that shared ranking to break ties
+// with, not just the bare MovieSummary shape the frontend renders.
+export interface TmdbSearchResult extends MovieSummary {
+  voteCount: number;
+}
+
+export async function searchMovies(query: string): Promise<TmdbSearchResult[]> {
   const data = await tmdbFetch(`/search/movie?query=${encodeURIComponent(query)}`);
   return (data.results ?? []).map((r: any) => ({
     movieId: String(r.id),
     title: r.title,
     poster: r.poster_path || null,
-    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null
+    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null,
+    voteCount: r.vote_count ?? 0
   }));
 }

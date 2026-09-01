@@ -3,7 +3,11 @@ import { searchMovies, getRecentMovies, type MovieSummary } from '../services/mo
 import { posterUrl } from '../../../lib/images'
 import { MovieDetail } from './MovieDetail'
 
-const DEBOUNCE_MS = 350
+// Every search now hits live TMDB (movies.service.ts's local-index+TMDB
+// merge, hld.md §18) rather than only ever reading a local Firestore index —
+// a real external API call, not a cheap local read, so this fires on a full
+// pause rather than a quick typing lull.
+const DEBOUNCE_MS = 1000
 const MIN_QUERY_LENGTH = 2 // below this, a query is mostly noise against a broad catalog
 
 interface Props {

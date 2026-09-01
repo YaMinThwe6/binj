@@ -669,6 +669,17 @@ User selects a result → triggers §2's detail-ingestion flow for that specific
 
 See `backend/test/searchRanking.test.ts` for the worked examples this was built against (e.g. "dark knight" ranking *The Dark Knight* above a far more popular but textually unrelated *Batman*).
 
+**Implementation note (redesigned 2026-08-31 — the three-tier cascade above is retired, tiers 1+3 merged instead of chained):** using search in practice surfaced two real gaps in the cascade design:
+
+- **Completeness, not just quality.** "Local index found *something*" was the only signal deciding whether tier 3 (live TMDB) ever ran — not "local index found the *right* thing," and not "local index found *everything* relevant." A same-titled remake/reboot (e.g. *Dune* 1984 vs. 2021) that only had one version locally indexed could mask the other one forever: once a confident local match existed, the cascade never asked TMDB again for that query, so a sibling title TMDB knows about but the local catalog doesn't would never surface.
+- **Tier 3 never actually got ranked.** The old tier 3 returned TMDB's raw results in TMDB's own order — it never ran through `rankCandidate` at all, only tiers 1/2 (the Firestore-backed tiers) did. The good ordering this produced in practice (e.g. *Dune* 2021 before 1984) was TMDB's own relevance, not this system's ranking — and once those results got upserted into the local index as lightweight docs (no `voteCount` yet, only present after a full detail-fetch), a *second* search for the same query would rank same-titled duplicates as an exact tie, falling back to Firestore's arbitrary document order — not popularity at all.
+
+**Fix — merge, don't cascade.** The local index and live TMDB are now queried together on *every* search (`Promise.all`, not sequential), combined into one candidate pool, deduplicated by `movieId` (TMDB's fresher data wins when both sides return the same movie), and scored as one set through the same `rankCandidate` pass — so ranking is real for TMDB-sourced candidates too, not just locally-cached ones. TMDB's own search results now carry `voteCount` (`backend/src/lib/tmdb.ts`'s `TmdbSearchResult`) specifically so this shared ranking has a real popularity signal to tie-break with. A TMDB failure degrades to local-only results rather than failing the search outright, as long as the local index has something to offer.
+
+**Tier 2 (the real-time Levenshtein scan over up to 2000 local docs, run only when tier 1 found nothing) is dropped, not replaced.** It existed to squeeze extra value from the local catalog before giving up and asking TMDB — now that TMDB is asked unconditionally, that job is redundant, and its cost would otherwise run on every search rather than only a rare all-local-misses case. `backend/src/lib/levenshtein.ts` and its own unit tests are untouched (still used by `searchRanking.ts`'s fuzzy-match tiers), just no longer exercised via a dedicated broad-scan tier.
+
+See `backend/test/movies.test.ts`'s `GET /search/movies` describe block for the current behavior (merged results, dedup-prefers-TMDB, graceful TMDB-failure degradation, ranking dominance still enforced across the merged pool).
+
 ## 19. Flow: Block / Mute
 
 Two related but different things:

@@ -111,39 +111,19 @@ export async function getRecentMoviesService(): Promise<{ items: MovieSummary[] 
 }
 
 const MAX_QUERY_WORDS = 30; // Firestore's array-contains-any cap
-const FALLBACK_CANDIDATE_LIMIT = 2000; // bounds the broader-scan tier at prototype scale
 const RESULTS_TOP_N = 20;
 
-function toMovieSummary(id: string, data: FirebaseFirestore.DocumentData): MovieSummary {
-  return { movieId: id, title: data.title as string, poster: (data.poster as string | null) ?? null, year: (data.year as number | null) ?? null };
-}
-
-// Scores every candidate doc through searchRanking.ts's rankCandidate,
-// drops non-matches (matchType "none" — a doc that only matched the
-// Firestore array-contains-any lookup by coincidence, or a broader-scan
-// candidate too far from the query to count), and sorts by score descending.
-// The one ranking pass both tiers below share — only *how candidates get
-// found* differs between them, not how good a match is judged to be.
-function rankAndSort(query: string, docs: { id: string; data: FirebaseFirestore.DocumentData }[]): MovieSummary[] {
-  return docs
-    .map(({ id, data }) => ({
-      id,
-      data,
-      // voteCount (present once a movie's been fully detail-ingested) stands
-      // in for a popularity signal — a tie-break only, per searchRanking.ts's
-      // own weighting, so a coarser proxy here doesn't skew results.
-      ...rankCandidate(query, { title: data.title as string, popularitySignal: (data.voteCount as number | undefined) ?? 0 })
-    }))
-    .filter((r) => r.matchType !== "none")
-    .sort((a, b) => b.score - a.score)
-    .slice(0, RESULTS_TOP_N)
-    .map(({ id, data }) => toMovieSummary(id, data));
+interface SearchCandidate {
+  title: string;
+  poster: string | null;
+  year: number | null;
+  popularitySignal: number;
 }
 
 // Writes TMDB's live-search results into Firestore (lightweight — title/
-// poster/year/titleSearchTerms, not a full detail-ingestion) so the same
-// query resolves locally next time, without waiting for someone to open
-// each result's detail page first.
+// poster/year/titleSearchTerms, not a full detail-ingestion) so the local
+// index keeps growing over time, independent of whether it already had a
+// match for this particular search.
 async function upsertSearchable(items: MovieSummary[]): Promise<void> {
   if (!db || items.length === 0) return;
   const batch = db.batch();
@@ -154,51 +134,88 @@ async function upsertSearchable(items: MovieSummary[]): Promise<void> {
   await batch.commit();
 }
 
-// GET /search/movies — hld.md §18's local-first search index. Cheapest tier
-// first, each one only runs if the previous tier found nothing, and both
-// Firestore tiers rank candidates through the same searchRanking.ts pass
-// (rankAndSort above):
-//   1. Firestore titleSearchTerms array-contains-any <query words> — one
-//      indexed lookup, catches exact/prefix/token matches and precomputed
-//      single-typo variants (searchIndex.ts unions both into that field).
-//   2. A broader scan of the local catalog (bounded — FALLBACK_CANDIDATE_LIMIT),
-//      scored the same way — catches deeper-fuzzy matches the indexed lookup's
-//      precomputed terms didn't cover. Only runs when tier 1 found nothing,
-//      not on every search.
-//   3. Live TMDB — only when even the local catalog has nothing close;
-//      results get upserted into Firestore so this same query resolves
-//      locally (tier 1) next time.
+// GET /search/movies — hld.md §18 (redesigned 2026-08-31). The local index
+// and live TMDB are queried together on *every* search — never a cascade
+// where TMDB only gets asked if the local index came up empty — then merged
+// into one pool, deduplicated by movieId, and scored through the same
+// searchRanking.ts pass so a same-titled duplicate that only TMDB knows
+// about can't get buried behind a weaker local match, and vice versa:
+//   - Local index: Firestore titleSearchTerms array-contains-any <query
+//     words>, catching exact/prefix/token matches and precomputed
+//     single-typo variants (searchIndex.ts unions both into that field).
+//     TMDB itself has no typo tolerance at all — confirmed directly — so
+//     this is the only source of that.
+//   - Live TMDB: catches everything the local index doesn't have yet at
+//     all, including every version of a same-titled movie (all returned in
+//     one call, no completeness tracking needed) — and refreshes stale
+//     local data when both sides return the same movie.
+// A live TMDB failure degrades to local-only results rather than failing
+// the whole search, as long as the local index has something to offer.
+//
+// The previous design's second tier — a real-time Levenshtein scan over up
+// to 2000 local docs, run only when the indexed lookup found nothing — is
+// dropped. It existed to squeeze extra value from the local catalog before
+// giving up and asking TMDB; now that TMDB is asked unconditionally, its
+// job is redundant and its cost (scanning/scoring up to 2000 docs) would
+// otherwise run on every search instead of only a rare empty-tier-1 case.
 export async function searchMoviesService(query: string): Promise<{ items: MovieSummary[]; nextCursor: null }> {
   if (!query) {
     throw new AppError("MISSING_QUERY", "q query param is required", 400);
   }
 
   try {
-    if (db) {
-      const queryWords = significantWords(query).slice(0, MAX_QUERY_WORDS);
-      if (queryWords.length > 0) {
-        const snap = await db.collection("movies").where("titleSearchTerms", "array-contains-any", queryWords).get();
-        if (!snap.empty) {
-          const items = rankAndSort(
-            query,
-            snap.docs.map((d) => ({ id: d.id, data: d.data() }))
-          );
-          if (items.length > 0) return { items, nextCursor: null };
-        }
+    const queryWords = significantWords(query).slice(0, MAX_QUERY_WORDS);
 
-        const broadSnap = await db.collection("movies").limit(FALLBACK_CANDIDATE_LIMIT).get();
-        const fuzzyItems = rankAndSort(
-          query,
-          broadSnap.docs.map((d) => ({ id: d.id, data: d.data() }))
-        );
-        if (fuzzyItems.length > 0) {
-          return { items: fuzzyItems, nextCursor: null };
-        }
-      }
+    const localPromise: Promise<{ id: string; data: FirebaseFirestore.DocumentData }[]> =
+      db && queryWords.length > 0
+        ? db
+            .collection("movies")
+            .where("titleSearchTerms", "array-contains-any", queryWords)
+            .get()
+            .then((snap) => snap.docs.map((d) => ({ id: d.id, data: d.data() })))
+        : Promise.resolve([]);
+
+    // A TMDB failure shouldn't fail the whole search when the local index
+    // still has something to offer — null (not a throw) signals "TMDB is
+    // unavailable this time", handled below, distinct from "TMDB ran fine
+    // and legitimately found nothing" ([]).
+    const tmdbPromise = tmdbSearchMovies(query).catch(() => null);
+
+    const [localDocs, tmdbResults] = await Promise.all([localPromise, tmdbPromise]);
+
+    if (tmdbResults) {
+      await upsertSearchable(tmdbResults);
     }
 
-    const items = await tmdbSearchMovies(query);
-    await upsertSearchable(items);
+    const byId = new Map<string, SearchCandidate>();
+    for (const { id, data } of localDocs) {
+      byId.set(id, {
+        title: data.title as string,
+        poster: (data.poster as string | null) ?? null,
+        year: (data.year as number | null) ?? null,
+        popularitySignal: (data.voteCount as number | undefined) ?? 0
+      });
+    }
+    // TMDB's live data overwrites a possibly-stale local doc for the same
+    // movie rather than appearing as a separate duplicate entry.
+    for (const r of tmdbResults ?? []) {
+      byId.set(r.movieId, { title: r.title, poster: r.poster, year: r.year, popularitySignal: r.voteCount });
+    }
+
+    const items = [...byId.entries()]
+      .map(([id, candidate]) => ({ id, candidate, ...rankCandidate(query, { title: candidate.title, popularitySignal: candidate.popularitySignal }) }))
+      .filter((r) => r.matchType !== "none")
+      .sort((a, b) => b.score - a.score)
+      .slice(0, RESULTS_TOP_N)
+      .map(({ id, candidate }) => ({ movieId: id, title: candidate.title, poster: candidate.poster, year: candidate.year }));
+
+    if (items.length === 0 && tmdbResults === null) {
+      // Both sides came up empty: local had nothing, and TMDB didn't
+      // legitimately return zero results, it *failed* — surface that
+      // rather than silently claiming "no movies found".
+      throw new AppError("TMDB_UPSTREAM_ERROR", "Failed to search movies", 502);
+    }
+
     return { items, nextCursor: null };
   } catch (err) {
     if (err instanceof AppError) throw err;
