@@ -345,15 +345,18 @@ export function MovieDetail() {
               <section className="lg:flex-1">
                 <h2 className="mb-3 text-[15px] font-bold text-text">Cast</h2>
                 <ul className="flex gap-4 overflow-x-auto pb-0.5 lg:flex-wrap">
-                  {movie.cast.map((c) => (
-                    <li key={c.personId} className="w-16 flex-none text-center">
-                      <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full border border-[rgba(124,140,166,0.32)] bg-[rgba(124,140,166,0.14)] font-serif text-base text-[#9BABC4]">
-                        {c.name.charAt(0)}
-                      </div>
-                      <div className="text-[11px] font-semibold text-text">{c.name}</div>
-                      <div className="text-[10px] text-text-muted">{c.character}</div>
-                    </li>
-                  ))}
+                  {movie.cast.map((c) => {
+                    const photo = posterUrl(c.photo, 'w185')
+                    return (
+                      <li key={c.personId} className="w-16 flex-none text-center">
+                        <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[rgba(124,140,166,0.32)] bg-[rgba(124,140,166,0.14)] font-serif text-base text-[#9BABC4]">
+                          {photo ? <img src={photo} alt="" className="h-full w-full object-cover" /> : c.name.charAt(0)}
+                        </div>
+                        <div className="text-[11px] font-semibold text-text">{c.name}</div>
+                        <div className="text-[10px] text-text-muted">{c.character}</div>
+                      </li>
+                    )
+                  })}
                 </ul>
               </section>
             )}

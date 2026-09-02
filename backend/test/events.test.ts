@@ -380,7 +380,13 @@ describe("GET /events/nearby", () => {
   const bangaloreNearby = { lat: 12.9761, lng: 77.5946 }; // ~0.5km away
   const mysore = { lat: 12.2958, lng: 76.6394 }; // ~145km away
 
-  function inPersonBody(overrides: Partial<typeof validBody> & { location: { address: string; lat: number; lng: number } }) {
+  function inPersonBody(
+    overrides: Partial<typeof validBody> & {
+      location: { address: string; lat: number; lng: number };
+      title?: string;
+      invitedUserIds?: string[];
+    }
+  ) {
     return { ...validBody, mode: "in-person" as const, ...overrides };
   }
 
