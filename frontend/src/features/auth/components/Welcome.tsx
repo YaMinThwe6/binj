@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../lib/AuthContext'
 import { startEmailAuth, verifyEmailAuth } from '../services/authApi'
 
@@ -42,13 +43,6 @@ function MailIcon() {
   )
 }
 
-interface Props {
-  // Present only when reached from the public Discover flow (root "/" for a
-  // signed-out visitor) — shows a back arrow on the splash stage so a guest
-  // who was just browsing can return there instead of being stuck on Welcome.
-  onBack?: () => void
-}
-
 // hld.md §13 — the combined login/signup entry point (was two separate
 // ideas crammed under "Login"; renamed since one screen genuinely serves
 // both). Three stages: the Get-Started splash (design canvas's
@@ -56,7 +50,11 @@ interface Props {
 // and OTP verification (SignupEmailOTP.dc.html's verify state) — all one
 // component since they share the same auth handlers and only the first
 // stage's copy depends on which button the visitor arrived through.
-export function Welcome({ onBack }: Props) {
+// Reached at "/get-started" — the back arrow on the splash stage always
+// returns to Discover ("/"), regardless of how this URL was reached
+// (clicked from Discover, typed directly, or a bookmark).
+export function Welcome() {
+  const navigate = useNavigate()
   const { signInWithGoogle, signInWithMicrosoft, signInWithToken } = useAuth()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -160,18 +158,16 @@ export function Welcome({ onBack }: Props) {
           />
         </div>
 
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to Discover"
-            className="relative z-10 mt-5 ml-6 flex h-[38px] w-[38px] items-center justify-center rounded-full border border-border-soft bg-surface-alt md:hidden"
-          >
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          aria-label="Back to Discover"
+          className="relative z-10 mt-5 ml-6 flex h-[38px] w-[38px] items-center justify-center rounded-full border border-border-soft bg-surface-alt md:hidden"
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
 
         {/* Desktop-only: fixed top-left wordmark + a Discover-return control
             in the same spot the mobile back arrow occupies, since desktop's
@@ -179,18 +175,16 @@ export function Welcome({ onBack }: Props) {
         <div className="absolute top-10 left-14 z-10 hidden items-center gap-4 md:flex">
           <span className="font-serif text-2xl font-bold text-accent">BINJ</span>
         </div>
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to Discover"
-            className="absolute top-9 right-14 z-10 hidden h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface-alt/80 md:flex"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          aria-label="Back to Discover"
+          className="absolute top-9 right-14 z-10 hidden h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface-alt/80 md:flex"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
 
         <div className="relative z-10 mt-auto flex flex-col items-center px-8 pb-14 text-center md:px-10 md:pb-14">
           <span className="font-serif text-5xl font-bold text-accent animate-logo-pulse md:hidden">BINJ</span>

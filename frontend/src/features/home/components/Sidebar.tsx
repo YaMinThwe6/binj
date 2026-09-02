@@ -1,6 +1,4 @@
-interface Props {
-  onNavigateSearch: () => void
-}
+import { useNavigate } from 'react-router-dom'
 
 interface NavItem {
   label: string
@@ -44,7 +42,8 @@ function NavRow({ label, active, disabled, icon, onClick }: NavItem) {
 // wired to real navigation; the rest mirror the same "Coming soon" disabled
 // treatment the mobile bottom nav already uses for features that don't
 // exist yet, not new functionality.
-export function Sidebar({ onNavigateSearch }: Props) {
+export function Sidebar() {
+  const navigate = useNavigate()
   return (
     <aside className="hidden w-58 flex-none flex-col gap-7 border-r border-border-soft px-4.5 py-6 lg:flex">
       <div>
@@ -69,7 +68,7 @@ export function Sidebar({ onNavigateSearch }: Props) {
         />
         <NavRow
           label="Search"
-          onClick={onNavigateSearch}
+          onClick={() => navigate('/search')}
           icon={
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />

@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { getUserProfile, type PublicProfile } from '../services/profileApi'
 import { followUser, unfollowUser } from '../../home/services/homeApi'
 import { posterUrl } from '../../../lib/images'
-
-interface Props {
-  uid: string
-  onBack: () => void
-}
 
 function connectLabel(relationship: PublicProfile['relationship']): string {
   if (relationship === 'following') return 'Following'
@@ -24,7 +20,13 @@ function formatWatchedAt(iso: string | null): string {
 // profile the backend computes (api-contracts.md §11b). Follow/unfollow
 // reuses homeApi's calls rather than re-implementing them — same backend
 // endpoints as PeopleYouMightVibeWith's Connect button.
-export function Profile({ uid, onBack }: Props) {
+export function Profile() {
+  // Only ever mounted via the "/profile/:uid" route (App.tsx), so this
+  // segment is always present in practice — the assertion just tells
+  // TypeScript what the route already guarantees.
+  const { uid: uidParam } = useParams<{ uid: string }>()
+  const uid = uidParam!
+  const navigate = useNavigate()
   const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [error, setError] = useState('')
 
@@ -63,7 +65,7 @@ export function Profile({ uid, onBack }: Props) {
   if (error && !profile) {
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-4 bg-bg px-6 text-text">
-        <button type="button" onClick={onBack} className="self-start text-sm font-semibold text-text-secondary">
+        <button type="button" onClick={() => navigate(-1)} className="self-start text-sm font-semibold text-text-secondary">
           ← Back
         </button>
         <p role="alert" className="text-sm text-red-400">
@@ -96,7 +98,7 @@ export function Profile({ uid, onBack }: Props) {
         <div className="absolute top-4 left-4 lg:top-6 lg:left-8">
           <button
             type="button"
-            onClick={onBack}
+            onClick={() => navigate(-1)}
             aria-label="Back"
             className="flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-black/55"
           >

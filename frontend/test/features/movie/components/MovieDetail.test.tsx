@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const getMovie = vi.fn()
 const getMovieStatus = vi.fn()
@@ -76,10 +77,27 @@ afterEach(() => {
   authUser = { uid: 'uid-1' }
 })
 
+// Seeds two history entries so the "Back" button's navigate(-1) has
+// somewhere real to go — a bare single-entry history can't go back further.
+// Also stubs /get-started and /profile/:uid, the two destinations MovieDetail
+// itself can navigate to.
+function renderWithRouter(movieId = 'movie-1') {
+  return render(
+    <MemoryRouter initialEntries={['/', `/movie/${movieId}`]} initialIndex={1}>
+      <Routes>
+        <Route path="/" element={<p>Previous page</p>} />
+        <Route path="/movie/:movieId" element={<MovieDetail />} />
+        <Route path="/get-started" element={<p>Get started page</p>} />
+        <Route path="/profile/:uid" element={<p>Profile page</p>} />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('MovieDetail', () => {
   it('renders hero info: title, year, genres, runtime, TMDB rating, and "No ratings yet" when binjRating.count is 0', async () => {
     mockDefaults()
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     expect(screen.getByText(/2024/)).toBeInTheDocument()
@@ -93,7 +111,7 @@ describe('MovieDetail', () => {
     getMovie.mockResolvedValue({ ...movie, binjRating: { sum: 18, count: 4 } }) // avg 4.5
     getMovieStatus.mockResolvedValue(emptyStatus)
     getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('4.5')).toBeInTheDocument())
   })
@@ -102,7 +120,7 @@ describe('MovieDetail', () => {
     getMovie.mockResolvedValue(movie)
     getMovieStatus.mockResolvedValue({ watchlisted: true, watched: false, liked: true, review: null })
     getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toHaveAttribute('aria-pressed', 'true'))
     expect(screen.getAllByRole('button', { name: /^watched$/i })[0]).toHaveAttribute('aria-pressed', 'false')
@@ -112,7 +130,7 @@ describe('MovieDetail', () => {
   it('toggling watchlist calls addToWatchlist optimistically and updates pressed state', async () => {
     mockDefaults()
     addToWatchlist.mockResolvedValue(undefined)
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toBeInTheDocument())
     fireEvent.click(screen.getAllByRole('button', { name: /watchlist/i })[0])
@@ -124,7 +142,7 @@ describe('MovieDetail', () => {
   it('rolls back the optimistic toggle when the API call fails', async () => {
     mockDefaults()
     addToWatchlist.mockRejectedValue(new Error('network error'))
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getAllByRole('button', { name: /watchlist/i })[0]).toBeInTheDocument())
     fireEvent.click(screen.getAllByRole('button', { name: /watchlist/i })[0])
@@ -137,7 +155,7 @@ describe('MovieDetail', () => {
     mockDefaults()
     markWatched.mockResolvedValue(undefined)
     likeMovie.mockResolvedValue(undefined)
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getAllByRole('button', { name: /^watched$/i })[0]).toBeInTheDocument())
     fireEvent.click(screen.getAllByRole('button', { name: /^watched$/i })[0])
@@ -151,14 +169,14 @@ describe('MovieDetail', () => {
     getMovie.mockResolvedValueOnce({ ...movie, poster: '/dune2.jpg' })
     getMovieStatus.mockResolvedValue(emptyStatus)
     getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(document.querySelector('img.poster')).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w500/dune2.jpg'))
   })
 
   it('renders no poster image when the movie has none', async () => {
     mockDefaults() // fixture's poster is null
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     expect(document.querySelector('img.poster')).not.toBeInTheDocument()
@@ -166,7 +184,7 @@ describe('MovieDetail', () => {
 
   it('renders streaming providers, synopsis, and cast', async () => {
     mockDefaults()
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Netflix')).toBeInTheDocument())
     expect(screen.getByText(/Paul Atreides unites/)).toBeInTheDocument()
@@ -184,7 +202,7 @@ describe('MovieDetail', () => {
       ],
       nextCursor: null
     })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Meera')).toBeInTheDocument())
     expect(screen.getByText('Incredible film')).toBeInTheDocument()
@@ -194,7 +212,7 @@ describe('MovieDetail', () => {
 
   it('"Write a review" opens a blank form when the caller has no existing review', async () => {
     mockDefaults()
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByRole('button', { name: /write a review/i })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /write a review/i }))
@@ -210,7 +228,7 @@ describe('MovieDetail', () => {
       review: { rating: 4, reviewText: 'Pretty good', isAnonymous: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
     })
     getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByRole('button', { name: /edit your review/i })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /edit your review/i }))
@@ -225,7 +243,7 @@ describe('MovieDetail', () => {
   it('submitting the review form calls submitReview and refreshes the list and status', async () => {
     mockDefaults()
     submitReview.mockResolvedValue({ rating: 5, reviewText: 'Amazing', isAnonymous: false, createdAt: '', updatedAt: '' })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByRole('button', { name: /write a review/i })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /write a review/i }))
@@ -243,7 +261,7 @@ describe('MovieDetail', () => {
     mockDefaults()
     submitReview.mockResolvedValue({ rating: 5, reviewText: 'Amazing', isAnonymous: false, createdAt: '', updatedAt: '' })
     getMovie.mockResolvedValueOnce(movie).mockResolvedValueOnce({ ...movie, binjRating: { sum: 5, count: 1 } })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByRole('button', { name: /write a review/i })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /write a review/i }))
@@ -263,7 +281,7 @@ describe('MovieDetail', () => {
     })
     getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
     deleteReview.mockResolvedValue(undefined)
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByRole('button', { name: /edit your review/i })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /edit your review/i }))
@@ -277,11 +295,20 @@ describe('MovieDetail', () => {
     getMovie.mockResolvedValue(movie)
     getMovieStatus.mockRejectedValue(new Error('status failed'))
     getMovieReviews.mockResolvedValue({ items: [], nextCursor: null })
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     // Movie itself and reviews still render fine even though status failed independently.
     expect(screen.queryByText(/status failed/i)).toBeInTheDocument()
+  })
+
+  it('navigates back when Back is clicked', async () => {
+    mockDefaults()
+    renderWithRouter()
+
+    await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /back/i })[0])
+    expect(await screen.findByText('Previous page')).toBeInTheDocument()
   })
 })
 
@@ -289,23 +316,22 @@ describe('MovieDetail — signed-out visitor (public Discover)', () => {
   it('never calls getMovieStatus or getMovieWatchedBy for a guest', async () => {
     mockAuthUser(null)
     mockDefaults()
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} onRequireAuth={vi.fn()} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     expect(getMovieStatus).not.toHaveBeenCalled()
     expect(getMovieWatchedBy).not.toHaveBeenCalled()
   })
 
-  it('shows a sign-in prompt instead of the action bar, calling onRequireAuth', async () => {
+  it('shows a sign-in prompt instead of the action bar, navigating to Get Started', async () => {
     mockAuthUser(null)
     mockDefaults()
-    const onRequireAuth = vi.fn()
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} onRequireAuth={onRequireAuth} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /^watchlist$/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: /sign in to save, rate & review/i })[0])
-    expect(onRequireAuth).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Get started page')).toBeInTheDocument()
   })
 
   it('still shows the public reviews list, but "Write a review" prompts sign-in instead of opening the form', async () => {
@@ -315,12 +341,11 @@ describe('MovieDetail — signed-out visitor (public Discover)', () => {
       items: [{ authorId: 'u2', displayName: 'Meera', rating: 5, reviewText: 'Incredible film', isAnonymous: false, createdAt: '', updatedAt: '' }],
       nextCursor: null
     })
-    const onRequireAuth = vi.fn()
-    render(<MovieDetail movieId="movie-1" onBack={vi.fn()} onRequireAuth={onRequireAuth} />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Meera')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /^write a review$/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /sign in to write a review/i }))
-    expect(onRequireAuth).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Get started page')).toBeInTheDocument()
   })
 })

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const searchMovies = vi.fn()
 const getRecentMovies = vi.fn()
@@ -24,52 +25,76 @@ beforeEach(() => {
   getRecentMovies.mockResolvedValue({ items: [] })
 })
 
+// MovieSearch decides guest-vs-signed-in from useAuth() rather than a prop
+// now, and navigates for real (Home, Get Started, movie cards) instead of
+// calling callback props — so every render goes through a router with stub
+// destination routes. The signed-in tests mount it at "/search" (its real
+// route when reached from Home); the guest tests mount it at "/" (its real
+// route for a signed-out visitor, hld.md §3).
+function renderWithRouter(initialEntry: '/search' | '/' = '/search') {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/search" element={<MovieSearch />} />
+        <Route path="/" element={initialEntry === '/' ? <MovieSearch /> : <p>Home page</p>} />
+        <Route path="/get-started" element={<p>Get started page</p>} />
+        <Route path="/movie/:movieId" element={<p>Movie detail page</p>} />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('MovieSearch — signed-in usage (via Home)', () => {
   it('shows a "← Home" back button, not the guest header', () => {
-    render(<MovieSearch onBack={vi.fn()} />)
+    renderWithRouter()
     expect(screen.getByRole('button', { name: /← home/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^get started$/i })).not.toBeInTheDocument()
   })
 
-  it('calls onBack when "← Home" is clicked', () => {
-    const onBack = vi.fn()
-    render(<MovieSearch onBack={onBack} />)
+  it('navigates Home when "← Home" is clicked', async () => {
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /← home/i }))
-    expect(onBack).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Home page')).toBeInTheDocument()
   })
 })
 
 describe('MovieSearch — guest usage (public Discover)', () => {
   it('shows the BINJ brand and a Get Started button instead of a back button', () => {
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    authUser = null
+    renderWithRouter('/')
     expect(screen.getByText('BINJ')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^get started$/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /← home/i })).not.toBeInTheDocument()
   })
 
-  it('calls onRequireAuth when Get Started is clicked', () => {
-    const onRequireAuth = vi.fn()
-    render(<MovieSearch onRequireAuth={onRequireAuth} />)
+  it('navigates to Get Started when Get Started is clicked', async () => {
+    authUser = null
+    renderWithRouter('/')
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
-    expect(onRequireAuth).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Get started page')).toBeInTheDocument()
   })
 })
 
 describe('MovieSearch — search', () => {
   it('searches and renders results, then opens MovieDetail on click', async () => {
+    authUser = null
     searchMovies.mockResolvedValue({ items: [{ movieId: 'm1', title: 'Dune: Part Two', poster: null, year: 2024 }] })
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    renderWithRouter('/')
 
     fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
 
     await waitFor(() => expect(searchMovies).toHaveBeenCalledWith('Dune'))
     expect(await screen.findByText('Dune: Part Two')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Dune: Part Two'))
+    expect(await screen.findByText('Movie detail page')).toBeInTheDocument()
   })
 
   it('renders the poster image from TMDB\'s CDN when a result has one', async () => {
+    authUser = null
     searchMovies.mockResolvedValue({ items: [{ movieId: 'm1', title: 'Dune: Part Two', poster: '/abc123.jpg', year: 2024 }] })
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    renderWithRouter('/')
 
     fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
@@ -80,8 +105,9 @@ describe('MovieSearch — search', () => {
   })
 
   it('shows a "No poster" placeholder when a result has none', async () => {
+    authUser = null
     searchMovies.mockResolvedValue({ items: [{ movieId: 'm1', title: 'Dune: Part Two', poster: null, year: 2024 }] })
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    renderWithRouter('/')
 
     fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
@@ -91,8 +117,9 @@ describe('MovieSearch — search', () => {
   })
 
   it('shows an error message when search fails', async () => {
+    authUser = null
     searchMovies.mockRejectedValue(new Error('Search failed'))
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    renderWithRouter('/')
 
     fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
@@ -104,7 +131,7 @@ describe('MovieSearch — search', () => {
 describe('MovieSearch — recently released (default browse view)', () => {
   it('fetches and shows recently released movies on mount, before any search', async () => {
     getRecentMovies.mockResolvedValue({ items: [{ movieId: 'r1', title: 'Fresh Release', poster: null, year: 2026 }] })
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    renderWithRouter('/')
 
     expect(await screen.findByText('Fresh Release')).toBeInTheDocument()
     expect(screen.getByText(/recently released/i)).toBeInTheDocument()
@@ -113,7 +140,7 @@ describe('MovieSearch — recently released (default browse view)', () => {
   it('switches to search results once a search is submitted, hiding recently released', async () => {
     getRecentMovies.mockResolvedValue({ items: [{ movieId: 'r1', title: 'Fresh Release', poster: null, year: 2026 }] })
     searchMovies.mockResolvedValue({ items: [{ movieId: 'm1', title: 'Dune: Part Two', poster: null, year: 2024 }] })
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    renderWithRouter('/')
 
     await screen.findByText('Fresh Release')
     fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
@@ -126,7 +153,7 @@ describe('MovieSearch — recently released (default browse view)', () => {
 
   it('does not break the rest of the page when recently-released fails to load', async () => {
     getRecentMovies.mockRejectedValue(new Error('boom'))
-    render(<MovieSearch onRequireAuth={vi.fn()} />)
+    renderWithRouter('/')
 
     await waitFor(() => expect(screen.getByText(/couldn't load recent releases/i)).toBeInTheDocument())
     expect(screen.getByLabelText(/search for a movie/i)).toBeInTheDocument()

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 let currentUser: { uid: string; displayName: string; email: string } | null = {
   uid: 'uid-1',
@@ -24,6 +25,16 @@ vi.mock('../src/lib/firebase', () => ({
 
 const { default: App } = await import('../src/App')
 
+// App itself no longer wraps in a router (that lives in main.tsx), so tests
+// mount it under a MemoryRouter at "/" — App's own <Routes> take it from there.
+function render() {
+  return rtlRender(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  )
+}
+
 const originalFetch = globalThis.fetch
 
 function envelope(data: unknown) {
@@ -42,7 +53,11 @@ describe('App search flow', () => {
     // user-triggered search call race each other (getMe awaits getIdToken() first,
     // so it doesn't necessarily reach fetch() before the search does).
     globalThis.fetch = vi.fn((url: string) => {
-      if (url.includes('/users/me')) {
+      // Exact match, not includes() — "/users/me" is a substring of
+      // "/users/me/tasteMatches", "/users/me/movies/634649", and
+      // "/users/me/notifications" too, all of which need their own branches
+      // below instead of silently getting this one's getMe() response shape.
+      if (/\/users\/me(?:\?|$)/.test(url)) {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -121,7 +136,7 @@ describe('App search flow', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    render(<App />)
+    render()
 
     // Home is the default landing view — navigate to Search first.
     await waitFor(() => expect(screen.getAllByRole('button', { name: /^search$/i }).length).toBeGreaterThan(0))
@@ -149,7 +164,7 @@ describe('App search flow', () => {
 describe('App — signed-out root ("/")', () => {
   it('shows public movie discovery, not an auth wall, when signed out', async () => {
     currentUser = null
-    render(<App />)
+    render()
 
     expect(await screen.findByText(/discover movies/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^get started$/i })).toBeInTheDocument()
@@ -158,7 +173,7 @@ describe('App — signed-out root ("/")', () => {
 
   it('opens Welcome when Get Started is clicked, and Back returns to Discover', async () => {
     currentUser = null
-    render(<App />)
+    render()
 
     await screen.findByText(/discover movies/i)
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 const signInWithGoogle = vi.fn()
 const signInWithMicrosoft = vi.fn()
@@ -18,6 +19,17 @@ vi.mock('../../../../src/lib/AuthContext', () => ({
 
 const { Welcome } = await import('../../../../src/features/auth/components/Welcome')
 
+// Welcome now navigates for real (its back arrows call useNavigate()
+// directly, per hld.md's "/get-started" route), so it needs a router even
+// though nothing here exercises the back buttons themselves.
+function render() {
+  return rtlRender(
+    <MemoryRouter>
+      <Welcome />
+    </MemoryRouter>
+  )
+}
+
 const originalFetch = globalThis.fetch
 
 afterEach(() => {
@@ -30,7 +42,7 @@ afterEach(() => {
 
 describe('Welcome — splash', () => {
   it('shows the logo, tagline, Get Started, and a Log in link', () => {
-    render(<Welcome />)
+    render()
     // Mobile and desktop each render their own copy of the wordmark/tagline,
     // toggled by CSS breakpoint (md:hidden / hidden md:block) — both exist in
     // the DOM regardless of viewport since jsdom doesn't evaluate media
@@ -42,14 +54,14 @@ describe('Welcome — splash', () => {
   })
 
   it('opens the sign-in form with signup framing when Get Started is clicked', () => {
-    render(<Welcome />)
+    render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
     expect(screen.getByText(/create your account/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
   })
 
   it('opens the same sign-in form with login framing when "Log in" is clicked', () => {
-    render(<Welcome />)
+    render()
     fireEvent.click(screen.getByRole('button', { name: /already have an account/i }))
     expect(screen.getByText(/welcome back/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
@@ -58,14 +70,14 @@ describe('Welcome — splash', () => {
 
 describe('Welcome — OAuth providers', () => {
   it('calls signInWithGoogle when "Continue with Google" is clicked', () => {
-    render(<Welcome />)
+    render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
     fireEvent.click(screen.getByRole('button', { name: /continue with google/i }))
     expect(signInWithGoogle).toHaveBeenCalledTimes(1)
   })
 
   it('calls signInWithMicrosoft when "Continue with Microsoft" is clicked', () => {
-    render(<Welcome />)
+    render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
     fireEvent.click(screen.getByRole('button', { name: /continue with microsoft/i }))
     expect(signInWithMicrosoft).toHaveBeenCalledTimes(1)
@@ -88,7 +100,7 @@ describe('Welcome — Email + OTP flow', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    render(<Welcome />)
+    render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
 
     fireEvent.change(screen.getByLabelText(/email address/i), {
@@ -131,7 +143,7 @@ describe('Welcome — Email + OTP flow', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    render(<Welcome />)
+    render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
 
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@example.com' } })

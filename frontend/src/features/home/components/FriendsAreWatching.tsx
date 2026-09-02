@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getHomeActivity, type ActivityItem } from '../services/homeApi'
 import { posterUrl } from '../../../lib/images'
 
@@ -15,11 +16,8 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-interface Props {
-  onOpenProfile: (uid: string) => void
-}
-
-export function FriendsAreWatching({ onOpenProfile }: Props) {
+export function FriendsAreWatching() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -65,7 +63,7 @@ export function FriendsAreWatching({ onOpenProfile }: Props) {
                   {item.displayName.charAt(0)}
                 </span>
                 <span className="text-[10.5px] text-text-secondary">
-                  <button type="button" onClick={() => onOpenProfile(item.uid)} className="font-semibold text-text-secondary">
+                  <button type="button" onClick={() => navigate(`/profile/${item.uid}`)} className="font-semibold text-text-secondary">
                     {item.displayName}
                   </button>{' '}
                   {verbFor(item.type)}

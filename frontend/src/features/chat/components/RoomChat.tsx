@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { sendMessage, deleteMessage, subscribeToMessages, type RoomMessage } from '../services/roomApi'
 import { reportContent, type CreateReportResult } from '../../../lib/api'
-
-interface Props {
-  roomId: string
-  currentUid: string
-  onBack: () => void
-}
+import { useAuth } from '../../../lib/AuthContext'
 
 function formatTime(iso: string | null): string {
   if (!iso) return ''
@@ -24,7 +20,17 @@ function describeReportResult(result: CreateReportResult): string {
 // hld.md §16 — messages arrive in real time via subscribeToMessages'
 // Firestore onSnapshot listener, not polling; sending/deleting still goes
 // through the backend (write path stays validated server-side).
-export function RoomChat({ roomId, currentUid, onBack }: Props) {
+export function RoomChat() {
+  // Only ever mounted via the "/rooms/:roomId" route (App.tsx), so this
+  // segment is always present in practice — the assertion just tells
+  // TypeScript what the route already guarantees. currentUid comes straight
+  // from the Firebase Auth user rather than a passed prop — its uid is the
+  // same id BINJ's own profile is keyed by (hld.md §13).
+  const { roomId: roomIdParam } = useParams<{ roomId: string }>()
+  const roomId = roomIdParam!
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const currentUid = user!.uid
   const [messages, setMessages] = useState<RoomMessage[]>([])
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
@@ -93,7 +99,7 @@ export function RoomChat({ roomId, currentUid, onBack }: Props) {
       <header className="flex items-center gap-3 border-b border-border-soft px-4 py-3.5">
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => navigate(-1)}
           aria-label="Back"
           className="flex h-[34px] w-[34px] items-center justify-center rounded-full border border-border-soft bg-surface-alt"
         >

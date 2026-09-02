@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   getMovie,
   getMovieStatus,
@@ -16,19 +17,8 @@ import {
   type Review
 } from '../services/movieApi'
 import { WatchedByFriends } from './WatchedByFriends'
-import { Profile } from '../../profile/components/Profile'
 import { useAuth } from '../../../lib/AuthContext'
 import { posterUrl } from '../../../lib/images'
-
-interface Props {
-  movieId: string
-  onBack: () => void
-  // Present only when MovieDetail is reached by a signed-out visitor
-  // (the public Discover flow, hld.md §3's "public search/browse does not
-  // require auth" extended to detail view) — lets a guest opt into signing
-  // in from here instead of the action bar/review form just failing.
-  onRequireAuth?: () => void
-}
 
 const EMPTY_STATUS: MovieStatus = { watchlisted: false, watched: false, liked: false, review: null }
 
@@ -62,7 +52,13 @@ function ActionButton({ label, icon, active, onClick }: { label: string; icon: R
   )
 }
 
-export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
+export function MovieDetail() {
+  // Only ever mounted via the "/movie/:movieId" route (App.tsx), so this
+  // segment is always present in practice — the assertion just tells
+  // TypeScript what the route already guarantees.
+  const { movieId: movieIdParam } = useParams<{ movieId: string }>()
+  const movieId = movieIdParam!
+  const navigate = useNavigate()
   const { user } = useAuth()
   const isGuest = !user
   const [movie, setMovie] = useState<MovieDetailData | null>(null)
@@ -80,7 +76,6 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
   const [reviewText, setReviewText] = useState('')
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [formError, setFormError] = useState('')
-  const [openProfileUid, setOpenProfileUid] = useState<string | null>(null)
 
   function loadReviews() {
     return getMovieReviews(movieId)
@@ -163,14 +158,10 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
     }
   }
 
-  if (openProfileUid) {
-    return <Profile uid={openProfileUid} onBack={() => setOpenProfileUid(null)} />
-  }
-
   if (movieError) {
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-4 bg-bg px-6 text-text">
-        <button type="button" onClick={onBack} className="self-start text-sm font-semibold text-text-secondary">
+        <button type="button" onClick={() => navigate(-1)} className="self-start text-sm font-semibold text-text-secondary">
           ← Back
         </button>
         <p role="alert" className="text-sm text-red-400">
@@ -193,7 +184,7 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
 
   const actionBar = isGuest ? (
     <div className="px-5 pt-5 lg:px-0 lg:pt-0">
-      <button type="button" onClick={onRequireAuth} className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-bg lg:w-auto lg:px-8">
+      <button type="button" onClick={() => navigate('/get-started')} className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-bg lg:w-auto lg:px-8">
         Sign in to save, rate &amp; review
       </button>
     </div>
@@ -250,7 +241,7 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
           <div className="absolute top-4 left-4">
             <button
               type="button"
-              onClick={onBack}
+              onClick={() => navigate(-1)}
               aria-label="Back"
               className="flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-black/55"
             >
@@ -263,7 +254,7 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
 
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => navigate(-1)}
           aria-label="Back"
           className="hidden h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface-alt lg:mb-6 lg:flex"
         >
@@ -340,7 +331,7 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
           <div className="flex flex-col gap-7 lg:flex-row lg:gap-8">
             {!isGuest && (
               <section className="lg:flex-1">
-                <WatchedByFriends movieId={movieId} onOpenProfile={setOpenProfileUid} />
+                <WatchedByFriends movieId={movieId} />
               </section>
             )}
             <section className="lg:flex-1">
@@ -391,7 +382,7 @@ export function MovieDetail({ movieId, onBack, onRequireAuth }: Props) {
               </ul>
 
               {isGuest ? (
-                <button type="button" onClick={onRequireAuth} className="mt-3 w-full rounded-xl border border-border bg-surface-alt py-3 text-[13.5px] font-bold text-text lg:w-auto lg:px-6">
+                <button type="button" onClick={() => navigate('/get-started')} className="mt-3 w-full rounded-xl border border-border bg-surface-alt py-3 text-[13.5px] font-bold text-text lg:w-auto lg:px-6">
                   Sign in to write a review
                 </button>
               ) : (

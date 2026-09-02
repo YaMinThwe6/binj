@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Me } from '../../../lib/api'
 import { getNotifications } from '../services/homeApi'
 import { GreetingHero } from './GreetingHero'
@@ -7,20 +8,16 @@ import { PeopleYouMightVibeWith } from './PeopleYouMightVibeWith'
 import { UpcomingEvents } from './UpcomingEvents'
 import { NearbyEvents } from './NearbyEvents'
 import { FriendsAreWatching } from './FriendsAreWatching'
-import { RoomChat } from '../../chat/components/RoomChat'
-import { Profile } from '../../profile/components/Profile'
 import { Sidebar } from './Sidebar'
 
 interface Props {
   me: Me
   onSignOut: () => void
-  onNavigateSearch: () => void
 }
 
-export function Home({ me, onSignOut, onNavigateSearch }: Props) {
+export function Home({ me, onSignOut }: Props) {
+  const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
-  const [openRoomId, setOpenRoomId] = useState<string | null>(null)
-  const [openProfileUid, setOpenProfileUid] = useState<string | null>(null)
 
   useEffect(() => {
     getNotifications(true)
@@ -28,21 +25,13 @@ export function Home({ me, onSignOut, onNavigateSearch }: Props) {
       .catch(() => setUnreadCount(0))
   }, [])
 
-  if (openRoomId) {
-    return <RoomChat roomId={openRoomId} currentUid={me.uid} onBack={() => setOpenRoomId(null)} />
-  }
-
-  if (openProfileUid) {
-    return <Profile uid={openProfileUid} onBack={() => setOpenProfileUid(null)} />
-  }
-
   const initial = (me.displayName || me.email || '?').charAt(0).toUpperCase()
 
   return (
     <div className="flex min-h-svh bg-bg text-text">
       {/* Desktop-only left nav (design canvas's HomeDesktop.dc.html) — the
           mobile bottom nav below still owns navigation under lg. */}
-      <Sidebar onNavigateSearch={onNavigateSearch} />
+      <Sidebar />
 
       <main className="min-w-0 flex-1 pb-6 lg:flex lg:flex-col lg:pb-0">
         <header className="flex items-center justify-between px-5 pt-4.5 lg:border-b lg:border-border-soft lg:px-7 lg:py-4.5">
@@ -50,7 +39,7 @@ export function Home({ me, onSignOut, onNavigateSearch }: Props) {
 
           <button
             type="button"
-            onClick={onNavigateSearch}
+            onClick={() => navigate('/search')}
             className="hidden max-w-[420px] flex-1 items-center gap-2 rounded-[10px] border border-border-soft bg-surface-alt px-3.5 py-2.5 text-left lg:flex"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-faint" aria-hidden="true">
@@ -63,7 +52,7 @@ export function Home({ me, onSignOut, onNavigateSearch }: Props) {
           <div className="flex items-center gap-3.5">
             <button
               type="button"
-              onClick={onNavigateSearch}
+              onClick={() => navigate('/search')}
               aria-label="Search"
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border-soft bg-surface-alt lg:hidden"
             >
@@ -102,19 +91,19 @@ export function Home({ me, onSignOut, onNavigateSearch }: Props) {
             <div className="flex flex-col gap-7 lg:col-start-1 lg:gap-8">
               <GreetingHero displayName={me.displayName} />
               <TopPicks />
-              <UpcomingEvents onOpenChat={setOpenRoomId} />
-              <NearbyEvents onOpenChat={setOpenRoomId} />
-              <FriendsAreWatching onOpenProfile={setOpenProfileUid} />
+              <UpcomingEvents />
+              <NearbyEvents />
+              <FriendsAreWatching />
             </div>
             <div className="lg:col-start-2 lg:row-start-1">
-              <PeopleYouMightVibeWith onOpenProfile={setOpenProfileUid} />
+              <PeopleYouMightVibeWith />
             </div>
           </div>
         </div>
 
         <nav className="mt-7 flex items-center justify-around border-t border-border-soft px-2 pt-5 lg:hidden">
           <span className="flex flex-col items-center gap-1 text-[10px] font-bold text-accent">Home</span>
-          <button type="button" onClick={onNavigateSearch} className="flex flex-col items-center gap-1 text-[10px] font-semibold text-text-muted">
+          <button type="button" onClick={() => navigate('/search')} className="flex flex-col items-center gap-1 text-[10px] font-semibold text-text-muted">
             Search
           </button>
           <span className="flex flex-col items-center gap-1 text-[10px] font-semibold text-text-faint" title="Coming soon">

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route, Link } from 'react-router-dom'
 
 const sendMessage = vi.fn()
 const deleteMessage = vi.fn()
@@ -9,6 +10,16 @@ const reportContent = vi.fn()
 
 vi.mock('../../../../src/features/chat/services/roomApi', () => ({ sendMessage, deleteMessage, subscribeToMessages }))
 vi.mock('../../../../src/lib/api', () => ({ reportContent }))
+vi.mock('../../../../src/lib/AuthContext', () => ({
+  useAuth: () => ({
+    user: { uid: 'uid-1' },
+    loading: false,
+    signInWithGoogle: vi.fn(),
+    signInWithMicrosoft: vi.fn(),
+    signInWithToken: vi.fn(),
+    signOutUser: vi.fn()
+  })
+}))
 
 const { RoomChat } = await import('../../../../src/features/chat/components/RoomChat')
 
@@ -33,10 +44,23 @@ function mockSubscription(msgs: typeof messages) {
   })
 }
 
+// Seeds two history entries so the "Back" button's navigate(-1) has
+// somewhere real to go — a bare single-entry history can't go back further.
+function renderWithRouter() {
+  return render(
+    <MemoryRouter initialEntries={['/', '/rooms/room-1']} initialIndex={1}>
+      <Routes>
+        <Route path="/" element={<p>Previous page</p>} />
+        <Route path="/rooms/:roomId" element={<RoomChat />} />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('RoomChat', () => {
   it('subscribes to the room on mount and renders non-deleted messages', () => {
     mockSubscription(messages)
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     expect(subscribeToMessages).toHaveBeenCalledWith('room-1', expect.any(Function))
     expect(screen.getByText('Hey everyone!')).toBeInTheDocument()
@@ -46,24 +70,44 @@ describe('RoomChat', () => {
 
   it('unsubscribes on unmount', () => {
     mockSubscription(messages)
-    const { unmount } = render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    const { unmount } = renderWithRouter()
     unmount()
     expect(unsubscribe).toHaveBeenCalled()
   })
 
-  it('re-subscribes when roomId changes', () => {
+  it('re-subscribes when the route\'s roomId changes', async () => {
     mockSubscription(messages)
-    const { rerender } = render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
-    rerender(<RoomChat roomId="room-2" currentUid="uid-1" onBack={vi.fn()} />)
+    // Same mounted RoomChat instance across a route param change — proves
+    // the subscription effect reacts to useParams() changing, not just to
+    // a fresh mount. Real navigation via a Link, not rerender(), since
+    // useParams() only updates on an actual route transition.
+    render(
+      <MemoryRouter initialEntries={['/rooms/room-1']}>
+        <Routes>
+          <Route
+            path="/rooms/:roomId"
+            element={
+              <>
+                <Link to="/rooms/room-2">Go to room 2</Link>
+                <RoomChat />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(subscribeToMessages).toHaveBeenCalledWith('room-1', expect.any(Function))
 
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByText('Go to room 2'))
+
+    await waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
     expect(subscribeToMessages).toHaveBeenCalledWith('room-2', expect.any(Function))
   })
 
   it('sends a message and clears the draft', async () => {
     mockSubscription(messages)
     sendMessage.mockResolvedValue({ messageId: 'm4', createdAt: '2026-01-01T20:03:00.000Z' })
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     fireEvent.change(screen.getByLabelText(/message/i), { target: { value: 'Starting now!' } })
     fireEvent.click(screen.getByRole('button', { name: /^send$/i }))
@@ -75,7 +119,7 @@ describe('RoomChat', () => {
   it('shows an error and keeps the draft when sending fails', async () => {
     mockSubscription(messages)
     sendMessage.mockRejectedValue(new Error('network error'))
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     fireEvent.change(screen.getByLabelText(/message/i), { target: { value: 'oops' } })
     fireEvent.click(screen.getByRole('button', { name: /^send$/i }))
@@ -86,7 +130,7 @@ describe('RoomChat', () => {
 
   it('only offers Delete on the caller\'s own messages', () => {
     mockSubscription(messages)
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     expect(screen.getAllByRole('button', { name: /delete/i })).toHaveLength(1) // only m1, authored by uid-1
   })
@@ -94,24 +138,23 @@ describe('RoomChat', () => {
   it('deletes a message on click', async () => {
     mockSubscription(messages)
     deleteMessage.mockResolvedValue(undefined)
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }))
     await waitFor(() => expect(deleteMessage).toHaveBeenCalledWith('room-1', 'm1'))
   })
 
-  it('calls onBack when Back is clicked', () => {
+  it('navigates back when Back is clicked', async () => {
     mockSubscription(messages)
-    const onBack = vi.fn()
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={onBack} />)
+    renderWithRouter()
 
     fireEvent.click(screen.getByRole('button', { name: /back/i }))
-    expect(onBack).toHaveBeenCalled()
+    expect(await screen.findByText('Previous page')).toBeInTheDocument()
   })
 
   it('only offers Report on other people\'s messages, not the caller\'s own', () => {
     mockSubscription(messages)
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     expect(screen.getAllByRole('button', { name: /^report$/i })).toHaveLength(1) // only m2, authored by uid-2
   })
@@ -133,7 +176,7 @@ describe('RoomChat', () => {
         resolvedAt: '2026-01-01T20:05:00.000Z'
       }
     })
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     fireEvent.click(screen.getByRole('button', { name: /^report$/i }))
     fireEvent.change(screen.getByLabelText(/why are you reporting/i), { target: { value: 'being rude' } })
@@ -163,7 +206,7 @@ describe('RoomChat', () => {
         resolvedAt: '2026-01-01T20:05:00.000Z'
       }
     })
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     fireEvent.click(screen.getByRole('button', { name: /^report$/i }))
     fireEvent.change(screen.getByLabelText(/why are you reporting/i), { target: { value: 'not sure' } })
@@ -174,7 +217,7 @@ describe('RoomChat', () => {
 
   it('closes the report form on Cancel without submitting', () => {
     mockSubscription(messages)
-    render(<RoomChat roomId="room-1" currentUid="uid-1" onBack={vi.fn()} />)
+    renderWithRouter()
 
     fireEvent.click(screen.getByRole('button', { name: /^report$/i }))
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }))

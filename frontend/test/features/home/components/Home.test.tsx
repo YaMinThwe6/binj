@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const getNotifications = vi.fn()
 const getHomeGreeting = vi.fn()
@@ -60,29 +61,39 @@ function mockAllEmpty() {
   getHomeActivity.mockResolvedValue({ items: [] })
 }
 
+function renderWithRouter(onSignOut: () => void) {
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<Home me={me} onSignOut={onSignOut} />} />
+        <Route path="/search" element={<p>Search page</p>} />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('Home', () => {
   it('shows the unread notification count as a badge', async () => {
     mockAllEmpty()
     getNotifications.mockResolvedValue({ items: [{ id: 'n1' }, { id: 'n2' }] })
-    render(<Home me={me} onSignOut={vi.fn()} onNavigateSearch={vi.fn()} />)
+    renderWithRouter(vi.fn())
 
     await waitFor(() => expect(getNotifications).toHaveBeenCalledWith(true))
     expect(await screen.findByText('2')).toBeInTheDocument()
   })
 
-  it('calls onNavigateSearch when the Search button is clicked', async () => {
+  it('navigates to Search when the Search button is clicked', async () => {
     mockAllEmpty()
-    const onNavigateSearch = vi.fn()
-    render(<Home me={me} onSignOut={vi.fn()} onNavigateSearch={onNavigateSearch} />)
+    renderWithRouter(vi.fn())
 
     fireEvent.click(screen.getAllByRole('button', { name: /^search$/i })[0])
-    expect(onNavigateSearch).toHaveBeenCalled()
+    expect(await screen.findByText('Search page')).toBeInTheDocument()
   })
 
   it('calls onSignOut when Sign out is clicked', async () => {
     mockAllEmpty()
     const onSignOut = vi.fn()
-    render(<Home me={me} onSignOut={onSignOut} onNavigateSearch={vi.fn()} />)
+    renderWithRouter(onSignOut)
 
     fireEvent.click(screen.getByRole('button', { name: /sign out/i }))
     expect(onSignOut).toHaveBeenCalled()

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getTasteMatches, followUser, unfollowUser, type TasteMatch } from '../services/homeApi'
 
 function connectLabel(relationship: TasteMatch['relationship']): string {
@@ -7,20 +8,30 @@ function connectLabel(relationship: TasteMatch['relationship']): string {
   return 'Connect'
 }
 
-interface Props {
-  onOpenProfile: (uid: string) => void
-}
-
-export function PeopleYouMightVibeWith({ onOpenProfile }: Props) {
+export function PeopleYouMightVibeWith() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<TasteMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // Home can unmount mid-fetch (e.g. navigating away right after landing) —
+    // guard against setting state on an unmounted component when the
+    // response lands late.
+    let cancelled = false
     getTasteMatches()
-      .then((res) => setItems(res.items))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load matches'))
-      .finally(() => setLoading(false))
+      .then((res) => {
+        if (!cancelled) setItems(res.items)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load matches')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function toggleConnect(uid: string) {
@@ -80,7 +91,7 @@ export function PeopleYouMightVibeWith({ onOpenProfile }: Props) {
               key={person.uid}
               className="w-[118px] flex-none rounded-2xl border border-border-soft bg-surface p-4 text-center lg:flex lg:w-full lg:items-center lg:gap-2.5 lg:rounded-none lg:border-none lg:bg-transparent lg:p-0 lg:text-left"
             >
-              <button type="button" onClick={() => onOpenProfile(person.uid)} className="flex w-full flex-col items-center lg:min-w-0 lg:flex-1 lg:flex-row lg:text-left">
+              <button type="button" onClick={() => navigate(`/profile/${person.uid}`)} className="flex w-full flex-col items-center lg:min-w-0 lg:flex-1 lg:flex-row lg:text-left">
                 <div className="mx-auto flex h-13 w-13 items-center justify-center rounded-full border border-[rgba(124,140,166,0.32)] bg-[rgba(124,140,166,0.14)] text-[15px] font-bold text-[#9BABC4] lg:mx-0 lg:h-9.5 lg:w-9.5 lg:flex-none lg:text-[13px]">
                   {person.displayName.charAt(0).toUpperCase()}
                 </div>

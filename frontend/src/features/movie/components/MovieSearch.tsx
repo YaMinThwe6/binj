@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { searchMovies, getRecentMovies, type MovieSummary } from '../services/movieApi'
 import { posterUrl } from '../../../lib/images'
-import { MovieDetail } from './MovieDetail'
+import { useAuth } from '../../../lib/AuthContext'
 
 // Every search now hits live TMDB (movies.service.ts's local-index+TMDB
 // merge, hld.md §18) rather than only ever reading a local Firestore index —
@@ -9,16 +10,6 @@ import { MovieDetail } from './MovieDetail'
 // pause rather than a quick typing lull.
 const DEBOUNCE_MS = 1000
 const MIN_QUERY_LENGTH = 2 // below this, a query is mostly noise against a broad catalog
-
-interface Props {
-  // Signed-in usage (via Home): go back to Home.
-  onBack?: () => void
-  // Guest usage (public Discover, root "/" for a signed-out visitor):
-  // opens the Welcome/auth entry instead of a Home there's no signed-in
-  // session to go back to. Exactly one of onBack/onRequireAuth is passed —
-  // which one decides which header renders.
-  onRequireAuth?: () => void
-}
 
 function MovieCard({ movie, onOpen }: { movie: MovieSummary; onOpen: () => void }) {
   const poster = posterUrl(movie.poster)
@@ -41,11 +32,17 @@ function MovieCard({ movie, onOpen }: { movie: MovieSummary; onOpen: () => void 
   )
 }
 
-export function MovieSearch({ onBack, onRequireAuth }: Props) {
+// Reached at "/" for a signed-out visitor (public Discover, hld.md §3) or at
+// "/search" for a signed-in one — same component either way, the header/copy
+// just branches on useAuth()'s user, same pattern MovieDetail already uses
+// for its own guest/signed-in split.
+export function MovieSearch() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const isGuest = !user
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MovieSummary[]>([])
   const [hasSearched, setHasSearched] = useState(false)
-  const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -74,7 +71,6 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
     if (!trimmed) return
     const thisRequestId = ++requestIdRef.current
     setStatus('loading')
-    setSelectedMovieId(null)
     try {
       const { items } = await searchMovies(trimmed)
       if (requestIdRef.current !== thisRequestId) return // a newer search already superseded this one
@@ -126,21 +122,17 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
     await runSearch(query)
   }
 
-  if (selectedMovieId) {
-    return <MovieDetail movieId={selectedMovieId} onBack={() => setSelectedMovieId(null)} onRequireAuth={onRequireAuth} />
-  }
-
   return (
     <main className="flex min-h-svh flex-1 flex-col bg-bg text-text">
       <header className="flex items-center justify-between border-b border-border-soft px-5 py-4">
-        {onBack ? (
-          <button type="button" onClick={onBack} className="text-sm font-semibold text-text-secondary">
+        {!isGuest ? (
+          <button type="button" onClick={() => navigate('/')} className="text-sm font-semibold text-text-secondary">
             ← Home
           </button>
         ) : (
           <>
             <span className="font-serif text-lg font-bold text-accent">BINJ</span>
-            <button type="button" onClick={onRequireAuth} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-bold text-bg">
+            <button type="button" onClick={() => navigate('/get-started')} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-bold text-bg">
               Get Started
             </button>
           </>
@@ -148,7 +140,7 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
       </header>
 
       <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-6">
-        {!onBack && (
+        {isGuest && (
           <div className="mb-6">
             <h1 className="font-serif text-[26px] font-semibold text-white">Discover movies</h1>
             <p className="mt-1 text-[13.5px] text-text-muted">Search, browse, and see what BINJ's community thinks — sign in to rate, save, and connect.</p>
@@ -181,7 +173,7 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
             {results.length === 0 && status === 'idle' && <p className="mt-8 text-center text-sm text-text-muted">No results for "{query}".</p>}
             <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
               {results.map((movie) => (
-                <MovieCard key={movie.movieId} movie={movie} onOpen={() => setSelectedMovieId(movie.movieId)} />
+                <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
               ))}
             </ul>
           </>
@@ -193,7 +185,7 @@ export function MovieSearch({ onBack, onRequireAuth }: Props) {
             {recentStatus === 'idle' && recent.length === 0 && <p className="mt-3 text-sm text-text-muted">Nothing new to show right now.</p>}
             <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
               {recent.map((movie) => (
-                <MovieCard key={movie.movieId} movie={movie} onOpen={() => setSelectedMovieId(movie.movieId)} />
+                <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
               ))}
             </ul>
           </section>

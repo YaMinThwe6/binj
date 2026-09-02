@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getUpcomingEvents, joinEvent, type UpcomingEvent } from '../services/homeApi'
 import { posterUrl } from '../../../lib/images'
 
@@ -9,11 +10,8 @@ function formatDate(iso: string | null): string {
     ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-interface Props {
-  onOpenChat: (roomId: string) => void
-}
-
-export function UpcomingEvents({ onOpenChat }: Props) {
+export function UpcomingEvents() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<UpcomingEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -91,7 +89,7 @@ export function UpcomingEvents({ onOpenChat }: Props) {
                   {status === 'joined' ? 'Joined' : status === 'pending' ? 'Requested' : 'Join'}
                 </button>
                 {status === 'joined' && (
-                  <button type="button" onClick={() => onOpenChat(event.roomId)} className="text-[11px] font-semibold text-text-muted">
+                  <button type="button" onClick={() => navigate(`/rooms/${event.roomId}`)} className="text-[11px] font-semibold text-text-muted">
                     Chat
                   </button>
                 )}

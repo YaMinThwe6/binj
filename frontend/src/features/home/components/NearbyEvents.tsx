@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getNearbyEvents, joinEvent, type NearbyEvent } from '../services/homeApi'
 import { NearbyEventsMap } from './NearbyEventsMap'
 import { mapsConfigured } from '../../../lib/maps'
@@ -19,11 +20,8 @@ type Status = 'idle' | 'locating' | 'loading' | 'loaded' | 'denied' | 'error'
 // than prompting for location on every Home visit: matches PRD §30.7's
 // no-location-without-consent principle, and the browser's own permission
 // prompt only fires once findNearby() actually calls getCurrentPosition.
-interface Props {
-  onOpenChat: (roomId: string) => void
-}
-
-export function NearbyEvents({ onOpenChat }: Props) {
+export function NearbyEvents() {
+  const navigate = useNavigate()
   const [status, setStatus] = useState<Status>('idle')
   const [items, setItems] = useState<NearbyEvent[]>([])
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null)
@@ -129,7 +127,7 @@ export function NearbyEvents({ onOpenChat }: Props) {
                     {joined === 'joined' ? 'Joined' : joined === 'pending' ? 'Requested' : 'Join'}
                   </button>
                   {joined === 'joined' && (
-                    <button type="button" onClick={() => onOpenChat(event.roomId)} className="text-[11px] font-semibold text-text-muted">
+                    <button type="button" onClick={() => navigate(`/rooms/${event.roomId}`)} className="text-[11px] font-semibold text-text-muted">
                       Chat
                     </button>
                   )}
