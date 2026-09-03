@@ -406,7 +406,7 @@ export function Welcome() {
         </div>
 
         <div className="flex flex-1 items-center justify-center px-12 pb-16">
-          <div className="w-full max-w-[400px]">
+          <div className="w-full max-w-[480px]">
             {stage === 'form' && (
               <>
                 <h1 className="font-serif text-[28px] font-semibold text-white">{intent === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
