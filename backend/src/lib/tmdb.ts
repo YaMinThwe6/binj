@@ -201,7 +201,20 @@ const GENRE_NAME_TO_ID: Record<string, number> = {
   Western: 37
 };
 
-export type TmdbDiscoverResult = MovieSummary;
+const GENRE_ID_TO_NAME: Record<number, string> = Object.fromEntries(
+  Object.entries(GENRE_NAME_TO_ID).map(([name, id]) => [id, name])
+);
+
+// Everything MovieCandidate actually needs (movie.ts) is already sitting in
+// TMDB's own /discover/movie response — genre_ids, vote_average,
+// original_language — no separate detail fetch required. Only cast/crew
+// needs a real getMovieDetail() call (Discover doesn't return credits at
+// all); callers that need that pay for it themselves per movie, not here.
+export interface TmdbDiscoverResult extends MovieSummary {
+  genres: string[];
+  originalLanguage: string;
+  voteAverage: number;
+}
 
 // onboarding.service.ts's genre/language-filtered candidate & celebrity-suggestion
 // paging (hld.md §13, redesigned for infinite scroll) — /discover/movie is the one
@@ -216,9 +229,9 @@ export async function discoverMovies(genres: string[], languages: string[], page
 
   // TMDB's discover only accepts a single original_language, unlike
   // with_genres' comma-separated OR. With more than one language chosen,
-  // this is left unfiltered here and cross-checked in-app once full detail
-  // is fetched — same "genre query, language filtered in-app" convention
-  // onboarding.service.ts's existing local candidate query already uses.
+  // this is left unfiltered here and cross-checked in-app instead — same
+  // "genre query, language filtered in-app" convention onboarding.service.ts's
+  // local candidate query already uses.
   if (languages.length === 1) params.set("with_original_language", languages[0]);
 
   const data = await tmdbFetch(`/discover/movie?${params.toString()}`);
@@ -226,7 +239,10 @@ export async function discoverMovies(genres: string[], languages: string[], page
     movieId: String(r.id),
     title: r.title,
     poster: r.poster_path || null,
-    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null
+    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null,
+    genres: ((r.genre_ids ?? []) as number[]).map((id) => GENRE_ID_TO_NAME[id]).filter((g): g is string => g !== undefined),
+    originalLanguage: r.original_language ?? "en",
+    voteAverage: r.vote_average ?? 0
   }));
   return { items, totalPages: data.total_pages ?? 1 };
 }

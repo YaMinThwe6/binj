@@ -166,9 +166,28 @@ describe("GET /onboarding/watched-candidates", () => {
     expect(res.body.data.nextCursor).toBe("2");
   });
 
-  it("a cursor page fetches TMDB Discover instead of the local index, and backfills full detail", async () => {
+  it("a cursor page answers straight from Discover's own fields — no per-item detail fetch blocking the response", async () => {
     discoverMovies.mockResolvedValueOnce({
-      items: [{ movieId: "603", title: "The Matrix", poster: "/matrix.jpg", year: 1999 }],
+      items: [
+        { movieId: "603", title: "The Matrix", poster: "/matrix.jpg", year: 1999, genres: ["Science Fiction", "Action"], originalLanguage: "en", voteAverage: 8.2 }
+      ],
+      totalPages: 5
+    });
+
+    const app = createApp();
+    const res = await req(app, "?genres=Action&cursor=2");
+
+    expect(res.status).toBe(200);
+    expect(discoverMovies).toHaveBeenCalledWith(["Action"], [], 2);
+    expect(res.body.data.items).toEqual([
+      { movieId: "603", title: "The Matrix", poster: "/matrix.jpg", year: 1999, genres: ["Science Fiction", "Action"], originalLanguage: "en", voteAverage: 8.2 }
+    ]);
+    expect(res.body.data.nextCursor).toBe("3");
+  });
+
+  it("still backfills full detail into the local index in the background, without blocking the response", async () => {
+    discoverMovies.mockResolvedValueOnce({
+      items: [{ movieId: "603", title: "The Matrix", poster: "/matrix.jpg", year: 1999, genres: ["Action"], originalLanguage: "en", voteAverage: 8.2 }],
       totalPages: 5
     });
     fetchMovieDetails.mockResolvedValueOnce({
@@ -185,15 +204,11 @@ describe("GET /onboarding/watched-candidates", () => {
     });
 
     const app = createApp();
-    const res = await req(app, "?genres=Action&cursor=2");
+    await req(app, "?genres=Action&cursor=2");
+    // The backfill is fire-and-forget — give its microtask chain a tick to land.
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(res.status).toBe(200);
-    expect(discoverMovies).toHaveBeenCalledWith(["Action"], [], 2);
-    expect(res.body.data.items).toEqual([
-      { movieId: "603", title: "The Matrix", poster: "/matrix.jpg", year: 1999, genres: ["Science Fiction", "Action"], originalLanguage: "en", voteAverage: 8.2 }
-    ]);
-    expect(res.body.data.nextCursor).toBe("3");
-    // Backfilled into the local index for next time, same as any other detail fetch.
+    expect(fetchMovieDetails).toHaveBeenCalledWith("603");
     expect((store.get("movies/603") as { genres?: string[] })?.genres).toEqual(["Science Fiction", "Action"]);
   });
 
@@ -209,23 +224,11 @@ describe("GET /onboarding/watched-candidates", () => {
   it("cross-checks multiple chosen languages in-app, since TMDB Discover only takes one", async () => {
     discoverMovies.mockResolvedValueOnce({
       items: [
-        { movieId: "1", title: "English Movie", poster: null, year: 2020 },
-        { movieId: "2", title: "Korean Movie", poster: null, year: 2020 }
+        { movieId: "1", title: "English Movie", poster: null, year: 2020, genres: [], originalLanguage: "en", voteAverage: 5 },
+        { movieId: "2", title: "Korean Movie", poster: null, year: 2020, genres: [], originalLanguage: "ko", voteAverage: 5 }
       ],
       totalPages: 1
     });
-    fetchMovieDetails.mockImplementation(async (movieId: string) => ({
-      movieId,
-      title: movieId === "1" ? "English Movie" : "Korean Movie",
-      poster: null,
-      year: 2020,
-      originalLanguage: movieId === "1" ? "en" : "ko",
-      genres: [],
-      voteAverage: 5,
-      cast: [],
-      crew: [],
-      credits: []
-    }));
 
     const app = createApp();
     const res = await req(app, "?languages=ko,ja&cursor=1");

@@ -44,7 +44,17 @@ describe("tmdb.discoverMovies", () => {
       ok: true,
       status: 200,
       json: async () => ({
-        results: [{ id: 157336, title: "Interstellar", poster_path: "/poster.jpg", release_date: "2014-11-05" }],
+        results: [
+          {
+            id: 157336,
+            title: "Interstellar",
+            poster_path: "/poster.jpg",
+            release_date: "2014-11-05",
+            genre_ids: [878, 18],
+            original_language: "en",
+            vote_average: 8.4
+          }
+        ],
         total_pages: 12
       })
     });
@@ -58,7 +68,17 @@ describe("tmdb.discoverMovies", () => {
     expect(url).toContain("with_genres=878%2C18");
     expect(url).toContain("page=3");
     expect(result).toEqual({
-      items: [{ movieId: "157336", title: "Interstellar", poster: "/poster.jpg", year: 2014 }],
+      items: [
+        {
+          movieId: "157336",
+          title: "Interstellar",
+          poster: "/poster.jpg",
+          year: 2014,
+          genres: ["Science Fiction", "Drama"],
+          originalLanguage: "en",
+          voteAverage: 8.4
+        }
+      ],
       totalPages: 12
     });
   });

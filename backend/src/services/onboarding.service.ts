@@ -1,4 +1,4 @@
-import type { MovieCandidate, CelebritySuggestion, MovieDetail } from "@binj/shared-types";
+import type { MovieCandidate, CelebritySuggestion } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { discoverMovies } from "../lib/tmdb.js";
 import { getMovieDetail } from "./movies.service.js";
@@ -20,39 +20,35 @@ function parseCursor(raw: unknown): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-// Shared by both watched-candidates and celebrity-suggestions' "keep growing
-// as you scroll" paging (hld.md §13, redesigned for infinite scroll): the
-// local Firestore index only ever has genre/language/cast/crew for a movie
-// once someone's individually opened its detail page, so it can't grow on
-// its own past whatever's been incidentally viewed. /discover/movie is TMDB's
-// one endpoint that's natively paginated by genre+language, so each scroll
-// page here is a real Discover page, with full detail (genres, cast/crew)
-// backfilled via getMovieDetail's existing fetch-and-upsert path — reused
-// as-is rather than duplicated, so a movie discovered this way becomes
-// exactly as locally-cached and search-indexed as one someone opened by hand.
-async function fetchGenreLanguagePage(
-  genres: string[],
-  languages: string[],
-  page: number
-): Promise<{ movies: MovieDetail[]; hasMore: boolean }> {
-  const { items, totalPages } = await discoverMovies(genres, languages, page);
-
-  const detailed = await Promise.all(
-    items.map((item) =>
-      getMovieDetail(item.movieId).catch(() => null) // one bad movie shouldn't fail the whole page
-    )
-  );
-  let movies = detailed.filter((m): m is MovieDetail => m !== null);
-
-  // TMDB's with_original_language only accepts a single code (discoverMovies
-  // skips it entirely when more than one language was chosen) — cross-check
-  // the full set here instead, same "genre query, language filtered in-app"
-  // convention the local candidate query below already uses.
-  if (languages.length > 1) {
-    movies = movies.filter((m) => languages.includes(m.originalLanguage));
+// Fire-and-forget: pulls each discovered movie through getMovieDetail's
+// existing fetch-and-upsert path so it becomes exactly as locally-cached and
+// search-indexed as one someone opened by hand — but NOT awaited by either
+// caller below. Awaiting a full TMDB detail fetch (credits/videos/watch-
+// providers, several sub-requests) for every item on a scroll page was the
+// actual bug reported: correct data, but 15-20+ seconds per page with the UI
+// showing nothing but a static "Loading more…" the whole time. Both callers
+// only need what discoverMovies() already returned in ONE request; this just
+// grows the local pool for next time, in the background.
+function backfillInBackground(movieIds: string[]): void {
+  for (const movieId of movieIds) {
+    getMovieDetail(movieId).catch(() => {});
   }
+}
 
-  return { movies, hasMore: page < totalPages };
+// Cheap local-only lookup — no TMDB call — for celebrity-suggestions' cursor
+// paging below: cast/crew isn't in a Discover result at all (only a full
+// detail fetch has credits), so a newly-discovered movie's people can't be
+// known synchronously without paying the same latency backfillInBackground
+// is deliberately avoiding. A movie already backfilled (by a past visit here,
+// by watched-candidates' own background backfill, or by someone opening its
+// detail page directly) answers instantly instead.
+async function getCachedCredits(movieId: string): Promise<CreditedMovie | null> {
+  const db = requireDb();
+  const snap = await db.collection("movies").doc(movieId).get();
+  if (!snap.exists) return null;
+  const data = snap.data();
+  if (data?.genres === undefined) return null; // not yet full-detail-fetched
+  return { cast: data.cast, crew: data.crew };
 }
 
 // GET /onboarding/watched-candidates — api-contracts.md §11, hld.md §13.
@@ -62,9 +58,12 @@ async function fetchGenreLanguagePage(
 //
 // Paging (redesigned for infinite scroll): the first page (no cursor) is the
 // original fast local-index query below, untouched. Every page after that
-// comes from fetchGenreLanguagePage's live TMDB Discover paging instead —
-// the local index alone can't grow past whatever's incidentally been viewed,
-// so scrolling further needs a source that's actually inexhaustible.
+// comes straight from discoverMovies()'s own response — genres, language,
+// and vote average are already right there in a Discover result, so this
+// responds off ONE TMDB request instead of waiting on a full detail fetch
+// (credits/videos/watch-providers) per movie. Full detail still gets pulled
+// in — just in the background (backfillInBackground), so it doesn't block
+// this response the way it used to.
 export async function getWatchedCandidates(
   rawGenres: unknown,
   rawLanguages: unknown,
@@ -75,17 +74,27 @@ export async function getWatchedCandidates(
   const cursor = parseCursor(rawCursor);
 
   if (cursor !== null) {
-    const { movies, hasMore } = await fetchGenreLanguagePage(genres, languages, cursor);
-    const items: MovieCandidate[] = movies.map((m) => ({
-      movieId: m.movieId,
-      title: m.title,
-      poster: m.poster,
-      year: m.year,
-      genres: m.genres,
-      originalLanguage: m.originalLanguage,
-      voteAverage: m.voteAverage
+    const { items: discovered, totalPages } = await discoverMovies(genres, languages, cursor);
+    let items: MovieCandidate[] = discovered.map((d) => ({
+      movieId: d.movieId,
+      title: d.title,
+      poster: d.poster,
+      year: d.year,
+      genres: d.genres,
+      originalLanguage: d.originalLanguage,
+      voteAverage: d.voteAverage
     }));
-    return { items, nextCursor: hasMore ? String(cursor + 1) : null };
+
+    // TMDB's with_original_language only accepts a single code (discoverMovies
+    // skips it entirely when more than one language was chosen) — cross-check
+    // the full set here instead, same "genre query, language filtered in-app"
+    // convention the local candidate query below already uses.
+    if (languages.length > 1) {
+      items = items.filter((m) => languages.includes(m.originalLanguage as string));
+    }
+
+    backfillInBackground(discovered.map((d) => d.movieId));
+    return { items, nextCursor: cursor < totalPages ? String(cursor + 1) : null };
   }
 
   const db = requireDb();
@@ -165,12 +174,19 @@ function rankPeopleFromMovies(movies: CreditedMovie[]): CelebritySuggestion[] {
 // GET /onboarding/celebrity-suggestions — api-contracts.md §5, hld.md §13.
 // Page 1 (no cursor) ranks cast/crew from the caller's already-saved watched
 // movies, unchanged — the strongest, most personalized signal when it exists.
-// Every page after that comes from the same genre/language Discover paging
-// watched-candidates uses (fetchGenreLanguagePage) — not just for "keep
-// scrolling", but because watch history being thin or empty (Watched is
-// skippable, and this step used to have zero fallback for that) previously
-// meant this whole step rendered nothing; genre/language gives it something
-// to suggest regardless of watch history.
+// Every page after that walks the same genre/language Discover paging
+// watched-candidates uses — not just for "keep scrolling", but because watch
+// history being thin or empty (Watched is skippable, and this step used to
+// have zero fallback for that) previously meant this whole step rendered
+// nothing; genre/language gives it something to suggest regardless.
+//
+// Unlike watched-candidates, this genuinely needs cast/crew — which a
+// Discover result doesn't carry at all, only a full detail fetch does. Rather
+// than block the response on that (the actual latency bug this whole cursor
+// design had), a discovered movie only contributes here if it's *already*
+// locally cached (getCachedCredits — a plain Firestore read, no TMDB call);
+// anything not yet cached is skipped for this page and backfilled in the
+// background instead, ready by the next visit or the next scroll.
 export async function getCelebritySuggestions(
   uid: string,
   rawGenres: unknown,
@@ -182,8 +198,13 @@ export async function getCelebritySuggestions(
   const cursor = parseCursor(rawCursor);
 
   if (cursor !== null) {
-    const { movies, hasMore } = await fetchGenreLanguagePage(genres, languages, cursor);
-    return { items: rankPeopleFromMovies(movies), nextCursor: hasMore ? String(cursor + 1) : null };
+    const { items: discovered, totalPages } = await discoverMovies(genres, languages, cursor);
+    const cached = await Promise.all(discovered.map((d) => getCachedCredits(d.movieId)));
+    const uncachedIds = discovered.filter((_, i) => cached[i] === null).map((d) => d.movieId);
+    backfillInBackground(uncachedIds);
+
+    const movies = cached.filter((c): c is CreditedMovie => c !== null);
+    return { items: rankPeopleFromMovies(movies), nextCursor: cursor < totalPages ? String(cursor + 1) : null };
   }
 
   const db = requireDb();

@@ -194,26 +194,18 @@ describe("GET /onboarding/celebrity-suggestions", () => {
     expect(res.body.data.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
   });
 
-  it("a cursor page ranks people from genre/language-filtered movies fetched via TMDB Discover", async () => {
+  it("a cursor page ranks people from genre/language-filtered movies that are already locally cached", async () => {
     discoverMovies.mockResolvedValueOnce({
       items: [
-        { movieId: "1", title: "Movie One", poster: null, year: 2020 },
-        { movieId: "2", title: "Movie Two", poster: null, year: 2020 }
+        { movieId: "1", title: "Movie One", poster: null, year: 2020, genres: ["Drama"], originalLanguage: "en", voteAverage: 7 },
+        { movieId: "2", title: "Movie Two", poster: null, year: 2020, genres: ["Drama"], originalLanguage: "en", voteAverage: 7 }
       ],
       totalPages: 3
     });
-    fetchMovieDetails.mockImplementation(async (movieId: string) => ({
-      movieId,
-      title: `Movie ${movieId}`,
-      poster: null,
-      year: 2020,
-      originalLanguage: "en",
-      genres: ["Drama"],
-      voteAverage: 7,
-      cast: [{ personId: "p1", name: "Shared Actor", photo: null }],
-      crew: movieId === "1" ? [{ personId: "p2", name: "Director One", photo: null }] : [],
-      credits: []
-    }));
+    // Both already fully detail-fetched locally (genres present) — this is
+    // the fast path: no TMDB detail call needed to read their cast/crew.
+    store.set("movies/1", { genres: ["Drama"], cast: [{ personId: "p1", name: "Shared Actor", photo: null }], crew: [{ personId: "p2", name: "Director One", photo: null }] });
+    store.set("movies/2", { genres: ["Drama"], cast: [{ personId: "p1", name: "Shared Actor", photo: null }], crew: [] });
 
     const app = createApp();
     const res = await request(app)
@@ -222,9 +214,39 @@ describe("GET /onboarding/celebrity-suggestions", () => {
 
     expect(res.status).toBe(200);
     expect(discoverMovies).toHaveBeenCalledWith(["Drama"], [], 1);
+    expect(fetchMovieDetails).not.toHaveBeenCalled();
     expect(res.body.data.items[0]).toEqual({ personId: "p1", name: "Shared Actor", photo: null, appearsIn: 2 });
     expect(res.body.data.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
     expect(res.body.data.nextCursor).toBe("2");
+  });
+
+  it("a cursor page skips a not-yet-cached movie for this response, but backfills it in the background", async () => {
+    discoverMovies.mockResolvedValueOnce({
+      items: [{ movieId: "9", title: "Unseen Movie", poster: null, year: 2020, genres: ["Drama"], originalLanguage: "en", voteAverage: 7 }],
+      totalPages: 1
+    });
+    fetchMovieDetails.mockResolvedValueOnce({
+      movieId: "9",
+      title: "Unseen Movie",
+      poster: null,
+      year: 2020,
+      originalLanguage: "en",
+      genres: ["Drama"],
+      voteAverage: 7,
+      cast: [{ personId: "p9", name: "New Actor", photo: null }],
+      crew: [],
+      credits: []
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .get("/onboarding/celebrity-suggestions?genres=Drama&cursor=1")
+      .set("Authorization", "Bearer good");
+
+    expect(res.body.data.items).toEqual([]); // nothing to rank from yet — not cached at request time
+    await new Promise((resolve) => setTimeout(resolve, 20)); // fire-and-forget backfill's microtask chain
+    expect(fetchMovieDetails).toHaveBeenCalledWith("9");
+    expect((store.get("movies/9") as { genres?: string[] })?.genres).toEqual(["Drama"]);
   });
 
   it("a cursor page returns nextCursor: null once TMDB's own totalPages is exhausted", async () => {
