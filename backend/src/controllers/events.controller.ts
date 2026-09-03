@@ -43,7 +43,7 @@ export async function postDenyJoinRequest(req: Request, res: Response): Promise<
 }
 
 export async function getEvent(req: Request, res: Response): Promise<void> {
-  const result = await eventsService.getEvent(req.params.eventId);
+  const result = await eventsService.getEvent(req.params.eventId, req.uid!);
   Responder.success(res, result);
 }
 

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { searchMovies, getRecentMovies, type MovieSummary } from '../services/movieApi'
 import { posterUrl } from '../../../lib/images'
 import { useAuth } from '../../../lib/AuthContext'
+import { DiscoverPeopleTeaser } from './DiscoverPeopleTeaser'
+import { DiscoverEventsTeaser } from './DiscoverEventsTeaser'
 
 // Every search now hits live TMDB (movies.service.ts's local-index+TMDB
 // merge, hld.md §18) rather than only ever reading a local Firestore index —
@@ -144,56 +146,68 @@ export function MovieSearch() {
         )}
       </header>
 
-      <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-6">
+      <div className="flex flex-1">
+        <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-6">
+          {isGuest && (
+            <div className="mb-6">
+              <h1 className="font-serif text-[26px] font-semibold text-white">Discover movies</h1>
+              <p className="mt-1 text-[13.5px] text-text-muted">Search, browse, and see what BINJ's community thinks — sign in to rate, save, and connect.</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search for a movie…"
+              aria-label="Search for a movie"
+              className="flex-1 rounded-xl border border-border bg-surface-alt px-4 py-3 text-sm text-text outline-none focus:border-accent"
+            />
+            <button type="submit" className="rounded-xl bg-accent px-5 py-3 text-sm font-bold text-bg">
+              Search
+            </button>
+          </form>
+
+          {status === 'loading' && <p className="mt-6 text-sm text-text-muted">Loading…</p>}
+          {status === 'error' && (
+            <p role="alert" className="mt-6 text-sm text-red-400">
+              {errorMessage}
+            </p>
+          )}
+
+          {hasSearched && status !== 'loading' ? (
+            <>
+              {results.length === 0 && status === 'idle' && <p className="mt-8 text-center text-sm text-text-muted">No results for "{query}".</p>}
+              <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {results.map((movie) => (
+                  <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
+                ))}
+              </ul>
+            </>
+          ) : (
+            <section className="mt-8">
+              <h2 className="text-[15px] font-semibold text-text">Recently released</h2>
+              {recentStatus === 'loading' && <p className="mt-3 text-sm text-text-muted">Loading…</p>}
+              {recentStatus === 'error' && <p className="mt-3 text-sm text-text-muted">Couldn't load recent releases right now.</p>}
+              {recentStatus === 'idle' && recent.length === 0 && <p className="mt-3 text-sm text-text-muted">Nothing new to show right now.</p>}
+              <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {recent.map((movie) => (
+                  <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        {/* Desktop-only, guest-only right rail — teases the signed-in-only
+            People/Events features rather than leaving the wide desktop
+            layout empty next to a narrow centered column. */}
         {isGuest && (
-          <div className="mb-6">
-            <h1 className="font-serif text-[26px] font-semibold text-white">Discover movies</h1>
-            <p className="mt-1 text-[13.5px] text-text-muted">Search, browse, and see what BINJ's community thinks — sign in to rate, save, and connect.</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search for a movie…"
-            aria-label="Search for a movie"
-            className="flex-1 rounded-xl border border-border bg-surface-alt px-4 py-3 text-sm text-text outline-none focus:border-accent"
-          />
-          <button type="submit" className="rounded-xl bg-accent px-5 py-3 text-sm font-bold text-bg">
-            Search
-          </button>
-        </form>
-
-        {status === 'loading' && <p className="mt-6 text-sm text-text-muted">Loading…</p>}
-        {status === 'error' && (
-          <p role="alert" className="mt-6 text-sm text-red-400">
-            {errorMessage}
-          </p>
-        )}
-
-        {hasSearched && status !== 'loading' ? (
-          <>
-            {results.length === 0 && status === 'idle' && <p className="mt-8 text-center text-sm text-text-muted">No results for "{query}".</p>}
-            <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {results.map((movie) => (
-                <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
-              ))}
-            </ul>
-          </>
-        ) : (
-          <section className="mt-8">
-            <h2 className="text-[15px] font-semibold text-text">Recently released</h2>
-            {recentStatus === 'loading' && <p className="mt-3 text-sm text-text-muted">Loading…</p>}
-            {recentStatus === 'error' && <p className="mt-3 text-sm text-text-muted">Couldn't load recent releases right now.</p>}
-            {recentStatus === 'idle' && recent.length === 0 && <p className="mt-3 text-sm text-text-muted">Nothing new to show right now.</p>}
-            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {recent.map((movie) => (
-                <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
-              ))}
-            </ul>
-          </section>
+          <aside className="hidden w-80 flex-none flex-col gap-7 border-l border-border-soft px-5.5 py-6 lg:flex">
+            <DiscoverPeopleTeaser />
+            <DiscoverEventsTeaser />
+          </aside>
         )}
       </div>
     </main>

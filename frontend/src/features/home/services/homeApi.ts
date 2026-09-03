@@ -26,8 +26,11 @@ export function unfollowUser(uid: string): Promise<void> {
   return apiFetch(`/users/${encodeURIComponent(uid)}/follow`, { method: 'DELETE', auth: true })
 }
 
+// No auth — public, reachable by a signed-out guest too (MovieSearch.tsx's
+// Discover teaser). The response never carries exact coordinates either way
+// (backend's listUpcomingEvents), so there's nothing sensitive to gate here.
 export function getUpcomingEvents(): Promise<{ items: UpcomingEvent[] }> {
-  return apiFetch('/events/upcoming', { auth: true })
+  return apiFetch('/events/upcoming')
 }
 
 export function getNearbyEvents(lat: number, lng: number, radiusKm: number): Promise<{ items: NearbyEvent[] }> {

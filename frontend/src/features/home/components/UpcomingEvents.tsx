@@ -75,6 +75,11 @@ export function UpcomingEvents() {
                 </span>
                 <div className="mt-1 truncate text-[13px] font-bold text-text">{event.title ?? event.movieTitle ?? 'Watch party'}</div>
                 <div className="mt-0.5 text-[10.5px] text-text-muted">{formatDate(event.datetime)}</div>
+                {event.mode === 'in-person' && event.location && (
+                  <div className="mt-0.5 text-[10.5px] text-text-muted">
+                    {event.location.area}, {event.location.city}
+                  </div>
+                )}
                 <div className="mt-0.5 text-[10.5px] text-text-muted">
                   {event.participantCount}/{event.participantLimit} going
                 </div>

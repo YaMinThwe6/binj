@@ -210,6 +210,42 @@ describe("POST /events", () => {
     const privateStored = store.get(`events/${privateRes.body.data.eventId}`) as { joinCode: string | null };
     expect(privateStored.joinCode).toBe(privateRes.body.data.joinCode);
   });
+
+  it("400s an in-person event with no location at all", async () => {
+    const app = createApp();
+    const res = await authed(app, "post", "/events").send({ ...validBody, mode: "in-person" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("INVALID_EVENT");
+  });
+
+  it("400s an in-person event missing area or city", async () => {
+    const app = createApp();
+    const res = await authed(app, "post", "/events").send({
+      ...validBody,
+      mode: "in-person",
+      location: { area: "MG Road", lat: 12.9716, lng: 77.5946 } // no city
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("INVALID_EVENT");
+  });
+
+  it("does not require a location for an online event", async () => {
+    const app = createApp();
+    const res = await authed(app, "post", "/events").send(validBody); // mode: "online"
+    expect(res.status).toBe(201);
+  });
+
+  it("returns area/city as location, and the exact coordinates as preciseLocation, for the host who just created it", async () => {
+    const app = createApp();
+    const res = await authed(app, "post", "/events").send({
+      ...validBody,
+      mode: "in-person",
+      location: { area: "MG Road", city: "Bangalore", lat: 12.9716, lng: 77.5946 }
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.location).toEqual({ area: "MG Road", city: "Bangalore" });
+    expect(res.body.data.preciseLocation).toEqual({ lat: 12.9716, lng: 77.5946 });
+  });
 });
 
 describe("GET /events/upcoming", () => {
@@ -224,6 +260,33 @@ describe("GET /events/upcoming", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.items.map((e: { eventId: string }) => e.eventId)).toEqual(["soon", "later"]);
     expect(res.body.data.items[0].movieTitle).toBe("Dune: Part Two");
+  });
+
+  it("is reachable without a token — the guest Discover page's events teaser needs this too", async () => {
+    store.set("events/soon", { hostId: "host-1", movieId: "movie-1", visibility: "public", datetime: new Date("2099-06-01"), participantCount: 1, participantLimit: 5, requiresApproval: false });
+    const app = createApp();
+    const res = await request(app).get("/events/upcoming");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+  });
+
+  it("shows area/city but never the exact coordinates, even for the caller who hosts the event", async () => {
+    store.set("events/soon", {
+      hostId: "host-1", // currentUid defaults to "host-1" — this caller hosts it
+      movieId: "movie-1",
+      visibility: "public",
+      datetime: new Date("2099-06-01"),
+      mode: "in-person",
+      location: { area: "MG Road", city: "Bangalore", lat: 12.9716, lng: 77.5946 },
+      participantCount: 1,
+      participantLimit: 5,
+      requiresApproval: false
+    });
+    const app = createApp();
+    const res = await authed(app, "get", "/events/upcoming");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items[0].location).toEqual({ area: "MG Road", city: "Bangalore" });
+    expect(res.body.data.items[0].preciseLocation).toBeNull();
   });
 });
 
@@ -358,7 +421,7 @@ describe("POST /events computes a geohash for in-person events with a location",
     const res = await authed(app, "post", "/events").send({
       ...validBody,
       mode: "in-person",
-      location: { address: "MG Road, Bangalore", lat: 12.9716, lng: 77.5946 }
+      location: { area: "MG Road", city: "Bangalore", lat: 12.9716, lng: 77.5946 }
     });
     expect(res.status).toBe(201);
     const stored = store.get(`events/${res.body.data.eventId}`) as { geohash: string | null };
@@ -382,7 +445,7 @@ describe("GET /events/nearby", () => {
 
   function inPersonBody(
     overrides: Partial<typeof validBody> & {
-      location: { address: string; lat: number; lng: number };
+      location: { area: string; city: string; lat: number; lng: number };
       title?: string;
       invitedUserIds?: string[];
     }
@@ -409,7 +472,7 @@ describe("GET /events/nearby", () => {
   it("returns a public in-person event within the radius, with distanceKm", async () => {
     const app = createApp();
     await authed(app, "post", "/events").send(
-      inPersonBody({ location: { address: "Near MG Road", ...bangaloreNearby } })
+      inPersonBody({ location: { area: "Near MG Road", city: "Bangalore", ...bangaloreNearby } })
     );
 
     const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
@@ -418,11 +481,16 @@ describe("GET /events/nearby", () => {
     expect(res.body.data.items[0].movieTitle).toBe("Dune: Part Two");
     expect(res.body.data.items[0].distanceKm).toBeGreaterThan(0);
     expect(res.body.data.items[0].distanceKm).toBeLessThan(5);
+    // Unlike /events/upcoming, the map (NearbyEventsMap.tsx) needs a real pin
+    // for every result it plots — nearby stays unaffected by the
+    // pre-join area/city-only rule (out of scope, see events.service.ts).
+    expect(res.body.data.items[0].location).toEqual({ area: "Near MG Road", city: "Bangalore" });
+    expect(res.body.data.items[0].preciseLocation).toEqual(bangaloreNearby);
   });
 
   it("excludes an event outside the search radius", async () => {
     const app = createApp();
-    await authed(app, "post", "/events").send(inPersonBody({ location: { address: "Mysore Palace", ...mysore } }));
+    await authed(app, "post", "/events").send(inPersonBody({ location: { area: "Mysore Palace", city: "Mysore", ...mysore } }));
 
     const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
     expect(res.status).toBe(200);
@@ -441,7 +509,7 @@ describe("GET /events/nearby", () => {
   it("excludes a private event the caller neither hosts nor was invited to", async () => {
     const app = createApp();
     await authed(app, "post", "/events").send(
-      inPersonBody({ visibility: "private", location: { address: "Near MG Road", ...bangaloreNearby } })
+      inPersonBody({ visibility: "private", location: { area: "Near MG Road", city: "Bangalore", ...bangaloreNearby } })
     );
 
     currentUid = "guest-1";
@@ -453,7 +521,7 @@ describe("GET /events/nearby", () => {
   it("includes a private event the caller is hosting", async () => {
     const app = createApp(); // currentUid stays "host-1"
     await authed(app, "post", "/events").send(
-      inPersonBody({ visibility: "private", location: { address: "Near MG Road", ...bangaloreNearby } })
+      inPersonBody({ visibility: "private", location: { area: "Near MG Road", city: "Bangalore", ...bangaloreNearby } })
     );
 
     const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
@@ -466,7 +534,7 @@ describe("GET /events/nearby", () => {
     await authed(app, "post", "/events").send(
       inPersonBody({
         visibility: "private",
-        location: { address: "Near MG Road", ...bangaloreNearby },
+        location: { area: "Near MG Road", city: "Bangalore", ...bangaloreNearby },
         invitedUserIds: ["guest-1"]
       })
     );
@@ -484,10 +552,10 @@ describe("GET /events/nearby", () => {
       // (~3.2km away, vs. ~0.5km) — a point crossing into a neighboring cell
       // would be silently excluded by the range query itself (the known
       // "approximation of a bounding box" limitation this feature accepts).
-      inPersonBody({ title: "Far one", location: { address: "A bit further", lat: 13.0, lng: 77.6 } })
+      inPersonBody({ title: "Far one", location: { area: "A bit further", city: "Bangalore", lat: 13.0, lng: 77.6 } })
     );
     await authed(app, "post", "/events").send(
-      inPersonBody({ title: "Close one", location: { address: "Very close", ...bangaloreNearby } })
+      inPersonBody({ title: "Close one", location: { area: "Very close", city: "Bangalore", ...bangaloreNearby } })
     );
 
     const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=10`);
@@ -553,6 +621,42 @@ describe("GET /events/:eventId", () => {
     const app = createApp();
     const res = await authed(app, "get", "/events/evt-1");
     expect(res.status).toBe(200);
+  });
+
+  const inPersonEvent = {
+    hostId: "host-1",
+    movieId: "movie-1",
+    mode: "in-person",
+    location: { area: "MG Road", city: "Bangalore", lat: 12.9716, lng: 77.5946 },
+    visibility: "public",
+    participantCount: 1,
+    participantLimit: 5
+  };
+
+  it("gives the host the exact coordinates", async () => {
+    store.set("events/evt-1", inPersonEvent); // currentUid stays "host-1"
+    const app = createApp();
+    const res = await authed(app, "get", "/events/evt-1");
+    expect(res.body.data.location).toEqual({ area: "MG Road", city: "Bangalore" });
+    expect(res.body.data.preciseLocation).toEqual({ lat: 12.9716, lng: 77.5946 });
+  });
+
+  it("hides the exact coordinates from a signed-in caller who hasn't joined", async () => {
+    store.set("events/evt-1", inPersonEvent);
+    currentUid = "stranger-1";
+    const app = createApp();
+    const res = await authed(app, "get", "/events/evt-1");
+    expect(res.body.data.location).toEqual({ area: "MG Road", city: "Bangalore" });
+    expect(res.body.data.preciseLocation).toBeNull();
+  });
+
+  it("reveals the exact coordinates once the caller has joined", async () => {
+    store.set("events/evt-1", inPersonEvent);
+    store.set("events/evt-1/participants/guest-1", { joinedAt: new Date() });
+    currentUid = "guest-1";
+    const app = createApp();
+    const res = await authed(app, "get", "/events/evt-1");
+    expect(res.body.data.preciseLocation).toEqual({ lat: 12.9716, lng: 77.5946 });
   });
 });
 

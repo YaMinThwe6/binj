@@ -71,6 +71,15 @@ describe('UpcomingEvents', () => {
     expect(await screen.findByRole('button', { name: 'Requested' })).toBeDisabled()
   })
 
+  it('shows area/city for an in-person event', async () => {
+    getUpcomingEvents.mockResolvedValue({
+      items: [{ ...event, mode: 'in-person' as const, location: { area: 'Bandra West', city: 'Mumbai' }, preciseLocation: null }]
+    })
+    renderWithRouter()
+
+    expect(await screen.findByText('Bandra West, Mumbai')).toBeInTheDocument()
+  })
+
   it('offers a Chat button once joined, opening the event\'s room', async () => {
     getUpcomingEvents.mockResolvedValue({ items: [event] })
     joinEvent.mockResolvedValue({ status: 'joined' })

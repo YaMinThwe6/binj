@@ -6,6 +6,12 @@ const searchMovies = vi.fn()
 const getRecentMovies = vi.fn()
 vi.mock('../../../../src/features/movie/services/movieApi', () => ({ searchMovies, getRecentMovies }))
 
+// The guest right rail's DiscoverEventsTeaser fetches this on mount — not
+// this file's focus, defaulted to empty in beforeEach below so it doesn't
+// need setup in every test.
+const getUpcomingEvents = vi.fn()
+vi.mock('../../../../src/features/home/services/homeApi', () => ({ getUpcomingEvents }))
+
 let authUser: { uid: string } | null = { uid: 'uid-1' }
 vi.mock('../../../../src/lib/AuthContext', () => ({
   useAuth: () => ({ user: authUser, loading: false, signInWithGoogle: vi.fn(), signInWithMicrosoft: vi.fn(), signInWithToken: vi.fn(), signOutUser: vi.fn() })
@@ -16,6 +22,7 @@ const { MovieSearch } = await import('../../../../src/features/movie/components/
 afterEach(() => {
   searchMovies.mockReset()
   getRecentMovies.mockReset()
+  getUpcomingEvents.mockReset()
   authUser = { uid: 'uid-1' }
 })
 
@@ -23,6 +30,7 @@ afterEach(() => {
 // its own tests further down set specific responses.
 beforeEach(() => {
   getRecentMovies.mockResolvedValue({ items: [] })
+  getUpcomingEvents.mockResolvedValue({ items: [] })
 })
 
 // MovieSearch decides guest-vs-signed-in from useAuth() rather than a prop
@@ -84,6 +92,17 @@ describe('MovieSearch — guest usage (public Discover)', () => {
     authUser = { uid: 'uid-1' }
     renderWithRouter()
     expect(screen.queryByRole('button', { name: /our story/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the right-rail People teaser', () => {
+    authUser = null
+    renderWithRouter('/')
+    expect(screen.getByText('People you might vibe with')).toBeInTheDocument()
+  })
+
+  it('does not show the right-rail People teaser for a signed-in visitor', () => {
+    renderWithRouter()
+    expect(screen.queryByText('People you might vibe with')).not.toBeInTheDocument()
   })
 })
 
