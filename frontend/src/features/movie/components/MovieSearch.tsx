@@ -147,7 +147,7 @@ export function MovieSearch() {
       </header>
 
       <div className="flex flex-1">
-        <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-6">
+        <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-6">
           {isGuest && (
             <div className="mb-6">
               <h1 className="font-serif text-[26px] font-semibold text-white">Discover movies</h1>
