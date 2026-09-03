@@ -179,7 +179,7 @@ export function MovieSearch() {
           {hasSearched && status !== 'loading' ? (
             <>
               {results.length === 0 && status === 'idle' && <p className="mt-8 text-center text-sm text-text-muted">No results for "{query}".</p>}
-              <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {results.map((movie) => (
                   <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
                 ))}
@@ -191,7 +191,7 @@ export function MovieSearch() {
               {recentStatus === 'loading' && <p className="mt-3 text-sm text-text-muted">Loading…</p>}
               {recentStatus === 'error' && <p className="mt-3 text-sm text-text-muted">Couldn't load recent releases right now.</p>}
               {recentStatus === 'idle' && recent.length === 0 && <p className="mt-3 text-sm text-text-muted">Nothing new to show right now.</p>}
-              <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {recent.map((movie) => (
                   <MovieCard key={movie.movieId} movie={movie} onOpen={() => navigate(`/movie/${movie.movieId}`)} />
                 ))}

@@ -115,28 +115,16 @@ export function Welcome() {
   }
 
   if (stage === 'welcome') {
-    // Getting Started — matches the design canvas's Welcome.dc.html /
-    // WelcomeDesktop.dc.html exactly: full-bleed atmosphere photo (a
-    // distinct crop per breakpoint, not one image scaled), an accent glow
-    // and a bottom fade-to-black over it, content anchored to the bottom.
-    // Desktop swaps the small wordmark-as-heading for a fixed top-left
-    // wordmark plus a large headline + subtitle, and the button gains an
-    // arrow — mobile stays copy-only.
+    // Getting Started — an accent glow and a bottom fade-to-black wash over
+    // the plain background (no photo — a stock/generic atmosphere shot read
+    // as an artificial, template-made touch rather than something BINJ's
+    // own), content anchored to the bottom. Desktop swaps the small
+    // wordmark-as-heading for a fixed top-left wordmark plus a large
+    // headline + subtitle, and the button gains an arrow — mobile stays
+    // copy-only.
     return (
       <main className="relative flex h-svh flex-col overflow-hidden bg-bg text-text">
         <div className="pointer-events-none absolute inset-0">
-          <img
-            src="/images/welcome-bg-mobile.jpg"
-            alt=""
-            className="h-full w-full object-cover md:hidden"
-            style={{ objectPosition: 'center 30%' }}
-          />
-          <img
-            src="/images/welcome-bg-desktop.jpg"
-            alt=""
-            className="hidden h-full w-full object-cover md:block"
-            style={{ objectPosition: 'center 25%' }}
-          />
           <div
             className="absolute inset-0 md:hidden"
             style={{ background: 'radial-gradient(90% 55% at 75% 12%, rgba(var(--accent-rgb), 0.12), transparent 60%)' }}
