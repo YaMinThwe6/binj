@@ -174,7 +174,7 @@ export function Welcome() {
           </svg>
         </button>
 
-        <div className="relative z-10 mt-auto flex flex-col items-center px-8 pb-14 text-center md:px-10 md:pb-14">
+        <div className="relative z-10 mt-auto flex animate-fade-in-up flex-col items-center px-8 pb-14 text-center md:px-10 md:pb-14">
           <span className="font-serif text-5xl font-bold text-accent animate-logo-pulse md:hidden">BINJ</span>
           <p className="mt-3.5 mb-10 max-w-sm text-[15px] leading-relaxed text-text-secondary md:hidden">
             Find your movie.
@@ -182,6 +182,7 @@ export function Welcome() {
             Find your people.
           </p>
 
+          <span className="hidden animate-logo-pulse font-serif text-6xl font-bold text-accent md:mb-3 md:block">BINJ</span>
           <span className="hidden font-serif text-5xl font-bold tracking-wide text-white md:block">
             Find your movie.
             <br />

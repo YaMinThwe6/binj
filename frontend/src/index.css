@@ -30,6 +30,10 @@
      wordmark is coming once it's designed (see Welcome.tsx); this is just
      a gentle glow-pulse stand-in, not the final motion design. */
   --animate-logo-pulse: logo-pulse 3s ease-in-out infinite;
+
+  /* Welcome's bottom content block (wordmark/tagline/CTAs) eases in once on
+     page load — deliberately slow/gentle, not a snappy UI transition. */
+  --animate-fade-in-up: fade-in-up 1.4s ease-out both;
 }
 
 @keyframes logo-pulse {
@@ -40,6 +44,17 @@
   50% {
     opacity: 0.88;
     filter: drop-shadow(0 0 18px rgba(var(--accent-rgb), 0.55));
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
