@@ -224,11 +224,19 @@ export interface TmdbDiscoverResult extends MovieSummary {
 export async function discoverMovies(genres: string[], languages: string[], page: number): Promise<{ items: TmdbDiscoverResult[]; totalPages: number }> {
   const params = new URLSearchParams({ sort_by: "popularity.desc", page: String(page), include_adult: "false" });
 
+  // TMDB's with_genres treats a comma-separated list as AND (must match
+  // every genre listed) and pipe-separated as OR (match any) — confirmed
+  // directly against TMDB's own docs. A comma here (the natural-looking
+  // choice, and the original bug) makes the filter *stricter* the more
+  // genres someone picks — with enough genres selected, almost nothing
+  // satisfies "belongs to all of these at once", so Discover legitimately
+  // runs out of pages almost immediately. Since a user picking several
+  // genres means "any of these", not "all of these", pipe is correct here.
   const genreIds = genres.map((g) => GENRE_NAME_TO_ID[g]).filter((id): id is number => id !== undefined);
-  if (genreIds.length > 0) params.set("with_genres", genreIds.join(","));
+  if (genreIds.length > 0) params.set("with_genres", genreIds.join("|"));
 
-  // TMDB's discover only accepts a single original_language, unlike
-  // with_genres' comma-separated OR. With more than one language chosen,
+  // TMDB's discover only accepts a single original_language (no equivalent
+  // OR syntax the way with_genres has). With more than one language chosen,
   // this is left unfiltered here and cross-checked in-app instead — same
   // "genre query, language filtered in-app" convention onboarding.service.ts's
   // local candidate query already uses.

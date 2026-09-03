@@ -189,22 +189,27 @@ export function CelebritiesStep({ genres = [], languages = [], initialFollowedId
           </button>
         )}
 
-        {/* A fixed gap, not a flex-1 spacer — see MultiSelectStep.tsx for
-            why: flex-1 collapses to nothing once the form is vertically
-            centered instead of stretched (OnboardingShell's desktop
-            layout), so however many suggestions came back, there's still a
-            real gap here rather than the button touching the list. */}
+        {/* Extra breathing room so the sticky footer below never overlaps
+            the last row of the grid, however tall it's grown. */}
+        <div className="h-8" />
+      </div>
+
+      {/* Sticky to the viewport bottom, not just placed at the end of the
+          content — the grid can grow indefinitely now (infinite scroll), so
+          a Continue button that simply sits after it would end up scrolled
+          far out of reach instead of staying reachable at all times. */}
+      <div className="sticky bottom-0 border-t border-border-soft bg-bg/95 px-7 pt-4 pb-6 backdrop-blur-sm">
         <button
           type="button"
           onClick={() => onContinue([...followedIds])}
-          className="mt-8 flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg"
+          className="flex w-full items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg"
         >
           Continue
         </button>
         <button
           type="button"
           onClick={() => onSkip([...followedIds])}
-          className="mt-4 text-center text-[13px] font-semibold text-text-muted"
+          className="mt-4 block w-full text-center text-[13px] font-semibold text-text-muted"
         >
           Skip for now
         </button>

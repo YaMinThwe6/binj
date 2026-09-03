@@ -65,7 +65,10 @@ describe("tmdb.discoverMovies", () => {
 
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toContain("/discover/movie?");
-    expect(url).toContain("with_genres=878%2C18");
+    // Pipe-separated — TMDB's OR for with_genres. A comma would be AND
+    // (must match every genre listed), which is the bug this fixes: picking
+    // more genres should widen the match, not require all of them at once.
+    expect(url).toContain("with_genres=878%7C18");
     expect(url).toContain("page=3");
     expect(result).toEqual({
       items: [

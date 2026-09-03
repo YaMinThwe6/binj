@@ -20,18 +20,45 @@ function parseCursor(raw: unknown): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+// At most this many backfills run at once, process-wide — not per call. A
+// scroll session can trigger this dozens of times in a row (one per page),
+// and without a shared cap, each of those unboundedly fires off ~20 more
+// full TMDB detail fetches (several sub-requests each) plus Firestore
+// writes; those pile up faster than they drain and end up starving out
+// completely unrelated requests on the same server (a plain username save
+// was seen hanging behind the backlog). A real getMovieDetail() call for an
+// already-cached movie is cheap (one Firestore read, no TMDB round-trip) —
+// this queue only meaningfully throttles genuinely new movies.
+const BACKFILL_CONCURRENCY = 4;
+const backfillQueue: string[] = [];
+let backfillWorkersRunning = 0;
+
+function runBackfillWorker(): void {
+  const movieId = backfillQueue.shift();
+  if (movieId === undefined) {
+    backfillWorkersRunning--;
+    return;
+  }
+  getMovieDetail(movieId)
+    .catch(() => {})
+    .finally(runBackfillWorker);
+}
+
 // Fire-and-forget: pulls each discovered movie through getMovieDetail's
 // existing fetch-and-upsert path so it becomes exactly as locally-cached and
 // search-indexed as one someone opened by hand — but NOT awaited by either
 // caller below. Awaiting a full TMDB detail fetch (credits/videos/watch-
 // providers, several sub-requests) for every item on a scroll page was the
-// actual bug reported: correct data, but 15-20+ seconds per page with the UI
-// showing nothing but a static "Loading more…" the whole time. Both callers
-// only need what discoverMovies() already returned in ONE request; this just
-// grows the local pool for next time, in the background.
+// original bug reported: correct data, but 15-20+ seconds per page with the
+// UI showing nothing but a static "Loading more…" the whole time. Both
+// callers only need what discoverMovies() already returned in ONE request;
+// this just grows the local pool for next time, in the background, bounded
+// by BACKFILL_CONCURRENCY above.
 function backfillInBackground(movieIds: string[]): void {
-  for (const movieId of movieIds) {
-    getMovieDetail(movieId).catch(() => {});
+  backfillQueue.push(...movieIds);
+  while (backfillWorkersRunning < BACKFILL_CONCURRENCY && backfillQueue.length > 0) {
+    backfillWorkersRunning++;
+    runBackfillWorker();
   }
 }
 
