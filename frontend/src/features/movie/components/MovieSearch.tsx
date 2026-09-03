@@ -132,9 +132,14 @@ export function MovieSearch() {
         ) : (
           <>
             <span className="font-serif text-lg font-bold text-accent">BINJ</span>
-            <button type="button" onClick={() => navigate('/get-started')} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-bold text-bg">
-              Get Started
-            </button>
+            <div className="flex items-center gap-4">
+              <button type="button" onClick={() => navigate('/story')} className="text-[13px] font-semibold text-text-secondary">
+                Our Story
+              </button>
+              <button type="button" onClick={() => navigate('/get-started')} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-bold text-bg">
+                Get Started
+              </button>
+            </div>
           </>
         )}
       </header>
@@ -189,12 +194,6 @@ export function MovieSearch() {
               ))}
             </ul>
           </section>
-        )}
-
-        {isGuest && (
-          <button type="button" onClick={() => navigate('/story')} className="mt-10 block text-[11.5px] font-semibold text-text-faint underline">
-            Our Story
-          </button>
         )}
       </div>
     </main>

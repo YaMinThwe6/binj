@@ -75,7 +75,7 @@ describe('MovieSearch — guest usage (public Discover)', () => {
     expect(await screen.findByText('Get started page')).toBeInTheDocument()
   })
 
-  it('offers an Our Story link, absent for a signed-in visitor', async () => {
+  it('offers an Our Story button in the header, absent for a signed-in visitor', async () => {
     authUser = null
     renderWithRouter('/')
     fireEvent.click(screen.getByRole('button', { name: /our story/i }))
