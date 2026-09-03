@@ -298,6 +298,51 @@ describe("GET /users/me/movies/:movieId — status bundle", () => {
   });
 });
 
+describe("GET /users/me/movies/status — batch status", () => {
+  it("401s without a token", async () => {
+    const app = createApp();
+    const res = await request(app).get("/users/me/movies/status?ids=movie-1");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns an empty map when no ids are given", async () => {
+    const app = createApp();
+    const res = await authed(app, "get", "/users/me/movies/status");
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ items: {} });
+  });
+
+  it("reports each requested id, all-false for one the caller has no relationship to", async () => {
+    store.set("users/uid-1/watchlist/movie-1", { addedAt: new Date() });
+    store.set("users/uid-1/likes/movie-1", { createdAt: new Date() });
+    store.set("users/uid-1/watched/movie-2", { watchedAt: new Date(), visibility: "public" });
+    const app = createApp();
+    const res = await authed(app, "get", "/users/me/movies/status?ids=movie-1,movie-2,movie-3");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual({
+      "movie-1": { watchlisted: true, watched: false, liked: true },
+      "movie-2": { watchlisted: false, watched: true, liked: false },
+      "movie-3": { watchlisted: false, watched: false, liked: false }
+    });
+  });
+
+  it("dedupes repeated ids and ignores blanks", async () => {
+    const app = createApp();
+    const res = await authed(app, "get", "/users/me/movies/status?ids=movie-1,,movie-1, ,movie-1");
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body.data.items)).toEqual(["movie-1"]);
+  });
+
+  it("caps the number of ids it will look up in one request", async () => {
+    const ids = Array.from({ length: 200 }, (_, i) => `m${i}`).join(",");
+    const app = createApp();
+    const res = await authed(app, "get", `/users/me/movies/status?ids=${ids}`);
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body.data.items).length).toBeLessThanOrEqual(60);
+  });
+});
+
 describe("auth", () => {
   it("401s without a token on a write endpoint", async () => {
     const app = createApp();

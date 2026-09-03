@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../lib/api'
-export type { MovieSummary, MovieDetail, MovieStatus, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
-import type { MovieSummary, MovieDetail, MovieStatus, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
+export type { MovieSummary, MovieDetail, MovieStatus, MovieStatusLite, MovieStatusMap, DiscoverMoviesResponse, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
+import type { MovieSummary, MovieDetail, MovieStatus, MovieStatusMap, DiscoverMoviesResponse, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
 
 export function searchMovies(query: string): Promise<{ items: MovieSummary[] }> {
   return apiFetch(`/search/movies?q=${encodeURIComponent(query)}`)
@@ -8,6 +8,30 @@ export function searchMovies(query: string): Promise<{ items: MovieSummary[] }> 
 
 export function getRecentMovies(): Promise<{ items: MovieSummary[] }> {
   return apiFetch('/movies/recent')
+}
+
+// Browse-by-facet: every movie in a genre and/or original language,
+// popularity-ordered, TMDB's own discover paging passed straight through
+// (page 1-based, `totalPages` bounds "load more"). `genre` is a TMDB genre
+// name, `language` an ISO 639-1 code — the caller resolves those from the
+// chip it matched (see movie/genreLanguageMatch.ts).
+export function discoverMovies(
+  opts: { genre?: string | null; language?: string | null; page?: number }
+): Promise<DiscoverMoviesResponse> {
+  const params = new URLSearchParams()
+  if (opts.genre) params.set('genre', opts.genre)
+  if (opts.language) params.set('language', opts.language)
+  if (opts.page && opts.page > 1) params.set('page', String(opts.page))
+  return apiFetch(`/discover/movies?${params.toString()}`)
+}
+
+// Batch relationship lookup for a whole result set — one request instead of
+// one per card. Signed-in only. An id the caller has no relationship to is
+// still present in the map (all-false), so a missing key means "not asked",
+// not "no relationship".
+export function getMovieStatuses(movieIds: string[]): Promise<MovieStatusMap> {
+  if (movieIds.length === 0) return Promise.resolve({ items: {} })
+  return apiFetch(`/users/me/movies/status?ids=${movieIds.map(encodeURIComponent).join(',')}`, { auth: true })
 }
 
 export function getMovie(movieId: string): Promise<MovieDetail> {

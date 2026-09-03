@@ -11,6 +11,7 @@ import {
   getWatched,
   putLike,
   deleteLike,
+  getMovieStatuses,
   getMovieStatus
 } from "../controllers/userMovies.controller.js";
 
@@ -28,4 +29,7 @@ userMoviesRouter.get("/users/me/watched", requireAuth, asyncHandler(getWatched))
 userMoviesRouter.put("/users/me/likes/:movieId", requireAuth, asyncHandler(putLike));
 userMoviesRouter.delete("/users/me/likes/:movieId", requireAuth, asyncHandler(deleteLike));
 
+// Registered before "/users/me/movies/:movieId" — the param route would
+// otherwise capture "status" as a movieId.
+userMoviesRouter.get("/users/me/movies/status", requireAuth, asyncHandler(getMovieStatuses));
 userMoviesRouter.get("/users/me/movies/:movieId", requireAuth, asyncHandler(getMovieStatus));

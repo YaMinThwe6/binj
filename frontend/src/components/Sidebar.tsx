@@ -31,18 +31,19 @@ function NavRow({ label, active, disabled, icon, onClick }: NavItem) {
     )
   }
   return (
-    <button type="button" onClick={onClick} className="w-full text-left">
+    <button type="button" onClick={onClick} className="w-full cursor-pointer text-left">
       {content}
     </button>
   )
 }
 
 // Desktop-only left nav shell (design canvas's HomeDesktop.dc.html) — the
-// mobile bottom-nav stays the nav surface below lg. Only Home/Search are
-// wired to real navigation; the rest mirror the same "Coming soon" disabled
-// treatment the mobile bottom nav already uses for features that don't
-// exist yet, not new functionality.
-export function Sidebar() {
+// mobile bottom-nav (MobileTabBar) stays the nav surface below lg. Shared by
+// every top-level signed-in page so they read as one app rather than
+// separate screens; `active` highlights the current one. Only Home/Search
+// are wired to real navigation; the rest mirror the same "Coming soon"
+// disabled treatment the mobile bottom nav already uses.
+export function Sidebar({ active = 'home' }: { active?: 'home' | 'search' }) {
   const navigate = useNavigate()
   return (
     <aside className="hidden w-58 flex-none flex-col gap-7 border-r border-border-soft px-4.5 py-6 lg:flex">
@@ -58,7 +59,8 @@ export function Sidebar() {
       <nav className="flex flex-col gap-0.5">
         <NavRow
           label="Home"
-          active
+          active={active === 'home'}
+          onClick={() => navigate('/')}
           icon={
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 11l9-8 9 8" />
@@ -68,6 +70,7 @@ export function Sidebar() {
         />
         <NavRow
           label="Search"
+          active={active === 'search'}
           onClick={() => navigate('/search')}
           icon={
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

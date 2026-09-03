@@ -80,8 +80,9 @@ vi.mock("../src/lib/firebaseAdmin.js", () => ({
 const fetchMovieDetails = vi.fn();
 const searchMovies = vi.fn();
 const getRecentMovies = vi.fn();
+const discoverMovies = vi.fn();
 
-vi.mock("../src/lib/tmdb.js", () => ({ fetchMovieDetails, searchMovies, getRecentMovies }));
+vi.mock("../src/lib/tmdb.js", () => ({ fetchMovieDetails, searchMovies, getRecentMovies, discoverMovies }));
 
 const { createApp } = await import("../src/app.js");
 
@@ -91,6 +92,7 @@ beforeEach(() => {
   fetchMovieDetails.mockReset();
   searchMovies.mockReset();
   getRecentMovies.mockReset();
+  discoverMovies.mockReset();
 });
 
 describe("GET /movies/:movieId", () => {
@@ -366,5 +368,76 @@ describe("GET /search/movies", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.items).toEqual([]); // no textual match -> dropped, not just deprioritized
+  });
+});
+
+describe("GET /discover/movies", () => {
+  it("400s when neither a known genre nor a known language is given", async () => {
+    const app = createApp();
+    const res = await request(app).get("/discover/movies");
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("MISSING_FILTER");
+    expect(discoverMovies).not.toHaveBeenCalled();
+  });
+
+  it("400s on an unrecognized genre/language rather than silently returning unfiltered popular movies", async () => {
+    const app = createApp();
+    const res = await request(app).get("/discover/movies?genre=Bollywood&language=elvish");
+    expect(res.status).toBe(400);
+    expect(discoverMovies).not.toHaveBeenCalled();
+  });
+
+  it("passes a known language through to TMDB discover and returns its results as plain summaries", async () => {
+    discoverMovies.mockResolvedValueOnce({
+      items: [{ movieId: "496243", title: "Parasite", poster: "/p.jpg", year: 2019, genres: ["Thriller"], originalLanguage: "ko", voteAverage: 8.5 }],
+      totalPages: 12
+    });
+    const app = createApp();
+    const res = await request(app).get("/discover/movies?language=ko");
+
+    expect(res.status).toBe(200);
+    expect(discoverMovies).toHaveBeenCalledWith([], ["ko"], 1);
+    expect(res.body.data).toMatchObject({
+      page: 1,
+      totalPages: 12,
+      items: [{ movieId: "496243", title: "Parasite", poster: "/p.jpg", year: 2019 }]
+    });
+  });
+
+  it("passes a known genre through and honors the page param", async () => {
+    discoverMovies.mockResolvedValueOnce({ items: [], totalPages: 3 });
+    const app = createApp();
+    const res = await request(app).get("/discover/movies?genre=Horror&page=2");
+
+    expect(res.status).toBe(200);
+    expect(discoverMovies).toHaveBeenCalledWith(["Horror"], [], 2);
+  });
+
+  it("upserts discovered movies into the local index so a tapped card opens without a cold TMDB fetch", async () => {
+    discoverMovies.mockResolvedValueOnce({
+      items: [{ movieId: "496243", title: "Parasite", poster: "/p.jpg", year: 2019, genres: [], originalLanguage: "ko", voteAverage: 8.5 }],
+      totalPages: 1
+    });
+    const app = createApp();
+    await request(app).get("/discover/movies?language=ko");
+
+    const upserted = store.get("movies/496243") as { title: string; titleSearchTerms: string[] };
+    expect(upserted.title).toBe("Parasite");
+    expect(upserted.titleSearchTerms).toEqual(expect.arrayContaining(["p", "pa", "parasite"]));
+  });
+
+  it("502s when TMDB discover fails", async () => {
+    discoverMovies.mockRejectedValueOnce(new Error("boom"));
+    const app = createApp();
+    const res = await request(app).get("/discover/movies?genre=Horror");
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("TMDB_UPSTREAM_ERROR");
+  });
+
+  it("falls back to page 1 for a non-numeric page", async () => {
+    discoverMovies.mockResolvedValueOnce({ items: [], totalPages: 1 });
+    const app = createApp();
+    await request(app).get("/discover/movies?genre=Horror&page=abc");
+    expect(discoverMovies).toHaveBeenCalledWith(["Horror"], [], 1);
   });
 });

@@ -1,6 +1,12 @@
 import type { MovieDetail, MovieSummary } from "@binj/shared-types";
 import { db } from "../lib/firebaseAdmin.js";
-import { fetchMovieDetails, searchMovies as tmdbSearchMovies, getRecentMovies as tmdbGetRecentMovies, type TmdbMovie } from "../lib/tmdb.js";
+import {
+  fetchMovieDetails,
+  searchMovies as tmdbSearchMovies,
+  getRecentMovies as tmdbGetRecentMovies,
+  discoverMovies as tmdbDiscoverMovies,
+  type TmdbMovie
+} from "../lib/tmdb.js";
 import { buildSearchTerms, significantWords } from "../lib/searchIndex.js";
 import { rankCandidate } from "../lib/searchRanking.js";
 import { AppError } from "../utils/AppError.js";
@@ -110,6 +116,52 @@ export async function getRecentMoviesService(): Promise<{ items: MovieSummary[] 
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new AppError("TMDB_UPSTREAM_ERROR", "Failed to fetch recent movies", 502);
+  }
+}
+
+// Browse-by-facet catalog — the frontend's chip (`Browse Korean films`) only
+// ever sends a value from this same list, but the endpoint is public and
+// validates its own input rather than trusting the caller. Third copy of this
+// taxonomy in the tree (frontend onboarding constants.ts, tmdb.ts's
+// GENRE_NAME_TO_ID) — kept in sync by hand, same call tmdb.ts already made
+// ("hardcoded rather than fetched, since it practically never changes").
+const KNOWN_GENRES = new Set([
+  "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Family",
+  "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western"
+]);
+const KNOWN_LANGUAGES = new Set(["en", "hi", "ta", "te", "ml", "kn", "bn", "pa", "ko", "ja", "zh", "th", "es", "fr", "ru"]);
+const DISCOVER_MAX_PAGE = 500; // TMDB's /discover hard cap — asking past it just 422s
+
+// GET /discover/movies?genre=&language=&page= — a browse-by-facet listing,
+// distinct from GET /search/movies (that's text-relevance ranked; this is
+// "show me everything in this genre/language, popularity-ordered"). Public,
+// same as search. Backed by TMDB's own paginated /discover/movie
+// (tmdb.ts's discoverMovies), and every page's results are upserted into the
+// local index — same lightweight docs a live search writes — so a card the
+// user taps opens straight from Firestore instead of a cold TMDB fetch.
+export async function discoverMoviesService(
+  rawGenre: unknown,
+  rawLanguage: unknown,
+  rawPage: unknown
+): Promise<{ items: MovieSummary[]; page: number; totalPages: number }> {
+  const genre = typeof rawGenre === "string" && KNOWN_GENRES.has(rawGenre.trim()) ? rawGenre.trim() : null;
+  const language = typeof rawLanguage === "string" && KNOWN_LANGUAGES.has(rawLanguage.trim()) ? rawLanguage.trim() : null;
+
+  if (!genre && !language) {
+    throw new AppError("MISSING_FILTER", "A known genre or language is required", 400);
+  }
+
+  const parsedPage = Math.floor(Number(rawPage));
+  const page = Number.isFinite(parsedPage) && parsedPage >= 1 ? Math.min(parsedPage, DISCOVER_MAX_PAGE) : 1;
+
+  try {
+    const { items, totalPages } = await tmdbDiscoverMovies(genre ? [genre] : [], language ? [language] : [], page);
+    const summaries: MovieSummary[] = items.map((m) => ({ movieId: m.movieId, title: m.title, poster: m.poster, year: m.year }));
+    await upsertSearchable(summaries);
+    return { items: summaries, page, totalPages: Math.min(totalPages, DISCOVER_MAX_PAGE) };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError("TMDB_UPSTREAM_ERROR", "Failed to load discover results", 502);
   }
 }
 

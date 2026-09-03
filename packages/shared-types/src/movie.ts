@@ -9,6 +9,17 @@ export interface MovieSummary {
   year: number | null
 }
 
+// GET /discover/movies?genre=Horror&language=ko&page=1 — a browse-by-facet
+// listing (not a text search): every movie TMDB has in that genre and/or
+// original language, popularity-ordered, paginated. `page`/`totalPages` drive
+// the frontend's "load more" — there's no opaque cursor, it's literally
+// TMDB's own discover paging passed through.
+export interface DiscoverMoviesResponse {
+  items: MovieSummary[]
+  page: number
+  totalPages: number
+}
+
 export interface CastMember {
   personId: string
   name: string

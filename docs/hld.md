@@ -682,6 +682,8 @@ See `backend/test/searchRanking.test.ts` for the worked examples this was built 
 
 See `backend/test/movies.test.ts`'s `GET /search/movies` describe block for the current behavior (merged results, dedup-prefers-TMDB, graceful TMDB-failure degradation, ranking dominance still enforced across the merged pool).
 
+**Browse-by-facet (added alongside the Search page rebuild — `GET /discover/movies`, api-contracts.md §1):** text search answers "find the movie I'm thinking of"; it deliberately does *not* answer "show me every Korean film" — a query like `korean` or `horror` matches only titles containing that literal word. `GET /discover/movies?genre=&language=` fills that gap: it's TMDB's own `/discover/movie` (the same paginated endpoint onboarding's genre/language candidate paging already leans on, `tmdb.ts`'s `discoverMovies`) exposed as a public browse listing, popularity-ordered, no text ranking involved. The frontend (`MovieSearch.tsx` + `genreLanguageMatch.ts`) recognizes when a typed query *names* a genre or language and offers a "Browse Korean films" chip that switches the results area over to this listing; it's an explicit opt-in, not mixed into text-search results. Discovered movies are run through the same `upsertSearchable` lightweight-doc write as a live search's TMDB results, so opening one doesn't cold-fetch. The genre/language taxonomy is now a third hand-maintained copy (`frontend/src/lib/catalog.ts`, `backend/src/services/movies.service.ts`, `tmdb.ts`'s `GENRE_NAME_TO_ID`) — same "hardcoded, practically never changes" tradeoff §18's ranking notes already accept.
+
 ## 19. Flow: Block / Mute
 
 Two related but different things:

@@ -4,7 +4,9 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const searchMovies = vi.fn()
 const getRecentMovies = vi.fn()
-vi.mock('../../../../src/features/movie/services/movieApi', () => ({ searchMovies, getRecentMovies }))
+const discoverMovies = vi.fn()
+const getMovieStatuses = vi.fn()
+vi.mock('../../../../src/features/movie/services/movieApi', () => ({ searchMovies, getRecentMovies, discoverMovies, getMovieStatuses }))
 
 // The guest right rail's DiscoverEventsTeaser fetches this on mount — not
 // this file's focus, defaulted to empty in beforeEach below so it doesn't
@@ -22,6 +24,8 @@ const { MovieSearch } = await import('../../../../src/features/movie/components/
 afterEach(() => {
   searchMovies.mockReset()
   getRecentMovies.mockReset()
+  discoverMovies.mockReset()
+  getMovieStatuses.mockReset()
   getUpcomingEvents.mockReset()
   authUser = { uid: 'uid-1' }
 })
@@ -30,6 +34,8 @@ afterEach(() => {
 // its own tests further down set specific responses.
 beforeEach(() => {
   getRecentMovies.mockResolvedValue({ items: [] })
+  discoverMovies.mockResolvedValue({ items: [], page: 1, totalPages: 1 })
+  getMovieStatuses.mockResolvedValue({ items: {} })
   getUpcomingEvents.mockResolvedValue({ items: [] })
 })
 
@@ -54,16 +60,101 @@ function renderWithRouter(initialEntry: '/search' | '/' = '/search') {
 }
 
 describe('MovieSearch — signed-in usage (via Home)', () => {
-  it('shows a "← Home" back button, not the guest header', () => {
+  it('sits inside the app shell: sidebar with Search active, mobile tab bar, no guest header', () => {
     renderWithRouter()
-    expect(screen.getByRole('button', { name: /← home/i })).toBeInTheDocument()
+    // Sidebar (desktop) + MobileTabBar (mobile) each render a Search control
+    expect(screen.getAllByRole('button', { name: /^search$/i }).length).toBeGreaterThanOrEqual(2)
     expect(screen.queryByRole('button', { name: /^get started$/i })).not.toBeInTheDocument()
   })
 
-  it('navigates Home when "← Home" is clicked', async () => {
+  it('navigates Home from the shell', async () => {
     renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /← home/i }))
     expect(await screen.findByText('Home page')).toBeInTheDocument()
+  })
+
+  it('badges a result the caller has watched / watchlisted', async () => {
+    searchMovies.mockResolvedValue({
+      items: [
+        { movieId: 'm1', title: 'Seen It', poster: null, year: 2024 },
+        { movieId: 'm2', title: 'Saved It', poster: null, year: 2024 }
+      ]
+    })
+    getMovieStatuses.mockResolvedValue({
+      items: {
+        m1: { watchlisted: false, watched: true, liked: false },
+        m2: { watchlisted: true, watched: false, liked: false }
+      }
+    })
+    renderWithRouter()
+
+    const input = screen.getByLabelText(/search for a movie/i)
+    fireEvent.change(input, { target: { value: 'It' } })
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
+
+    await screen.findByText('Seen It')
+    await waitFor(() => expect(getMovieStatuses).toHaveBeenCalledWith(['m1', 'm2']))
+    expect(await screen.findByText(/✓ Watched/)).toBeInTheDocument()
+    expect(await screen.findByText(/\+ Watchlist/)).toBeInTheDocument()
+  })
+})
+
+describe('MovieSearch — browse by genre / language chip', () => {
+  it('offers a "Browse Korean films" chip when the query names a language, then shows the discover grid', async () => {
+    discoverMovies.mockResolvedValue({
+      items: [{ movieId: 'k1', title: 'Parasite', poster: null, year: 2019 }],
+      page: 1,
+      totalPages: 3
+    })
+    renderWithRouter('/')
+
+    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'korean' } })
+    const chip = await screen.findByRole('button', { name: /browse korean films/i })
+    fireEvent.click(chip)
+
+    await waitFor(() => expect(discoverMovies).toHaveBeenCalledWith({ genre: null, language: 'ko', page: 1 }))
+    expect(await screen.findByText('Parasite')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /korean films/i })).toBeInTheDocument()
+  })
+
+  it('offers a genre chip and pages in more results with "Load more", deduping repeats across pages', async () => {
+    discoverMovies.mockResolvedValueOnce({
+      items: [{ movieId: 'h1', title: 'Hereditary', poster: null, year: 2018 }],
+      page: 1,
+      totalPages: 2
+    })
+    discoverMovies.mockResolvedValueOnce({
+      items: [
+        { movieId: 'h1', title: 'Hereditary', poster: null, year: 2018 }, // TMDB repeats it on page 2
+        { movieId: 'h2', title: 'The Witch', poster: null, year: 2015 }
+      ],
+      page: 2,
+      totalPages: 2
+    })
+    renderWithRouter('/')
+
+    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'horror movies' } })
+    fireEvent.click(await screen.findByRole('button', { name: /browse horror movies/i }))
+
+    await screen.findByText('Hereditary')
+    fireEvent.click(screen.getByRole('button', { name: /load more/i }))
+
+    await waitFor(() => expect(discoverMovies).toHaveBeenLastCalledWith({ genre: 'Horror', language: null, page: 2 }))
+    expect(await screen.findByText('The Witch')).toBeInTheDocument()
+    expect(screen.getAllByText('Hereditary')).toHaveLength(1) // not doubled
+  })
+
+  it('leaves browse mode when the query is edited', async () => {
+    discoverMovies.mockResolvedValue({ items: [{ movieId: 'k1', title: 'Parasite', poster: null, year: 2019 }], page: 1, totalPages: 1 })
+    searchMovies.mockResolvedValue({ items: [] })
+    renderWithRouter('/')
+
+    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'korean' } })
+    fireEvent.click(await screen.findByRole('button', { name: /browse korean films/i }))
+    await screen.findByText('Parasite')
+
+    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'koreanx' } })
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /korean films/i })).not.toBeInTheDocument())
   })
 })
 
@@ -83,7 +174,7 @@ describe('MovieSearch — guest usage (public Discover)', () => {
     expect(await screen.findByText('Get started page')).toBeInTheDocument()
   })
 
-  it('offers an Our Story button in the header, absent for a signed-in visitor', async () => {
+  it('offers an Our Story button in the guest header, and drops the guest chrome for a signed-in visitor', async () => {
     authUser = null
     renderWithRouter('/')
     fireEvent.click(screen.getByRole('button', { name: /our story/i }))
@@ -91,7 +182,9 @@ describe('MovieSearch — guest usage (public Discover)', () => {
 
     authUser = { uid: 'uid-1' }
     renderWithRouter()
-    expect(screen.queryByRole('button', { name: /our story/i })).not.toBeInTheDocument()
+    // Guest-only chrome is gone; nav (incl. Our Story) now lives in the app shell.
+    expect(screen.queryByRole('button', { name: /^get started$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /^discover movies$/i })).not.toBeInTheDocument()
   })
 
   it('shows the right-rail People teaser', () => {
@@ -174,8 +267,9 @@ describe('MovieSearch — recently released (default browse view)', () => {
     renderWithRouter('/')
 
     await screen.findByText('Fresh Release')
-    fireEvent.change(screen.getByLabelText(/search for a movie/i), { target: { value: 'Dune' } })
-    fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
+    const input = screen.getByLabelText(/search for a movie/i)
+    fireEvent.change(input, { target: { value: 'Dune' } })
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
 
     expect(await screen.findByText('Dune: Part Two')).toBeInTheDocument()
     expect(screen.queryByText('Fresh Release')).not.toBeInTheDocument()

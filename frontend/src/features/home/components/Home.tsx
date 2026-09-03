@@ -9,7 +9,8 @@ import { BecauseYourFriendsWatched } from './BecauseYourFriendsWatched'
 import { UpcomingEvents } from './UpcomingEvents'
 import { NearbyEvents } from './NearbyEvents'
 import { FriendsAreWatching } from './FriendsAreWatching'
-import { Sidebar } from './Sidebar'
+import { Sidebar } from '../../../components/Sidebar'
+import { MobileTabBar } from '../../../components/MobileTabBar'
 
 interface Props {
   me: Me
@@ -32,7 +33,7 @@ export function Home({ me, onSignOut }: Props) {
     <div className="flex min-h-svh bg-bg text-text">
       {/* Desktop-only left nav (design canvas's HomeDesktop.dc.html) — the
           mobile bottom nav below still owns navigation under lg. */}
-      <Sidebar />
+      <Sidebar active="home" />
 
       <main className="min-w-0 flex-1 pb-6 lg:flex lg:flex-col lg:pb-0">
         <header className="flex items-center justify-between px-5 pt-4.5 lg:border-b lg:border-border-soft lg:px-7 lg:py-4.5">
@@ -111,25 +112,7 @@ export function Home({ me, onSignOut }: Props) {
           </div>
         </div>
 
-        <nav className="mt-7 flex items-center justify-around border-t border-border-soft px-2 pt-5 lg:hidden">
-          <span className="flex flex-col items-center gap-1 text-[10px] font-bold text-accent">Home</span>
-          <button type="button" onClick={() => navigate('/search')} className="flex flex-col items-center gap-1 text-[10px] font-semibold text-text-muted">
-            Search
-          </button>
-          <span className="flex flex-col items-center gap-1 text-[10px] font-semibold text-text-faint" title="Coming soon">
-            Events
-          </span>
-          <span className="flex flex-col items-center gap-1 text-[10px] font-semibold text-text-faint" title="Coming soon">
-            People
-          </span>
-          <span className="flex flex-col items-center gap-1 text-[10px] font-semibold text-text-faint" title="Coming soon">
-            Inbox
-          </span>
-        </nav>
-
-        <button type="button" onClick={() => navigate('/story')} className="mt-4 block text-center text-[10.5px] font-semibold text-text-faint underline lg:hidden">
-          Our Story
-        </button>
+        <MobileTabBar active="home" />
       </main>
     </div>
   )

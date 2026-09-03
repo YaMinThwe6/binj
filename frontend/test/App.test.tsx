@@ -129,9 +129,13 @@ describe('App search flow', () => {
         url.includes('/events/upcoming') ||
         url.includes('/home/activity') ||
         url.includes('/users/me/notifications') ||
-        url.includes('/movies/recent')
+        url.includes('/movies/recent') ||
+        url.includes('/discover/movies')
       ) {
         return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: [] }) })
+      }
+      if (url.includes('/users/me/movies/status')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => envelope({ items: {} }) })
       }
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
@@ -142,10 +146,9 @@ describe('App search flow', () => {
     await waitFor(() => expect(screen.getAllByRole('button', { name: /^search$/i }).length).toBeGreaterThan(0))
     fireEvent.click(screen.getAllByRole('button', { name: /^search$/i })[0])
 
-    fireEvent.change(screen.getByLabelText(/search for a movie/i), {
-      target: { value: 'spider-man' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /search/i }))
+    const searchInput = screen.getByLabelText(/search for a movie/i)
+    fireEvent.change(searchInput, { target: { value: 'spider-man' } })
+    fireEvent.submit(searchInput.closest('form') as HTMLFormElement)
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Spider-Man: No Way Home \(2021\)/i })).toBeInTheDocument()

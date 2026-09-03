@@ -31,6 +31,12 @@ GET /movies/recent   → 200 { items: [{ movieId, title, poster, year }] }
 ```
 Powers the public Discover page's default "recently released" section — the browse-without-a-query view shown below the search bar. TMDB's `now_playing` list (theatrical releases currently in cinemas), region-scoped to the same hardcoded India region as §8's streaming availability. Unauthenticated, same as `GET /search/movies`. 502 `TMDB_UPSTREAM_ERROR` on failure, matching search's own error shape.
 
+```
+GET /discover/movies?genre=:name&language=:code&page=:n
+→ 200 { items: [{ movieId, title, poster, year }], page, totalPages }
+```
+Browse-by-facet listing (added for the Search page's "Browse Korean films" / "Browse Horror movies" chip) — distinct from `GET /search/movies` in §7, which is text-relevance ranked; this is "every movie in this genre and/or original language, popularity-ordered." At least one of `genre` (a TMDB genre name, e.g. `Horror`) or `language` (ISO 639-1, e.g. `ko`) is required — 400 `MISSING_FILTER` if neither is a recognized value. `page` is 1-based and passed straight through to TMDB's own `/discover/movie` paging (`totalPages` bounds the frontend's "load more"; both capped at TMDB's page-500 limit). Unauthenticated, same as search. Every page's results are upserted into the local search index (`titleSearchTerms`) so a tapped card opens from Firestore rather than a cold TMDB fetch. 502 `TMDB_UPSTREAM_ERROR` on upstream failure.
+
 **Implementation note (caching, added once this was actually built):** reads `discover/recentMovies` (schema.md §1) instead of hitting TMDB live on every request — refreshed periodically by `backend/scripts/refreshRecentMovies.ts` (`pnpm --filter binj-backend run refresh-recent-movies`), run manually for now rather than on a real Cloud Scheduler trigger, same shortcut hld.md §5b already uses for taste matches. Falls back to a live TMDB call when the cache doc doesn't exist yet (before the script has ever run) or Firestore isn't configured, so the endpoint still works either way. The same script also indexes each recent title for §7's search (`titleSearchTerms`), so a just-released movie is searchable immediately, not only listed here.
 
 ## 2. Watchlist & Watched (§3, §5a) 🔒
@@ -69,6 +75,12 @@ GET  /users/me/movies/:movieId 🔒           → 200 { watchlisted, watched, li
                                               // NOT in the original sketch above — added so Movie Detail's action
                                               // bar and "write vs. edit review" can render in one request instead
                                               // of four (backend/src/routes/userMovies.ts)
+
+GET  /users/me/movies/status?ids=a,b,c 🔒   → 200 { items: { [movieId]: { watchlisted, watched, liked } } }
+                                              // batch form of the above (no review payload) — one request for a
+                                              // whole result set (search cards, the discover grid) instead of one
+                                              // per card. ids deduped, capped at 60/request; an id with no
+                                              // relationship is still present in the map, all-false.
 
 POST /movies/:movieId/reviews/:authorId/dispute 🔒
                                               body: { reason } → 201 { disputeId, status: "pending" }

@@ -35,3 +35,19 @@ export interface MovieStatus {
   liked: boolean
   review: MyReview | null
 }
+
+// GET /users/me/movies/status?ids=a,b,c — the same relationship signal as
+// MovieStatus but for a whole result set at once (search cards, discover
+// grids) and without the review payload those surfaces never render. Keyed
+// by movieId; an id the caller has no relationship to is still present with
+// all-false rather than omitted, so the client can tell "no relationship"
+// from "not in this response".
+export interface MovieStatusLite {
+  watchlisted: boolean
+  watched: boolean
+  liked: boolean
+}
+
+export interface MovieStatusMap {
+  items: Record<string, MovieStatusLite>
+}
