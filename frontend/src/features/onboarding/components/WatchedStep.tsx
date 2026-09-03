@@ -7,9 +7,10 @@ import { OnboardingShell } from './OnboardingShell'
 interface Props {
   genres: string[]
   languages: string[]
+  initialWatched?: MovieCandidate[]
   onContinue: (watched: MovieCandidate[]) => void
-  onSkip: () => void
-  onBack?: () => void
+  onSkip: (watched: MovieCandidate[]) => void
+  onBack?: (watched: MovieCandidate[]) => void
 }
 
 // Matches MovieSearch.tsx's own search-as-you-type pacing — a real API call
@@ -29,7 +30,7 @@ function toCandidate(movie: MovieCandidate | MovieSummary): MovieCandidate {
   return { ...movie, genres: [], originalLanguage: null, voteAverage: 0 }
 }
 
-export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: Props) {
+export function WatchedStep({ genres, languages, initialWatched, onContinue, onSkip, onBack }: Props) {
   const [candidates, setCandidates] = useState<MovieCandidate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -43,7 +44,13 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
   // Set<movieId> — so a movie marked watched from search results (which
   // aren't in `candidates`) still has something real to hand back via
   // onContinue, not just an id with nothing behind it.
-  const [watchedMovies, setWatchedMovies] = useState<Map<string, MovieCandidate>>(new Map())
+  // Seeded from the wizard's own state (already-toggled movies persisted
+  // server-side via markWatched) so re-visiting this step — Back from
+  // Celebrities, or forward again after Skip — shows the same checkmarks
+  // instead of starting blank.
+  const [watchedMovies, setWatchedMovies] = useState<Map<string, MovieCandidate>>(
+    () => new Map((initialWatched ?? []).map((m) => [m.movieId, m]))
+  )
 
   useEffect(() => {
     getWatchedCandidates(genres, languages)
@@ -107,7 +114,10 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
   return (
     <OnboardingShell
       step={4}
-      onBack={onBack}
+      // Wrapped so Back reports the current selection too, not just
+      // Continue/Skip — otherwise clicking Back without confirming first
+      // loses whatever was toggled on this visit.
+      onBack={onBack ? () => onBack([...watchedMovies.values()]) : undefined}
       desktopTitle="Every rating starts somewhere."
       desktopSubtitle="Tell us what you've already seen and we'll start building your taste profile from day one."
     >
@@ -186,7 +196,11 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
         >
           Continue
         </button>
-        <button type="button" onClick={onSkip} className="mt-4 text-center text-[13px] font-semibold text-text-muted">
+        <button
+          type="button"
+          onClick={() => onSkip([...watchedMovies.values()])}
+          className="mt-4 text-center text-[13px] font-semibold text-text-muted"
+        >
           Skip for now
         </button>
       </div>

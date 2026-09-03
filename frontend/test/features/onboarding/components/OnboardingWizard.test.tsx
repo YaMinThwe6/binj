@@ -118,4 +118,62 @@ describe('OnboardingWizard', () => {
     await waitFor(() => expect(screen.getAllByText('This username is available').length).toBeGreaterThan(0))
     expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled()
   })
+
+  it('keeps genre, language, watched and followed selections after navigating back to each step', async () => {
+    checkUsernameAvailable.mockResolvedValue({ available: true })
+    updateMe.mockResolvedValue({})
+    const candidates = [{ movieId: 'm1', title: 'Movie One', poster: null, year: 2020, genres: ['Drama'], voteAverage: 7 }]
+    getWatchedCandidates.mockResolvedValue({ items: candidates })
+    markWatched.mockResolvedValue(undefined)
+    const suggestions = [{ personId: 'p1', name: 'Jane Doe', photo: null, appearsIn: 2 }]
+    getCelebritySuggestions.mockResolvedValue({ items: suggestions })
+    followCelebrity.mockResolvedValue(undefined)
+
+    render(<OnboardingWizard initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onComplete={vi.fn()} />)
+
+    // Username -> Genres
+    await waitFor(() => expect(screen.getAllByLabelText(/^username$/i)[0]).toBeInTheDocument())
+    fireEvent.change(screen.getAllByLabelText(/^username$/i)[0], { target: { value: 'arjunk' } })
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled())
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
+
+    // Genres: pick Comedy, continue
+    await waitFor(() => expect(screen.getAllByText('Comedy')[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByText('Comedy')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
+
+    // Language: pick Korean, continue
+    await waitFor(() => expect(screen.getAllByText('Korean')[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByText('Korean')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
+
+    // Watched: mark Movie One, continue
+    await waitFor(() => expect(screen.getAllByText(/Movie One/)[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByText(/Movie One/)[0])
+    await waitFor(() => expect(markWatched).toHaveBeenCalledWith('m1'))
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
+
+    // Celebrities: follow Jane Doe, then go all the way back to Genres
+    await waitFor(() => expect(screen.getAllByText('Jane Doe').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText('Jane Doe')[0])
+    await waitFor(() => expect(followCelebrity).toHaveBeenCalledWith('p1'))
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^back$/i })[0]) // -> Watched
+    await waitFor(() => expect(screen.getAllByText('1 selected').length).toBeGreaterThan(0))
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^back$/i })[0]) // -> Language
+    await waitFor(() => expect(screen.getAllByText('Korean')[0]).toHaveAttribute('aria-pressed', 'true'))
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^back$/i })[0]) // -> Genres
+    await waitFor(() => expect(screen.getAllByText('Comedy')[0]).toHaveAttribute('aria-pressed', 'true'))
+
+    // Forward again all the way to Celebrities: the earlier follow is still reflected
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
+    await waitFor(() => expect(screen.getAllByText('Korean')[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
+    await waitFor(() => expect(screen.getAllByText('1 selected').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
+    await waitFor(() => expect(screen.getAllByText('Jane Doe').length).toBeGreaterThan(0))
+    expect(screen.getAllByRole('button', { name: /jane doe/i })[0]).toHaveAttribute('aria-pressed', 'true')
+  })
 })

@@ -73,6 +73,15 @@ describe('WatchedStep', () => {
     expect(onContinue).toHaveBeenCalledWith([candidates[0]])
   })
 
+  it('pre-checks movies from initialWatched when the step is revisited', async () => {
+    getWatchedCandidates.mockResolvedValue({ items: candidates })
+    render(
+      <WatchedStep genres={[]} languages={[]} initialWatched={[candidates[0]]} onContinue={vi.fn()} onSkip={vi.fn()} />
+    )
+
+    await waitFor(() => expect(screen.getAllByText('1 selected').length).toBeGreaterThan(0))
+  })
+
   it('searches for a movie beyond the candidate list and can mark it watched too', async () => {
     getWatchedCandidates.mockResolvedValue({ items: candidates })
     searchMovies.mockResolvedValue({ items: [{ movieId: 'm9', title: 'Searched Movie', poster: null, year: 2019 }] })

@@ -71,6 +71,14 @@ describe('CelebritiesStep', () => {
     expect(onContinue).toHaveBeenCalled()
   })
 
+  it('pre-follows people from initialFollowedIds when the step is revisited', async () => {
+    getCelebritySuggestions.mockResolvedValue({ items: suggestions })
+    render(<CelebritiesStep initialFollowedIds={['p1']} onContinue={vi.fn()} onSkip={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getAllByText('Jane Doe').length).toBeGreaterThan(0))
+    expect(screen.getAllByRole('button', { name: /jane doe/i })[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('searches for a person beyond the suggestion list and can follow them too', async () => {
     getCelebritySuggestions.mockResolvedValue({ items: suggestions })
     searchPeople.mockResolvedValue({ items: [{ personId: 'p9', name: 'Searched Person', photo: null }] })

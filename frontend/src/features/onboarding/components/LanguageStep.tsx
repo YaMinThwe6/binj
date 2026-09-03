@@ -3,11 +3,12 @@ import { MultiSelectStep } from './MultiSelectStep'
 import { LANGUAGE_OPTIONS } from '../constants'
 
 interface Props {
+  initialSelected?: string[]
   onDone: (languages: string[]) => void
-  onBack?: () => void
+  onBack?: (languages: string[]) => void
 }
 
-export function LanguageStep({ onDone, onBack }: Props) {
+export function LanguageStep({ initialSelected, onDone, onBack }: Props) {
   return (
     <MultiSelectStep
       step={3}
@@ -16,6 +17,7 @@ export function LanguageStep({ onDone, onBack }: Props) {
       desktopTitle="Cinema without borders."
       desktopSubtitle="Tell us which languages and regions of film you watch — not a dubbing preference."
       options={LANGUAGE_OPTIONS.map((l) => ({ value: l.code, label: l.label }))}
+      initialSelected={initialSelected}
       onContinue={async (selected) => {
         await updateMe({ preferredLanguages: selected.length > 0 ? selected : null })
         onDone(selected)

@@ -11,15 +11,18 @@ interface Props {
   title: string
   subtitle: string
   options: Option[]
+  initialSelected?: string[]
   onContinue: (selected: string[]) => Promise<void>
   onSkip: () => void
-  onBack?: () => void
+  onBack?: (selected: string[]) => void
   desktopTitle?: string
   desktopSubtitle?: string
 }
 
-export function MultiSelectStep({ step, title, subtitle, options, onContinue, onSkip, onBack, desktopTitle, desktopSubtitle }: Props) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+export function MultiSelectStep({ step, title, subtitle, options, initialSelected, onContinue, onSkip, onBack, desktopTitle, desktopSubtitle }: Props) {
+  // Seeded from the wizard's own state so re-visiting this step (Back from
+  // the next one) shows what was already chosen instead of starting blank.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected ?? []))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -45,7 +48,15 @@ export function MultiSelectStep({ step, title, subtitle, options, onContinue, on
   }
 
   return (
-    <OnboardingShell step={step} onBack={onBack} desktopTitle={desktopTitle} desktopSubtitle={desktopSubtitle}>
+    <OnboardingShell
+      step={step}
+      // Wrapped so Back reports the current selection too, not just
+      // Continue/Skip — otherwise clicking Back without confirming first
+      // loses whatever was toggled on this visit.
+      onBack={onBack ? () => onBack([...selected]) : undefined}
+      desktopTitle={desktopTitle}
+      desktopSubtitle={desktopSubtitle}
+    >
       <div className="flex flex-1 flex-col px-7 pt-8 pb-10">
         <h1 className="font-serif text-[26px] font-semibold text-white">{title}</h1>
         <p className="mt-2 mb-6 text-[13.5px] text-text-muted">{subtitle}</p>

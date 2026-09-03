@@ -40,6 +40,15 @@ describe('MultiSelectStep', () => {
     expect(onSkip).toHaveBeenCalled()
   })
 
+  it('pre-selects chips from initialSelected when the step is revisited', () => {
+    render(
+      <MultiSelectStep step={2} title="T" subtitle="S" options={options} initialSelected={['b']} onContinue={vi.fn()} onSkip={vi.fn()} />
+    )
+
+    expect(screen.getAllByText('Beta')[0]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByText('Alpha')[0]).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('shows an error message when onContinue rejects', async () => {
     const onContinue = vi.fn().mockRejectedValue(new Error('boom'))
     render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)

@@ -11,18 +11,22 @@ import { OnboardingShell } from './OnboardingShell'
 import { posterUrl } from '../../../lib/images'
 
 interface Props {
-  onContinue: () => void
-  onSkip: () => void
-  onBack?: () => void
+  initialFollowedIds?: string[]
+  onContinue: (followedIds: string[]) => void
+  onSkip: (followedIds: string[]) => void
+  onBack?: (followedIds: string[]) => void
 }
 
 // Matches WatchedStep.tsx's own search-as-you-type pacing.
 const DEBOUNCE_MS = 1000
 const MIN_QUERY_LENGTH = 2
 
-export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
+export function CelebritiesStep({ initialFollowedIds, onContinue, onSkip, onBack }: Props) {
   const [suggestions, setSuggestions] = useState<CelebritySuggestion[]>([])
-  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set())
+  // Seeded from the wizard's own state (already-followed people persisted
+  // server-side via followCelebrity) so re-visiting this step shows the
+  // same followed state instead of starting blank.
+  const [followedIds, setFollowedIds] = useState<Set<string>>(() => new Set(initialFollowedIds ?? []))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -89,7 +93,10 @@ export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
   return (
     <OnboardingShell
       step={5}
-      onBack={onBack}
+      // Wrapped so Back reports the current selection too, not just
+      // Continue/Skip — otherwise clicking Back without confirming first
+      // loses whatever was toggled on this visit.
+      onBack={onBack ? () => onBack([...followedIds]) : undefined}
       desktopTitle="Follow the people behind the films."
       desktopSubtitle="Actors and directors you follow show up first when they're in something new."
     >
@@ -160,12 +167,16 @@ export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
             real gap here rather than the button touching the list. */}
         <button
           type="button"
-          onClick={onContinue}
+          onClick={() => onContinue([...followedIds])}
           className="mt-8 flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg"
         >
           Continue
         </button>
-        <button type="button" onClick={onSkip} className="mt-4 text-center text-[13px] font-semibold text-text-muted">
+        <button
+          type="button"
+          onClick={() => onSkip([...followedIds])}
+          className="mt-4 text-center text-[13px] font-semibold text-text-muted"
+        >
           Skip for now
         </button>
       </div>
