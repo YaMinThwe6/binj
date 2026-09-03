@@ -106,9 +106,12 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
           })}
         </ul>
 
-        <div className="flex-1" />
-
-        <p className="mt-4 mb-3 text-center text-[11.5px] text-text-muted">{watchedIds.size} selected</p>
+        {/* A fixed gap, not a flex-1 spacer — see MultiSelectStep.tsx for
+            why: flex-1 collapses to nothing once the form is vertically
+            centered instead of stretched (OnboardingShell's desktop
+            layout), so however many candidates came back, there's still a
+            real gap here rather than the button touching the grid. */}
+        <p className="mt-8 mb-3 text-center text-[11.5px] text-text-muted">{watchedIds.size} selected</p>
         <button
           type="button"
           onClick={() => onContinue(candidates.filter((c) => watchedIds.has(c.movieId)))}

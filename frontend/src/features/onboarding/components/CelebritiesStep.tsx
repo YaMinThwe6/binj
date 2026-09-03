@@ -96,12 +96,15 @@ export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
           })}
         </ul>
 
-        <div className="flex-1" />
-
+        {/* A fixed gap, not a flex-1 spacer — see MultiSelectStep.tsx for
+            why: flex-1 collapses to nothing once the form is vertically
+            centered instead of stretched (OnboardingShell's desktop
+            layout), so however many suggestions came back, there's still a
+            real gap here rather than the button touching the list. */}
         <button
           type="button"
           onClick={onContinue}
-          className="mt-6 flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg"
+          className="mt-8 flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg"
         >
           Continue
         </button>

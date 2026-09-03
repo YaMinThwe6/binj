@@ -77,13 +77,17 @@ export function MultiSelectStep({ step, title, subtitle, options, onContinue, on
           </p>
         )}
 
-        <div className="flex-1" />
-
+        {/* A fixed gap, not a flex-1 spacer — flex-1 only pushes this button
+            to the bottom when the form is stretched to fill the viewport
+            (mobile); on desktop it's vertically centered instead
+            (OnboardingShell), so flex-1 has no room to grow and the button
+            ends up touching whatever's above it, however many options or
+            candidates that is. */}
         <button
           type="button"
           onClick={handleContinue}
           disabled={submitting}
-          className="flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg disabled:opacity-60"
+          className="mt-8 flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg disabled:opacity-60"
         >
           {submitting ? 'Saving…' : 'Continue'}
         </button>
