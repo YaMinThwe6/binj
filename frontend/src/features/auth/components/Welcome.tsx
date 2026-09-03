@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../lib/AuthContext'
 import { startEmailAuth, verifyEmailAuth } from '../services/authApi'
 
-type Stage = 'welcome' | 'form' | 'verify'
 // Purely a copy switch (heading/tagline) — "Get Started" and "Log in" hit
 // the exact same sign-in mechanism underneath. There's no separate signup
 // call: the backend creates a BINJ profile lazily on a brand-new user's
@@ -50,22 +49,32 @@ function MailIcon() {
 // and OTP verification (SignupEmailOTP.dc.html's verify state) — all one
 // component since they share the same auth handlers and only the first
 // stage's copy depends on which button the visitor arrived through.
-// Reached at "/get-started" — the back arrow on the splash stage always
-// returns to Discover ("/"), regardless of how this URL was reached
-// (clicked from Discover, typed directly, or a bookmark).
+// Reached at "/get-started" (splash), "/get-started/signup" or
+// "/get-started/login" (the provider/email chooser — same form, only the
+// copy differs) and "/get-started/verify" (OTP entry) — a real URL per
+// stage, matching every other screen in the app, rather than local state a
+// refresh or a shared link would lose. The back arrow on the splash stage
+// always returns to Discover ("/"), regardless of how "/get-started" itself
+// was reached (clicked from Discover, typed directly, or a bookmark).
 export function Welcome() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { signInWithGoogle, signInWithMicrosoft, signInWithToken } = useAuth()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [stage, setStage] = useState<Stage>('welcome')
-  const [intent, setIntent] = useState<Intent>('signup')
-  const [email, setEmail] = useState('')
+  // Seeded from the URL once on mount (only matters for a direct/refreshed
+  // load of "/get-started/verify?email=…" — a same-session navigate() from
+  // the form stage below already has this in local state, since it's the
+  // same mounted component throughout, not a remount per stage).
+  const [email, setEmail] = useState(() => searchParams.get('email') ?? '')
   const [code, setCode] = useState('')
 
+  const stage = location.pathname === '/get-started/verify' ? 'verify' : location.pathname === '/get-started' ? 'welcome' : 'form'
+  const intent: Intent = location.pathname === '/get-started/login' || searchParams.get('intent') === 'login' ? 'login' : 'signup'
+
   function openForm(nextIntent: Intent) {
-    setIntent(nextIntent)
-    setStage('form')
+    navigate(`/get-started/${nextIntent}`)
   }
 
   async function handleProviderSignIn(signIn: () => Promise<void>) {
@@ -86,7 +95,7 @@ export function Welcome() {
     setLoading(true)
     try {
       await startEmailAuth(email.trim())
-      setStage('verify')
+      navigate(`/get-started/verify?email=${encodeURIComponent(email.trim())}&intent=${intent}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send code')
     } finally {
@@ -287,7 +296,7 @@ export function Welcome() {
               </p>
             )}
 
-            <button type="button" onClick={() => setStage('welcome')} className="mt-6 text-center text-[13px] text-text-muted">
+            <button type="button" onClick={() => navigate('/get-started')} className="mt-6 text-center text-[13px] text-text-muted">
               Back
             </button>
           </div>
@@ -337,7 +346,7 @@ export function Welcome() {
             >
               {loading ? 'Verifying…' : 'Verify & continue'}
             </button>
-            <button type="button" onClick={() => setStage('form')} className="mt-3 text-[13px] text-text-muted">
+            <button type="button" onClick={() => navigate(`/get-started/${intent}`)} className="mt-3 text-[13px] text-text-muted">
               Back
             </button>
           </form>

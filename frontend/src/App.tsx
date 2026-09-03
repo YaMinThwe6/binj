@@ -47,6 +47,9 @@ function App() {
     return (
       <Routes>
         <Route path="/get-started" element={<Welcome />} />
+        <Route path="/get-started/signup" element={<Welcome />} />
+        <Route path="/get-started/login" element={<Welcome />} />
+        <Route path="/get-started/verify" element={<Welcome />} />
         <Route path="/movie/:movieId" element={<MovieDetail />} />
         <Route path="/story" element={<About />} />
         <Route path="*" element={<MovieSearch />} />

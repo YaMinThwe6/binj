@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const signInWithGoogle = vi.fn()
 const signInWithMicrosoft = vi.fn()
@@ -19,13 +19,20 @@ vi.mock('../../../../src/lib/AuthContext', () => ({
 
 const { Welcome } = await import('../../../../src/features/auth/components/Welcome')
 
-// Welcome now navigates for real (its back arrows call useNavigate()
-// directly, per hld.md's "/get-started" route), so it needs a router even
-// though nothing here exercises the back buttons themselves.
+// Welcome now navigates for real between its own sub-routes (splash ->
+// /get-started/signup or /login -> /get-started/verify), not just internal
+// state — registers the same four paths App.tsx does, all pointing at the
+// same <Welcome /> component instance, matching how it's actually reached.
 function render() {
   return rtlRender(
-    <MemoryRouter>
-      <Welcome />
+    <MemoryRouter initialEntries={['/get-started']}>
+      <Routes>
+        <Route path="/get-started" element={<Welcome />} />
+        <Route path="/get-started/signup" element={<Welcome />} />
+        <Route path="/get-started/login" element={<Welcome />} />
+        <Route path="/get-started/verify" element={<Welcome />} />
+        <Route path="/" element={<p>Discover page</p>} />
+      </Routes>
     </MemoryRouter>
   )
 }
@@ -65,6 +72,63 @@ describe('Welcome — splash', () => {
     fireEvent.click(screen.getByRole('button', { name: /already have an account/i }))
     expect(screen.getByText(/welcome back/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
+  })
+})
+
+describe('Welcome — per-stage URLs', () => {
+  it('Back from the signup form returns to the splash', () => {
+    render()
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
+    expect(screen.getByText(/create your account/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
+    expect(screen.getByRole('button', { name: /^get started$/i })).toBeInTheDocument()
+    expect(screen.queryByText(/create your account/i)).not.toBeInTheDocument()
+  })
+
+  it('Back from verify returns to the form it came from, framing intact', async () => {
+    globalThis.fetch = vi.fn((url: string) => {
+      if (url.includes('/auth/email/start')) {
+        return Promise.resolve({ ok: true, status: 204, json: async () => undefined })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as unknown as typeof fetch
+
+    render()
+    fireEvent.click(screen.getByRole('button', { name: /already have an account/i })) // login framing
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send me a code/i }))
+
+    await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
+
+    expect(screen.getByText(/welcome back/i)).toBeInTheDocument() // still login framing, not reset to signup
+  })
+
+  it('a direct load of /get-started/verify with an email in the URL shows it and can resend', async () => {
+    globalThis.fetch = vi.fn((url: string) => {
+      if (url.includes('/auth/email/start')) {
+        return Promise.resolve({ ok: true, status: 204, json: async () => undefined })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as unknown as typeof fetch
+
+    rtlRender(
+      <MemoryRouter initialEntries={['/get-started/verify?email=a%40example.com&intent=login']}>
+        <Routes>
+          <Route path="/get-started/verify" element={<Welcome />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText('a@example.com')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /resend code/i }))
+    await waitFor(() =>
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/auth/email/start'),
+        expect.objectContaining({ body: JSON.stringify({ email: 'a@example.com' }) })
+      )
+    )
   })
 })
 
