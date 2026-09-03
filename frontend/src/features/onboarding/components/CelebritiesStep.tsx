@@ -44,7 +44,6 @@ export function CelebritiesStep({ genres = [], languages = [], initialFollowedId
   // same followed state instead of starting blank.
   const [followedIds, setFollowedIds] = useState<Set<string>>(() => new Set(initialFollowedIds ?? []))
   const [error, setError] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PersonSummary[]>([])
@@ -99,15 +98,20 @@ export function CelebritiesStep({ genres = [], languages = [], initialFollowedId
   const isSearching = query.trim().length >= MIN_QUERY_LENGTH
   const displayed: (CelebritySuggestion | PersonSummary)[] = isSearching ? results : suggestions
 
-  // Search results aren't paginated (onboardingApi's searchPeople has no
-  // cursor) — scrolling only grows the suggestion grid, not a search's results.
-  function handleScroll() {
+  // Listens on the page itself (not a nested scroll box — a separate inner
+  // scroll region is easy to miss entirely, since nobody expects a form to
+  // have its own hidden scrollbar) so scrolling normally is what grows the
+  // grid. Search results aren't paginated (onboardingApi's searchPeople has
+  // no cursor), so this is suppressed while searching.
+  useEffect(() => {
     if (isSearching) return
-    const el = scrollRef.current
-    if (!el) return
-    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 200
-    if (nearBottom) loadMore()
-  }
+    function onScroll() {
+      const nearBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 300
+      if (nearBottom) loadMore()
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [isSearching, loadMore])
 
   return (
     <OnboardingShell
@@ -149,47 +153,41 @@ export function CelebritiesStep({ genres = [], languages = [], initialFollowedId
           <p className="text-sm text-text-muted">No suggestions yet — you can follow people from their pages later.</p>
         )}
 
-        {/* Its own scroll region (not relying on whatever ancestor happens
-            to scroll) — onScroll drives loadMore as the user nears the
-            bottom, so the grid keeps growing via TMDB Discover paging
-            (onboarding.service.ts) instead of stopping at one fixed batch. */}
-        <div ref={scrollRef} onScroll={handleScroll} className="max-h-[420px] overflow-y-auto pr-1">
-          <ul className="grid grid-cols-3 gap-x-3 gap-y-5">
-            {displayed.map((person) => {
-              const isFollowed = followedIds.has(person.personId)
-              const photo = posterUrl(person.photo, 'w185')
-              return (
-                <li key={person.personId}>
-                  <button type="button" aria-pressed={isFollowed} onClick={() => toggle(person.personId)} className="flex w-full flex-col items-center">
-                    <div
-                      className={`relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-surface-alt ${isFollowed ? 'border-2 border-accent' : 'border border-border'}`}
-                    >
-                      {photo ? (
-                        <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-lg font-semibold text-text-faint">{person.name.charAt(0)}</span>
-                      )}
-                      {isFollowed && (
-                        <span className="absolute right-0 bottom-0 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E0D10" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M20 6L9 17l-5-5" />
-                          </svg>
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-2 text-center text-[11.5px] font-medium text-text-secondary">{person.name}</div>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          {!isSearching && loadingMore && <p className="mt-3 text-center text-[11.5px] text-text-muted">Loading more…</p>}
-          {!isSearching && !loading && !loadingMore && hasMore && (
-            <button type="button" onClick={loadMore} className="mt-3 block w-full text-center text-[11.5px] font-semibold text-accent">
-              Load more
-            </button>
-          )}
-        </div>
+        <ul className="grid grid-cols-3 gap-x-3 gap-y-5">
+          {displayed.map((person) => {
+            const isFollowed = followedIds.has(person.personId)
+            const photo = posterUrl(person.photo, 'w185')
+            return (
+              <li key={person.personId}>
+                <button type="button" aria-pressed={isFollowed} onClick={() => toggle(person.personId)} className="flex w-full flex-col items-center">
+                  <div
+                    className={`relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-surface-alt ${isFollowed ? 'border-2 border-accent' : 'border border-border'}`}
+                  >
+                    {photo ? (
+                      <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-lg font-semibold text-text-faint">{person.name.charAt(0)}</span>
+                    )}
+                    {isFollowed && (
+                      <span className="absolute right-0 bottom-0 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E0D10" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 text-center text-[11.5px] font-medium text-text-secondary">{person.name}</div>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        {!isSearching && loadingMore && <p className="mt-3 text-center text-[11.5px] text-text-muted">Loading more…</p>}
+        {!isSearching && !loading && !loadingMore && hasMore && (
+          <button type="button" onClick={loadMore} className="mt-3 block w-full text-center text-[11.5px] font-semibold text-accent">
+            Load more
+          </button>
+        )}
 
         {/* A fixed gap, not a flex-1 spacer — see MultiSelectStep.tsx for
             why: flex-1 collapses to nothing once the form is vertically

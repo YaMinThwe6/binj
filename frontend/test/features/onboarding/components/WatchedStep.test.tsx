@@ -117,11 +117,12 @@ describe('WatchedStep', () => {
 
     await waitFor(() => expect(screen.getAllByText(/Movie One/).length).toBeGreaterThan(0))
 
-    const container = document.querySelectorAll('.overflow-y-auto')[0] as HTMLElement
-    Object.defineProperty(container, 'scrollTop', { value: 1000, configurable: true })
-    Object.defineProperty(container, 'scrollHeight', { value: 1100, configurable: true })
-    Object.defineProperty(container, 'clientHeight', { value: 200, configurable: true })
-    fireEvent.scroll(container)
+    // The grid scrolls with the page itself, not a nested box — stub the
+    // window/document metrics a real near-bottom scroll would report.
+    Object.defineProperty(window, 'scrollY', { value: 1000, configurable: true })
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true })
+    Object.defineProperty(document.documentElement, 'scrollHeight', { value: 1100, configurable: true })
+    fireEvent.scroll(window)
 
     await waitFor(() => expect(getWatchedCandidates).toHaveBeenCalledWith([], [], '2'))
     await waitFor(() => expect(screen.getAllByText(/Movie Three/).length).toBeGreaterThan(0))

@@ -45,7 +45,6 @@ export function WatchedStep({ genres, languages, initialWatched, onContinue, onS
     loadMore
   } = useInfinitePages(fetchPage, (m: MovieCandidate) => m.movieId)
   const [error, setError] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MovieSummary[]>([])
@@ -116,15 +115,20 @@ export function WatchedStep({ genres, languages, initialWatched, onContinue, onS
   const isSearching = query.trim().length >= MIN_QUERY_LENGTH
   const displayed: (MovieCandidate | MovieSummary)[] = isSearching ? results : candidates
 
-  // Search results aren't paginated (movieApi's searchMovies has no cursor) —
-  // scrolling only grows the suggestion grid, not a search's results.
-  function handleScroll() {
+  // Listens on the page itself (not a nested scroll box — a separate inner
+  // scroll region is easy to miss entirely, since nobody expects a form to
+  // have its own hidden scrollbar) so scrolling normally is what grows the
+  // grid. Search results aren't paginated (movieApi's searchMovies has no
+  // cursor), so this is suppressed while searching.
+  useEffect(() => {
     if (isSearching) return
-    const el = scrollRef.current
-    if (!el) return
-    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 200
-    if (nearBottom) loadMore()
-  }
+    function onScroll() {
+      const nearBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 300
+      if (nearBottom) loadMore()
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [isSearching, loadMore])
 
   return (
     <OnboardingShell
@@ -161,54 +165,48 @@ export function WatchedStep({ genres, languages, initialWatched, onContinue, onS
           </p>
         )}
 
-        {/* Its own scroll region (not relying on whatever ancestor happens
-            to scroll) — onScroll drives loadMore as the user nears the
-            bottom, so the grid keeps growing via TMDB Discover paging
-            (onboarding.service.ts) instead of stopping at one fixed batch. */}
-        <div ref={scrollRef} onScroll={handleScroll} className="max-h-[420px] overflow-y-auto pr-1">
-          <ul className="grid grid-cols-3 gap-3">
-            {displayed.map((movie) => {
-              const isWatched = watchedMovies.has(movie.movieId)
-              const poster = posterUrl(movie.poster)
-              return (
-                <li key={movie.movieId}>
-                  <button
-                    type="button"
-                    aria-pressed={isWatched}
-                    onClick={() => toggle(movie)}
-                    className="block w-full text-left"
+        <ul className="grid grid-cols-3 gap-3">
+          {displayed.map((movie) => {
+            const isWatched = watchedMovies.has(movie.movieId)
+            const poster = posterUrl(movie.poster)
+            return (
+              <li key={movie.movieId}>
+                <button
+                  type="button"
+                  aria-pressed={isWatched}
+                  onClick={() => toggle(movie)}
+                  className="block w-full text-left"
+                >
+                  <div
+                    className={`relative aspect-[2/3] w-full overflow-hidden rounded-[10px] bg-surface-alt ${isWatched ? 'border-2 border-accent' : 'border border-border'}`}
                   >
-                    <div
-                      className={`relative aspect-[2/3] w-full overflow-hidden rounded-[10px] bg-surface-alt ${isWatched ? 'border-2 border-accent' : 'border border-border'}`}
-                    >
-                      {poster ? (
-                        <img src={poster} alt="" loading="lazy" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[10px] text-text-faint">No poster</div>
-                      )}
-                      {isWatched && (
-                        <span className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E0D10" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M20 6L9 17l-5-5" />
-                          </svg>
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 text-center text-[10.5px] text-text-secondary">
-                      {movie.title} {movie.year ? `(${movie.year})` : ''}
-                    </div>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          {!isSearching && loadingMore && <p className="mt-3 text-center text-[11.5px] text-text-muted">Loading more…</p>}
-          {!isSearching && !loading && !loadingMore && hasMore && (
-            <button type="button" onClick={loadMore} className="mt-3 block w-full text-center text-[11.5px] font-semibold text-accent">
-              Load more
-            </button>
-          )}
-        </div>
+                    {poster ? (
+                      <img src={poster} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-text-faint">No poster</div>
+                    )}
+                    {isWatched && (
+                      <span className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E0D10" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1.5 text-center text-[10.5px] text-text-secondary">
+                    {movie.title} {movie.year ? `(${movie.year})` : ''}
+                  </div>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        {!isSearching && loadingMore && <p className="mt-3 text-center text-[11.5px] text-text-muted">Loading more…</p>}
+        {!isSearching && !loading && !loadingMore && hasMore && (
+          <button type="button" onClick={loadMore} className="mt-3 block w-full text-center text-[11.5px] font-semibold text-accent">
+            Load more
+          </button>
+        )}
 
         {/* A fixed gap, not a flex-1 spacer — see MultiSelectStep.tsx for
             why: flex-1 collapses to nothing once the form is vertically
