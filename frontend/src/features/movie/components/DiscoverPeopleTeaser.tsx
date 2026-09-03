@@ -26,7 +26,7 @@ export function DiscoverPeopleTeaser() {
       <button
         type="button"
         onClick={() => navigate('/get-started')}
-        className="mt-4 w-full rounded-[10px] border border-accent py-2.5 text-[12px] font-bold text-accent"
+        className="mt-4 w-full cursor-pointer rounded-[10px] border border-accent py-2.5 text-[12px] font-bold text-accent"
       >
         Sign up / sign in to view
       </button>

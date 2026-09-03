@@ -60,7 +60,7 @@ export function DiscoverEventsTeaser() {
               {formatDate(event.datetime)}
               {event.mode === 'in-person' && event.location ? ` · ${event.location.area}, ${event.location.city}` : ''}
             </div>
-            <button type="button" onClick={() => navigate('/get-started')} className="mt-2 text-[10.5px] font-bold text-text-faint">
+            <button type="button" onClick={() => navigate('/get-started')} className="mt-2 cursor-pointer text-[10.5px] font-bold text-text-faint underline">
               Sign in to join
             </button>
           </li>
