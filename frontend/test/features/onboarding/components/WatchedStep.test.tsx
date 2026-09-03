@@ -4,9 +4,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 const getWatchedCandidates = vi.fn()
 const markWatched = vi.fn()
 const unmarkWatched = vi.fn()
+const searchMovies = vi.fn()
 
 vi.mock('../../../../src/features/onboarding/services/onboardingApi', () => ({ getWatchedCandidates }))
-vi.mock('../../../../src/features/movie/services/movieApi', () => ({ markWatched, unmarkWatched }))
+vi.mock('../../../../src/features/movie/services/movieApi', () => ({ markWatched, unmarkWatched, searchMovies }))
 
 const { WatchedStep } = await import('../../../../src/features/onboarding/components/WatchedStep')
 
@@ -19,6 +20,7 @@ afterEach(() => {
   getWatchedCandidates.mockReset()
   markWatched.mockReset()
   unmarkWatched.mockReset()
+  searchMovies.mockReset()
 })
 
 // OnboardingShell renders its children twice — a mobile copy and a desktop
@@ -69,5 +71,29 @@ describe('WatchedStep', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
     expect(onContinue).toHaveBeenCalledWith([candidates[0]])
+  })
+
+  it('searches for a movie beyond the candidate list and can mark it watched too', async () => {
+    getWatchedCandidates.mockResolvedValue({ items: candidates })
+    searchMovies.mockResolvedValue({ items: [{ movieId: 'm9', title: 'Searched Movie', poster: null, year: 2019 }] })
+    markWatched.mockResolvedValue(undefined)
+    const onContinue = vi.fn()
+    render(<WatchedStep genres={[]} languages={[]} onContinue={onContinue} onSkip={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getAllByText(/Movie One/).length).toBeGreaterThan(0))
+    fireEvent.change(screen.getAllByLabelText(/search for a movie/i)[0], { target: { value: 'searched' } })
+
+    // The component's own debounce (1000ms) is right at waitFor's default
+    // timeout — give it real headroom instead of racing it.
+    await waitFor(() => expect(searchMovies).toHaveBeenCalledWith('searched'), { timeout: 2000 })
+    await waitFor(() => expect(screen.getAllByText(/Searched Movie/).length).toBeGreaterThan(0))
+    // The candidate grid is replaced while searching, not shown alongside it.
+    expect(screen.queryByText(/Movie One/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByText(/Searched Movie/)[0])
+    await waitFor(() => expect(markWatched).toHaveBeenCalledWith('m9'))
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
+    expect(onContinue).toHaveBeenCalledWith([{ movieId: 'm9', title: 'Searched Movie', poster: null, year: 2019, genres: [], originalLanguage: null, voteAverage: 0 }])
   })
 })

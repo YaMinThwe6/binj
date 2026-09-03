@@ -1,6 +1,11 @@
-import type { TasteMatch, WatchedByEntry } from "@binj/shared-types";
+import type { TasteMatch, WatchedByEntry, PersonSummary } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { AppError } from "../utils/AppError.js";
+import { significantWords } from "../lib/searchIndex.js";
+import { rankCandidate } from "../lib/searchRanking.js";
+
+const MAX_QUERY_WORDS = 30; // Firestore's array-contains-any cap — same as movies.service.ts's search
+const RESULTS_TOP_N = 20;
 
 function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null {
   if (!value) return null;
@@ -64,6 +69,43 @@ export async function listFollowedCelebrities(uid: string) {
     })
   );
   return { items, nextCursor: null };
+}
+
+// GET /people/search — by-name lookup over the local people/{personId}
+// catalog (populated lazily from movie credits, movies.service.ts's person
+// upsert — schema.md's "every credited person, not just top-billed").
+// Local-only, unlike movie search: there's no equivalent live "search
+// people directly" TMDB call already wired into this codebase the way
+// TMDB's movie search is, so this only ever finds someone BINJ has already
+// ingested via some movie's credits — not the entire universe of actors.
+export async function searchPeopleService(rawQuery: unknown): Promise<{ items: PersonSummary[] }> {
+  const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
+  if (!query) {
+    throw new AppError("MISSING_QUERY", "q query param is required", 400);
+  }
+
+  const db = requireDb();
+  const queryWords = significantWords(query).slice(0, MAX_QUERY_WORDS);
+  if (queryWords.length === 0) {
+    return { items: [] };
+  }
+
+  const snap = await db.collection("people").where("nameSearchTerms", "array-contains-any", queryWords).get();
+
+  const items: PersonSummary[] = snap.docs
+    .map((d) => ({ id: d.id, data: d.data() }))
+    .map(({ id, data }) => ({
+      id,
+      name: data.name as string,
+      photo: (data.photo as string | null) ?? null,
+      ...rankCandidate(query, { title: data.name as string, popularitySignal: data.popularity as number | undefined })
+    }))
+    .filter((r) => r.matchType !== "none")
+    .sort((a, b) => b.score - a.score)
+    .slice(0, RESULTS_TOP_N)
+    .map(({ id, name, photo }) => ({ personId: id, name, photo }));
+
+  return { items };
 }
 
 // GET /movies/:movieId/watchedBy — hld.md §5a, api-contracts.md §5. Never a

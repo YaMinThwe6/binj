@@ -6,7 +6,8 @@ import {
   putFollowedCelebrity,
   deleteFollowedCelebrity,
   getFollowedCelebrities,
-  getMovieWatchedBy
+  getMovieWatchedBy,
+  getPeopleSearch
 } from "../controllers/people.controller.js";
 
 export const peopleRouter = Router();
@@ -16,3 +17,4 @@ peopleRouter.put("/users/me/followedCelebrities/:personId", requireAuth, asyncHa
 peopleRouter.delete("/users/me/followedCelebrities/:personId", requireAuth, asyncHandler(deleteFollowedCelebrity));
 peopleRouter.get("/users/me/followedCelebrities", requireAuth, asyncHandler(getFollowedCelebrities));
 peopleRouter.get("/movies/:movieId/watchedBy", requireAuth, asyncHandler(getMovieWatchedBy));
+peopleRouter.get("/people/search", requireAuth, asyncHandler(getPeopleSearch));

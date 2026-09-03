@@ -204,6 +204,9 @@ describe("GET /movies/:movieId", () => {
       photo: null,
       knownForDepartment: "Acting",
       popularity: 9.7,
+      // GET /people/search's index (people.service.ts) — same helper movies'
+      // own titleSearchTerms uses, applied to the person's name instead.
+      nameSearchTerms: expect.arrayContaining(["l", "le", "leonardo"]),
       lastFetched: expect.any(Date)
     });
   });

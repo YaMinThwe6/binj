@@ -70,6 +70,9 @@ export async function getMovieDetail(movieId: string): Promise<MovieDetail> {
             photo: person.photo,
             knownForDepartment: person.knownForDepartment,
             popularity: person.popularity,
+            // GET /people/search's index (people.service.ts) — same helper,
+            // same array-contains-any pattern movies.titleSearchTerms uses.
+            nameSearchTerms: buildSearchTerms(person.name),
             lastFetched: new Date()
           },
           { merge: true }

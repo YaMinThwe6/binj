@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import { buildSearchTerms } from "../src/lib/searchIndex.js";
 
 type DocData = Record<string, unknown>;
 const store = new Map<string, DocData>();
@@ -35,6 +36,18 @@ function makeCollectionRef(path: string) {
           const av = (a[1][field] as number) ?? 0;
           const bv = (b[1][field] as number) ?? 0;
           return dir === "desc" ? bv - av : av - bv;
+        });
+        return { docs: entries.map(([key, data]) => ({ id: key.split("/").pop()!, data: () => data })) };
+      }
+    }),
+    // Only "array-contains-any" is implemented — the one operator
+    // people.service.ts's searchPeopleService actually issues.
+    where: (field: string, op: string, value: unknown[]) => ({
+      get: async () => {
+        const entries = directChildren(path).filter(([, data]) => {
+          if (op !== "array-contains-any") return false;
+          const fieldValue = data[field];
+          return Array.isArray(fieldValue) && value.some((v) => fieldValue.includes(v));
         });
         return { docs: entries.map(([key, data]) => ({ id: key.split("/").pop()!, data: () => data })) };
       }
@@ -150,6 +163,55 @@ describe("GET /onboarding/celebrity-suggestions", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.items[0]).toEqual({ personId: "p1", name: "Actor One", photo: null, appearsIn: 2 });
     expect(res.body.data.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
+  });
+});
+
+describe("GET /people/search", () => {
+  it("401s without a token", async () => {
+    const app = createApp();
+    const res = await request(app).get("/people/search?q=leo");
+    expect(res.status).toBe(401);
+  });
+
+  it("400s when q is missing", async () => {
+    const app = createApp();
+    const res = await request(app).get("/people/search").set("Authorization", "Bearer good");
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("MISSING_QUERY");
+  });
+
+  it("finds a person by name and returns personId/name/photo only", async () => {
+    store.set("people/p1", { name: "Leonardo DiCaprio", photo: "/leo.jpg", popularity: 40, nameSearchTerms: buildSearchTerms("Leonardo DiCaprio") });
+
+    const app = createApp();
+    const res = await request(app).get("/people/search?q=leo").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([{ personId: "p1", name: "Leonardo DiCaprio", photo: "/leo.jpg" }]);
+  });
+
+  it("excludes people whose name doesn't match at all", async () => {
+    store.set("people/p1", { name: "Leonardo DiCaprio", photo: null, popularity: 40, nameSearchTerms: buildSearchTerms("Leonardo DiCaprio") });
+    store.set("people/p2", { name: "Meryl Streep", photo: null, popularity: 30, nameSearchTerms: buildSearchTerms("Meryl Streep") });
+
+    const app = createApp();
+    const res = await request(app).get("/people/search?q=leo").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.map((p: { personId: string }) => p.personId)).toEqual(["p1"]);
+  });
+
+  it("ranks an exact/prefix match above a token-only match", async () => {
+    store.set("people/exact", { name: "Chris Evans", photo: null, popularity: 10, nameSearchTerms: buildSearchTerms("Chris Evans") });
+    store.set("people/token", { name: "Bradley Chris Cooper", photo: null, popularity: 90, nameSearchTerms: buildSearchTerms("Bradley Chris Cooper") });
+
+    const app = createApp();
+    const res = await request(app).get("/people/search?q=chris").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    // "Chris Evans" starts with the query (prefix match) — outranks
+    // "Bradley Chris Cooper" (token-only match) regardless of popularity.
+    expect(res.body.data.items[0].personId).toBe("exact");
   });
 });
 

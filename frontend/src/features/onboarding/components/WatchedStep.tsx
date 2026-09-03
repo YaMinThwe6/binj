@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getWatchedCandidates, type MovieCandidate } from '../services/onboardingApi'
-import { markWatched, unmarkWatched } from '../../movie/services/movieApi'
+import { markWatched, unmarkWatched, searchMovies, type MovieSummary } from '../../movie/services/movieApi'
 import { posterUrl } from '../../../lib/images'
 import { OnboardingShell } from './OnboardingShell'
 
@@ -12,11 +12,38 @@ interface Props {
   onBack?: () => void
 }
 
+// Matches MovieSearch.tsx's own search-as-you-type pacing — a real API call
+// (movies.service.ts's local-index+TMDB merge), not a cheap local read.
+const DEBOUNCE_MS = 1000
+const MIN_QUERY_LENGTH = 2
+
+// A search result (MovieSummary) is missing the fields a candidate carries
+// (genres/originalLanguage/voteAverage — /onboarding/watched-candidates
+// returns those, plain search doesn't) — defaulted here so a movie found
+// via search can still be marked watched and included in onContinue's
+// payload just like a suggested candidate. voteAverage defaults to 0
+// (greeting.ts's "pick the highest-rated watched movie" only degrades if
+// every watched movie came from search, never breaks).
+function toCandidate(movie: MovieCandidate | MovieSummary): MovieCandidate {
+  if ('voteAverage' in movie) return movie
+  return { ...movie, genres: [], originalLanguage: null, voteAverage: 0 }
+}
+
 export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: Props) {
   const [candidates, setCandidates] = useState<MovieCandidate[]>([])
-  const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<MovieSummary[]>([])
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keyed by movieId, valued with the full candidate shape — not just a
+  // Set<movieId> — so a movie marked watched from search results (which
+  // aren't in `candidates`) still has something real to hand back via
+  // onContinue, not just an id with nothing behind it.
+  const [watchedMovies, setWatchedMovies] = useState<Map<string, MovieCandidate>>(new Map())
 
   useEffect(() => {
     getWatchedCandidates(genres, languages)
@@ -28,28 +55,54 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function toggle(movieId: string) {
-    const wasWatched = watchedIds.has(movieId)
-    setWatchedIds((prev) => {
-      const next = new Set(prev)
-      if (wasWatched) next.delete(movieId)
-      else next.add(movieId)
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    const trimmed = query.trim()
+    if (trimmed.length < MIN_QUERY_LENGTH) {
+      setResults([])
+      setSearchStatus('idle')
+      return
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setSearchStatus('loading')
+      searchMovies(trimmed)
+        .then((res) => {
+          setResults(res.items)
+          setSearchStatus('idle')
+        })
+        .catch(() => setSearchStatus('error'))
+    }, DEBOUNCE_MS)
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    }
+  }, [query])
+
+  async function toggle(movie: MovieCandidate | MovieSummary) {
+    const full = toCandidate(movie)
+    const wasWatched = watchedMovies.has(full.movieId)
+    setWatchedMovies((prev) => {
+      const next = new Map(prev)
+      if (wasWatched) next.delete(full.movieId)
+      else next.set(full.movieId, full)
       return next
     })
     try {
-      if (wasWatched) await unmarkWatched(movieId)
-      else await markWatched(movieId)
+      if (wasWatched) await unmarkWatched(full.movieId)
+      else await markWatched(full.movieId)
     } catch (err) {
       // roll back the optimistic toggle on failure
-      setWatchedIds((prev) => {
-        const next = new Set(prev)
-        if (wasWatched) next.add(movieId)
-        else next.delete(movieId)
+      setWatchedMovies((prev) => {
+        const next = new Map(prev)
+        if (wasWatched) next.set(full.movieId, full)
+        else next.delete(full.movieId)
         return next
       })
       setError(err instanceof Error ? err.message : 'Failed to update')
     }
   }
+
+  const isSearching = query.trim().length >= MIN_QUERY_LENGTH
+  const displayed: (MovieCandidate | MovieSummary)[] = isSearching ? results : candidates
 
   return (
     <OnboardingShell
@@ -60,9 +113,23 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
     >
       <div className="flex flex-1 flex-col px-7 pt-8 pb-8">
         <h1 className="font-serif text-[26px] font-semibold text-white">Movies you&rsquo;ve watched</h1>
-        <p className="mt-2 mb-6 text-[13.5px] text-text-muted">This helps us build your taste profile (optional)</p>
+        <p className="mt-2 mb-5 text-[13.5px] text-text-muted">This helps us build your taste profile (optional)</p>
 
-        {loading && <p className="text-sm text-text-muted">Loading…</p>}
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search for a movie…"
+          aria-label="Search for a movie"
+          className="mb-4 rounded-xl border border-border bg-surface-alt px-4 py-3 text-sm text-text outline-none focus:border-accent"
+        />
+
+        {loading && !isSearching && <p className="text-sm text-text-muted">Loading…</p>}
+        {isSearching && searchStatus === 'loading' && <p className="text-sm text-text-muted">Searching…</p>}
+        {isSearching && searchStatus === 'error' && <p role="alert" className="text-sm text-red-400">Search failed</p>}
+        {isSearching && searchStatus === 'idle' && results.length === 0 && (
+          <p className="text-sm text-text-muted">No results for &ldquo;{query.trim()}&rdquo;.</p>
+        )}
         {error && (
           <p role="alert" className="mb-4 text-[13px] text-red-400">
             {error}
@@ -70,15 +137,15 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
         )}
 
         <ul className="grid grid-cols-3 gap-3">
-          {candidates.map((movie) => {
-            const isWatched = watchedIds.has(movie.movieId)
+          {displayed.map((movie) => {
+            const isWatched = watchedMovies.has(movie.movieId)
             const poster = posterUrl(movie.poster)
             return (
               <li key={movie.movieId}>
                 <button
                   type="button"
                   aria-pressed={isWatched}
-                  onClick={() => toggle(movie.movieId)}
+                  onClick={() => toggle(movie)}
                   className="block w-full text-left"
                 >
                   <div
@@ -111,10 +178,10 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
             centered instead of stretched (OnboardingShell's desktop
             layout), so however many candidates came back, there's still a
             real gap here rather than the button touching the grid. */}
-        <p className="mt-8 mb-3 text-center text-[11.5px] text-text-muted">{watchedIds.size} selected</p>
+        <p className="mt-8 mb-3 text-center text-[11.5px] text-text-muted">{watchedMovies.size} selected</p>
         <button
           type="button"
-          onClick={() => onContinue(candidates.filter((c) => watchedIds.has(c.movieId)))}
+          onClick={() => onContinue([...watchedMovies.values()])}
           className="flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg"
         >
           Continue

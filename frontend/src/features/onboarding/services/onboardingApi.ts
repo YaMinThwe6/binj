@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../lib/api'
-export type { MovieCandidate, CelebritySuggestion } from '@binj/shared-types'
-import type { MovieCandidate, CelebritySuggestion } from '@binj/shared-types'
+export type { MovieCandidate, CelebritySuggestion, PersonSummary } from '@binj/shared-types'
+import type { MovieCandidate, CelebritySuggestion, PersonSummary } from '@binj/shared-types'
 
 export function checkUsernameAvailable(username: string): Promise<{ available: boolean }> {
   return apiFetch(`/users/username-available?username=${encodeURIComponent(username)}`)
@@ -16,6 +16,13 @@ export function getWatchedCandidates(genres: string[], languages: string[]): Pro
 
 export function getCelebritySuggestions(): Promise<{ items: CelebritySuggestion[] }> {
   return apiFetch('/onboarding/celebrity-suggestions', { auth: true })
+}
+
+// Local-only, like the suggestions above — only ever finds someone BINJ has
+// already ingested via some movie's credits (people.service.ts's
+// searchPeopleService), not the entire universe of actors.
+export function searchPeople(query: string): Promise<{ items: PersonSummary[] }> {
+  return apiFetch(`/people/search?q=${encodeURIComponent(query)}`, { auth: true })
 }
 
 export function followCelebrity(personId: string): Promise<void> {

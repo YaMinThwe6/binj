@@ -7,6 +7,15 @@ export interface CelebritySuggestion {
   appearsIn: number
 }
 
+// GET /people/search item — a plain by-name lookup (api-contracts.md §5),
+// distinct from CelebritySuggestion: no appearsIn, since this isn't ranked
+// against the caller's own watch history the way suggestions are.
+export interface PersonSummary {
+  personId: string
+  name: string
+  photo: string | null
+}
+
 // GET /users/me/tasteMatches item — relationship is joined live against the
 // Follow collections (api-contracts.md §4) so a "Connect" button can render
 // the right state without a second round-trip.

@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react'
-import { getCelebritySuggestions, followCelebrity, unfollowCelebrity, type CelebritySuggestion } from '../services/onboardingApi'
+import { useEffect, useRef, useState } from 'react'
+import {
+  getCelebritySuggestions,
+  followCelebrity,
+  unfollowCelebrity,
+  searchPeople,
+  type CelebritySuggestion,
+  type PersonSummary
+} from '../services/onboardingApi'
 import { OnboardingShell } from './OnboardingShell'
+import { posterUrl } from '../../../lib/images'
 
 interface Props {
   onContinue: () => void
@@ -8,11 +16,20 @@ interface Props {
   onBack?: () => void
 }
 
+// Matches WatchedStep.tsx's own search-as-you-type pacing.
+const DEBOUNCE_MS = 1000
+const MIN_QUERY_LENGTH = 2
+
 export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
   const [suggestions, setSuggestions] = useState<CelebritySuggestion[]>([])
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<PersonSummary[]>([])
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     getCelebritySuggestions()
@@ -20,6 +37,28 @@ export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load suggestions'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    const trimmed = query.trim()
+    if (trimmed.length < MIN_QUERY_LENGTH) {
+      setResults([])
+      setSearchStatus('idle')
+      return
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setSearchStatus('loading')
+      searchPeople(trimmed)
+        .then((res) => {
+          setResults(res.items)
+          setSearchStatus('idle')
+        })
+        .catch(() => setSearchStatus('error'))
+    }, DEBOUNCE_MS)
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    }
+  }, [query])
 
   async function toggle(personId: string) {
     const wasFollowed = followedIds.has(personId)
@@ -44,6 +83,9 @@ export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
     }
   }
 
+  const isSearching = query.trim().length >= MIN_QUERY_LENGTH
+  const displayed: (CelebritySuggestion | PersonSummary)[] = isSearching ? results : suggestions
+
   return (
     <OnboardingShell
       step={5}
@@ -53,31 +95,46 @@ export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
     >
       <div className="flex flex-1 flex-col px-7 pt-8 pb-8">
         <h1 className="font-serif text-[26px] font-semibold text-white">Follow celebrities</h1>
-        <p className="mt-2 mb-6 text-[13.5px] text-text-muted">
+        <p className="mt-2 mb-5 text-[13.5px] text-text-muted">
           Based on what you&rsquo;ve watched — actors, directors, and crew alike (optional)
         </p>
 
-        {loading && <p className="text-sm text-text-muted">Loading…</p>}
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search for a person…"
+          aria-label="Search for a person"
+          className="mb-4 rounded-xl border border-border bg-surface-alt px-4 py-3 text-sm text-text outline-none focus:border-accent"
+        />
+
+        {loading && !isSearching && <p className="text-sm text-text-muted">Loading…</p>}
+        {isSearching && searchStatus === 'loading' && <p className="text-sm text-text-muted">Searching…</p>}
+        {isSearching && searchStatus === 'error' && <p role="alert" className="text-sm text-red-400">Search failed</p>}
+        {isSearching && searchStatus === 'idle' && results.length === 0 && (
+          <p className="text-sm text-text-muted">No results for &ldquo;{query.trim()}&rdquo;.</p>
+        )}
         {error && (
           <p role="alert" className="mb-4 text-[13px] text-red-400">
             {error}
           </p>
         )}
-        {!loading && suggestions.length === 0 && (
+        {!loading && !isSearching && suggestions.length === 0 && (
           <p className="text-sm text-text-muted">No suggestions yet — you can follow people from their pages later.</p>
         )}
 
         <ul className="grid grid-cols-3 gap-x-3 gap-y-5">
-          {suggestions.map((person) => {
+          {displayed.map((person) => {
             const isFollowed = followedIds.has(person.personId)
+            const photo = posterUrl(person.photo, 'w185')
             return (
               <li key={person.personId}>
                 <button type="button" aria-pressed={isFollowed} onClick={() => toggle(person.personId)} className="flex w-full flex-col items-center">
                   <div
                     className={`relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-surface-alt ${isFollowed ? 'border-2 border-accent' : 'border border-border'}`}
                   >
-                    {person.photo ? (
-                      <img src={person.photo} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    {photo ? (
+                      <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-lg font-semibold text-text-faint">{person.name.charAt(0)}</span>
                     )}

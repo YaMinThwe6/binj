@@ -26,3 +26,8 @@ export async function getMovieWatchedBy(req: Request, res: Response): Promise<vo
   const result = await peopleService.getMovieWatchedBy(req.uid!, req.params.movieId);
   Responder.success(res, result);
 }
+
+export async function getPeopleSearch(req: Request, res: Response): Promise<void> {
+  const result = await peopleService.searchPeopleService(req.query.q);
+  Responder.success(res, result);
+}
