@@ -97,4 +97,25 @@ describe('OnboardingWizard', () => {
 
     await waitFor(() => expect(getWatchedCandidates).toHaveBeenCalledWith(['Comedy'], ['ko']))
   })
+
+  it('keeps the saved username filled in and available after navigating back to it', async () => {
+    checkUsernameAvailable.mockResolvedValue({ available: true })
+    updateMe.mockResolvedValue({})
+
+    render(<OnboardingWizard initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onComplete={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getAllByLabelText(/^username$/i)[0]).toBeInTheDocument())
+    fireEvent.change(screen.getAllByLabelText(/^username$/i)[0], { target: { value: 'arjunk' } })
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled())
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
+
+    await waitFor(() => expect(screen.getAllByText(/what are you into/i)[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /^back$/i })[0])
+
+    // Back on the username step: the previously saved value is pre-filled,
+    // not blank, and it resolves as available rather than falsely "taken".
+    await waitFor(() => expect(screen.getAllByLabelText(/^username$/i)[0]).toHaveValue('arjunk'))
+    await waitFor(() => expect(screen.getAllByText('This username is available').length).toBeGreaterThan(0))
+    expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled()
+  })
 })

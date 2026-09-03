@@ -73,5 +73,23 @@ describe('UsernameStep', () => {
 
     await waitFor(() => expect(onDone).toHaveBeenCalled())
     expect(updateMe).toHaveBeenCalledWith({ displayName: 'Arjun Kumar', username: 'custom_name' })
+    expect(onDone).toHaveBeenCalledWith('Arjun Kumar', 'custom_name')
+  })
+
+  it('pre-fills the username field from initialUsername when the step is revisited', async () => {
+    checkUsernameAvailable.mockResolvedValue({ available: true })
+    render(
+      <UsernameStep
+        initialDisplayName="Arjun Kumar"
+        initialUsername="already_saved"
+        email="arjun.kumar@gmail.com"
+        onDone={vi.fn()}
+      />
+    )
+
+    expect(screen.getAllByLabelText(/^username$/i)[0]).toHaveValue('already_saved')
+    // The pre-filled username is the caller's own — it must resolve as
+    // available (not "taken"), so Continue isn't stuck disabled.
+    await waitFor(() => expect(screen.getAllByText('This username is available').length).toBeGreaterThan(0))
   })
 })

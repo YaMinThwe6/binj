@@ -10,15 +10,16 @@ const MAX_SUGGESTIONS = 4
 
 interface Props {
   initialDisplayName: string
+  initialUsername?: string
   email: string
-  onDone: (displayName: string) => void
+  onDone: (displayName: string, username: string) => void
 }
 
 type AvailabilityState = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
 
-export function UsernameStep({ initialDisplayName, email, onDone }: Props) {
+export function UsernameStep({ initialDisplayName, initialUsername, email, onDone }: Props) {
   const [displayName, setDisplayName] = useState(initialDisplayName)
-  const [username, setUsername] = useState('')
+  const [username, setUsername] = useState(initialUsername ?? '')
   const [availability, setAvailability] = useState<AvailabilityState>('idle')
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestionsLoading, setSuggestionsLoading] = useState(true)
@@ -95,8 +96,9 @@ export function UsernameStep({ initialDisplayName, email, onDone }: Props) {
     setSubmitting(true)
     try {
       const trimmedName = displayName.trim()
-      await updateMe({ displayName: trimmedName, username: username.trim().toLowerCase() })
-      onDone(trimmedName)
+      const trimmedUsername = username.trim().toLowerCase()
+      await updateMe({ displayName: trimmedName, username: trimmedUsername })
+      onDone(trimmedName, trimmedUsername)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {

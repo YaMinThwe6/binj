@@ -82,7 +82,13 @@ export async function getOrCreateUser(uid: string, claims: Claims): Promise<User
 // GET /users/username-available — api-contracts.md §11. Unauthenticated: needed
 // before an account necessarily exists to attach a reservation to (checked live
 // during onboarding step 3, before the PATCH that actually claims it).
-export async function isUsernameAvailable(rawUsername: string): Promise<boolean> {
+// `callerUid` mirrors the exclusion updateUser's own claim transaction
+// already applies (a reservation owned by the caller isn't "taken") — this
+// pre-submit check used to have no notion of the caller at all, so it wrongly
+// reported someone's own already-saved username as taken the moment they
+// revisited this step (Continue stayed disabled even though re-submitting
+// the same username would actually have succeeded).
+export async function isUsernameAvailable(rawUsername: string, callerUid?: string): Promise<boolean> {
   const username = rawUsername.trim().toLowerCase();
   if (!USERNAME_RE.test(username)) {
     throw new AppError("INVALID_USERNAME", "Username must be 3-30 characters: lowercase letters, numbers, dots, underscores", 400);
@@ -90,7 +96,8 @@ export async function isUsernameAvailable(rawUsername: string): Promise<boolean>
 
   const db = requireDb();
   const snap = await db.collection("usernames").doc(username).get();
-  return !snap.exists;
+  if (!snap.exists) return true;
+  return callerUid !== undefined && snap.data()?.uid === callerUid;
 }
 
 const SIMPLE_PATCHABLE_FIELDS = [

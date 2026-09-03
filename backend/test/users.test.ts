@@ -165,28 +165,48 @@ describe("GET /users/me", () => {
 });
 
 describe("GET /users/username-available", () => {
+  it("401s with no Authorization header", async () => {
+    const app = createApp();
+    const res = await request(app).get("/users/username-available?username=arjun.movies");
+    expect(res.status).toBe(401);
+  });
+
   it("400s on an invalid username", async () => {
     const app = createApp();
-    const res = await request(app).get("/users/username-available?username=a");
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const res = await request(app)
+      .get("/users/username-available?username=a")
+      .set("Authorization", "Bearer good");
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("INVALID_USERNAME");
   });
 
-  it("is unauthenticated — no token required", async () => {
-    const app = createApp();
-    const res = await request(app).get("/users/username-available?username=arjun.movies");
-    expect(res.status).toBe(200);
-  });
-
-  it("reports available:true when unclaimed, false when claimed", async () => {
+  it("reports available:true when unclaimed, false when claimed by someone else", async () => {
     store.set("usernames/taken", { uid: "someone-else" });
     const app = createApp();
 
-    const freeRes = await request(app).get("/users/username-available?username=free");
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const freeRes = await request(app)
+      .get("/users/username-available?username=free")
+      .set("Authorization", "Bearer good");
     expect(freeRes.body.data).toEqual({ available: true });
 
-    const takenRes = await request(app).get("/users/username-available?username=taken");
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const takenRes = await request(app)
+      .get("/users/username-available?username=taken")
+      .set("Authorization", "Bearer good");
     expect(takenRes.body.data).toEqual({ available: false });
+  });
+
+  it("reports available:true for a username the caller already owns", async () => {
+    store.set("usernames/mine", { uid: "uid-1" });
+    const app = createApp();
+
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const res = await request(app)
+      .get("/users/username-available?username=mine")
+      .set("Authorization", "Bearer good");
+    expect(res.body.data).toEqual({ available: true });
   });
 });
 

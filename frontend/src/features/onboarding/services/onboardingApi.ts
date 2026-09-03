@@ -3,7 +3,7 @@ export type { MovieCandidate, CelebritySuggestion, PersonSummary } from '@binj/s
 import type { MovieCandidate, CelebritySuggestion, PersonSummary } from '@binj/shared-types'
 
 export function checkUsernameAvailable(username: string): Promise<{ available: boolean }> {
-  return apiFetch(`/users/username-available?username=${encodeURIComponent(username)}`)
+  return apiFetch(`/users/username-available?username=${encodeURIComponent(username)}`, { auth: true })
 }
 
 export function getWatchedCandidates(genres: string[], languages: string[]): Promise<{ items: MovieCandidate[] }> {

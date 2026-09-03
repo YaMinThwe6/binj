@@ -18,6 +18,7 @@ interface Props {
 export function OnboardingWizard({ initialDisplayName, email, onComplete }: Props) {
   const [step, setStep] = useState<Step>('username')
   const [displayName, setDisplayName] = useState(initialDisplayName)
+  const [username, setUsername] = useState('')
   const [genres, setGenres] = useState<string[]>([])
   const [languages, setLanguages] = useState<string[]>([])
   const [greeting, setGreeting] = useState<string | null>(null)
@@ -27,9 +28,11 @@ export function OnboardingWizard({ initialDisplayName, email, onComplete }: Prop
       return (
         <UsernameStep
           initialDisplayName={initialDisplayName}
+          initialUsername={username}
           email={email}
-          onDone={(name) => {
+          onDone={(name, savedUsername) => {
             setDisplayName(name)
+            setUsername(savedUsername)
             setStep('genres')
           }}
         />
