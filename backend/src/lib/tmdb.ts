@@ -174,3 +174,59 @@ export async function searchMovies(query: string): Promise<TmdbSearchResult[]> {
     voteCount: r.vote_count ?? 0
   }));
 }
+
+// TMDB's fixed movie-genre table (/genre/movie/list) — hardcoded rather than
+// fetched, since it practically never changes and every other place in this
+// codebase already stores genres by name (movies.genres, GENRE_OPTIONS), not
+// TMDB's internal ids — discover is the one endpoint that needs ids, so the
+// translation happens right here at the boundary.
+const GENRE_NAME_TO_ID: Record<string, number> = {
+  Action: 28,
+  Adventure: 12,
+  Animation: 16,
+  Comedy: 35,
+  Crime: 80,
+  Documentary: 99,
+  Drama: 18,
+  Family: 10751,
+  Fantasy: 14,
+  History: 36,
+  Horror: 27,
+  Music: 10402,
+  Mystery: 9648,
+  Romance: 10749,
+  "Science Fiction": 878,
+  Thriller: 53,
+  War: 10752,
+  Western: 37
+};
+
+export type TmdbDiscoverResult = MovieSummary;
+
+// onboarding.service.ts's genre/language-filtered candidate & celebrity-suggestion
+// paging (hld.md §13, redesigned for infinite scroll) — /discover/movie is the one
+// TMDB endpoint that's natively paginated by genre+language, so it's the source
+// that actually keeps growing as the user scrolls, unlike the local Firestore
+// index (only ever populated by movies someone has individually opened).
+export async function discoverMovies(genres: string[], languages: string[], page: number): Promise<{ items: TmdbDiscoverResult[]; totalPages: number }> {
+  const params = new URLSearchParams({ sort_by: "popularity.desc", page: String(page), include_adult: "false" });
+
+  const genreIds = genres.map((g) => GENRE_NAME_TO_ID[g]).filter((id): id is number => id !== undefined);
+  if (genreIds.length > 0) params.set("with_genres", genreIds.join(","));
+
+  // TMDB's discover only accepts a single original_language, unlike
+  // with_genres' comma-separated OR. With more than one language chosen,
+  // this is left unfiltered here and cross-checked in-app once full detail
+  // is fetched — same "genre query, language filtered in-app" convention
+  // onboarding.service.ts's existing local candidate query already uses.
+  if (languages.length === 1) params.set("with_original_language", languages[0]);
+
+  const data = await tmdbFetch(`/discover/movie?${params.toString()}`);
+  const items: TmdbDiscoverResult[] = (data.results ?? []).map((r: any) => ({
+    movieId: String(r.id),
+    title: r.title,
+    poster: r.poster_path || null,
+    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null
+  }));
+  return { items, totalPages: data.total_pages ?? 1 };
+}

@@ -79,6 +79,36 @@ describe('CelebritiesStep', () => {
     expect(screen.getAllByRole('button', { name: /jane doe/i })[0]).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('auto-continues to genre/language suggestions when watch-history page 1 is empty', async () => {
+    getCelebritySuggestions
+      .mockResolvedValueOnce({ items: [], nextCursor: '1' })
+      .mockResolvedValueOnce({ items: [{ personId: 'p9', name: 'Discovered Person', photo: null, appearsIn: 1 }], nextCursor: null })
+    render(<CelebritiesStep onContinue={vi.fn()} onSkip={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getAllByText('Discovered Person').length).toBeGreaterThan(0))
+    expect(getCelebritySuggestions).toHaveBeenCalledWith([], [], null)
+    expect(getCelebritySuggestions).toHaveBeenCalledWith([], [], '1')
+  })
+
+  it('loads more suggestions when scrolled near the bottom, appending rather than replacing', async () => {
+    getCelebritySuggestions
+      .mockResolvedValueOnce({ items: suggestions, nextCursor: '1' })
+      .mockResolvedValueOnce({ items: [{ personId: 'p9', name: 'Discovered Person', photo: null, appearsIn: 1 }], nextCursor: null })
+    render(<CelebritiesStep genres={['Drama']} onContinue={vi.fn()} onSkip={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getAllByText('Jane Doe').length).toBeGreaterThan(0))
+
+    const container = document.querySelectorAll('.overflow-y-auto')[0] as HTMLElement
+    Object.defineProperty(container, 'scrollTop', { value: 1000, configurable: true })
+    Object.defineProperty(container, 'scrollHeight', { value: 1100, configurable: true })
+    Object.defineProperty(container, 'clientHeight', { value: 200, configurable: true })
+    fireEvent.scroll(container)
+
+    await waitFor(() => expect(getCelebritySuggestions).toHaveBeenCalledWith(['Drama'], [], '1'))
+    await waitFor(() => expect(screen.getAllByText('Discovered Person').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('Jane Doe').length).toBeGreaterThan(0)
+  })
+
   it('searches for a person beyond the suggestion list and can follow them too', async () => {
     getCelebritySuggestions.mockResolvedValue({ items: suggestions })
     searchPeople.mockResolvedValue({ items: [{ personId: 'p9', name: 'Searched Person', photo: null }] })

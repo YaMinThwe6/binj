@@ -9,6 +9,8 @@ const unfollowCelebrity = vi.fn()
 const updateMe = vi.fn()
 const markWatched = vi.fn()
 const unmarkWatched = vi.fn()
+const likeMovie = vi.fn()
+const unlikeMovie = vi.fn()
 
 vi.mock('../../../../src/features/onboarding/services/onboardingApi', () => ({
   checkUsernameAvailable,
@@ -18,7 +20,7 @@ vi.mock('../../../../src/features/onboarding/services/onboardingApi', () => ({
   unfollowCelebrity
 }))
 vi.mock('../../../../src/lib/api', () => ({ updateMe }))
-vi.mock('../../../../src/features/movie/services/movieApi', () => ({ markWatched, unmarkWatched }))
+vi.mock('../../../../src/features/movie/services/movieApi', () => ({ markWatched, unmarkWatched, likeMovie, unlikeMovie }))
 
 const { OnboardingWizard } = await import('../../../../src/features/onboarding/components/OnboardingWizard')
 
@@ -28,6 +30,8 @@ afterEach(() => {
   getWatchedCandidates.mockReset()
   markWatched.mockReset()
   unmarkWatched.mockReset()
+  likeMovie.mockReset()
+  unlikeMovie.mockReset()
   getCelebritySuggestions.mockReset()
   followCelebrity.mockReset()
   unfollowCelebrity.mockReset()
@@ -95,7 +99,7 @@ describe('OnboardingWizard', () => {
     fireEvent.click(screen.getAllByText('Korean')[0])
     fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
 
-    await waitFor(() => expect(getWatchedCandidates).toHaveBeenCalledWith(['Comedy'], ['ko']))
+    await waitFor(() => expect(getWatchedCandidates).toHaveBeenCalledWith(['Comedy'], ['ko'], null))
   })
 
   it('keeps the saved username filled in and available after navigating back to it', async () => {

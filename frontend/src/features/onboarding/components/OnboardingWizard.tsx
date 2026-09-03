@@ -92,6 +92,8 @@ export function OnboardingWizard({ initialDisplayName, email, onComplete }: Prop
     case 'celebrities':
       return (
         <CelebritiesStep
+          genres={genres}
+          languages={languages}
           initialFollowedIds={followedIds}
           onContinue={(ids) => {
             setFollowedIds(ids)

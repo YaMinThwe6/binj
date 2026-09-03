@@ -32,6 +32,7 @@ export interface StreamingProvider {
 export interface MovieDetail extends MovieSummary {
   runtime: number | null
   genres: string[]
+  originalLanguage: string // ISO 639-1, e.g. "en" — always written by getMovieDetail's full-detail fetch, defaults to "en" if TMDB omits it
   synopsis: string | null
   cast: CastMember[]
   crew: CrewMember[]

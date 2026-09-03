@@ -4,9 +4,11 @@ import { buildSearchTerms } from "../src/lib/searchIndex.js";
 
 type DocData = Record<string, unknown>;
 const store = new Map<string, DocData>();
+const batchOps: { path: string; data: DocData; opts?: { merge?: boolean } }[] = [];
 
 function makeDocRef(path: string) {
   return {
+    __path: path,
     id: path.split("/").pop()!,
     get: vi.fn(async () => ({ exists: store.has(path), id: path.split("/").pop()!, data: () => store.get(path) })),
     set: vi.fn(async (value: DocData) => {
@@ -55,7 +57,23 @@ function makeCollectionRef(path: string) {
   };
 }
 
-const db = { collection: (name: string) => makeCollectionRef(name) };
+const db = {
+  collection: (name: string) => makeCollectionRef(name),
+  // Needed for getMovieDetail's people-credits upsert, reached whenever
+  // celebrity-suggestions falls through to a genre/language discover page.
+  batch: () => ({
+    set: (ref: { __path: string }, data: DocData, opts?: { merge?: boolean }) => {
+      batchOps.push({ path: ref.__path, data, opts });
+    },
+    commit: vi.fn(async () => {
+      for (const op of batchOps) {
+        const existing = store.get(op.path) ?? {};
+        store.set(op.path, op.opts?.merge ? { ...existing, ...op.data } : op.data);
+      }
+      batchOps.length = 0;
+    })
+  })
+};
 
 vi.mock("../src/lib/firebaseAdmin.js", () => ({
   auth: { verifyIdToken: vi.fn(async () => ({ uid: "uid-1" })) },
@@ -64,10 +82,17 @@ vi.mock("../src/lib/firebaseAdmin.js", () => ({
   isFirebaseConfigured: () => true
 }));
 
+const discoverMovies = vi.fn();
+const fetchMovieDetails = vi.fn();
+vi.mock("../src/lib/tmdb.js", () => ({ discoverMovies, fetchMovieDetails, searchMovies: vi.fn(), getRecentMovies: vi.fn() }));
+
 const { createApp } = await import("../src/app.js");
 
 beforeEach(() => {
   store.clear();
+  batchOps.length = 0;
+  discoverMovies.mockReset();
+  fetchMovieDetails.mockReset();
 });
 
 describe("GET /users/me/tasteMatches", () => {
@@ -138,11 +163,15 @@ describe("Followed celebrities", () => {
 });
 
 describe("GET /onboarding/celebrity-suggestions", () => {
-  it("returns an empty list when there's no watch history yet (no fallback)", async () => {
+  it("page 1: still an empty list when there's no watch history yet, but offers a next (genre/language) page", async () => {
     const app = createApp();
     const res = await request(app).get("/onboarding/celebrity-suggestions").set("Authorization", "Bearer good");
     expect(res.status).toBe(200);
     expect(res.body.data.items).toEqual([]);
+    // No longer a dead end: page 2 falls through to genre/language discovery
+    // below, so watch history being empty doesn't leave this step with
+    // nothing to suggest at all.
+    expect(res.body.data.nextCursor).toBe("1");
   });
 
   it("ranks people by how many watched movies they appear in", async () => {
@@ -163,6 +192,48 @@ describe("GET /onboarding/celebrity-suggestions", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.items[0]).toEqual({ personId: "p1", name: "Actor One", photo: null, appearsIn: 2 });
     expect(res.body.data.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
+  });
+
+  it("a cursor page ranks people from genre/language-filtered movies fetched via TMDB Discover", async () => {
+    discoverMovies.mockResolvedValueOnce({
+      items: [
+        { movieId: "1", title: "Movie One", poster: null, year: 2020 },
+        { movieId: "2", title: "Movie Two", poster: null, year: 2020 }
+      ],
+      totalPages: 3
+    });
+    fetchMovieDetails.mockImplementation(async (movieId: string) => ({
+      movieId,
+      title: `Movie ${movieId}`,
+      poster: null,
+      year: 2020,
+      originalLanguage: "en",
+      genres: ["Drama"],
+      voteAverage: 7,
+      cast: [{ personId: "p1", name: "Shared Actor", photo: null }],
+      crew: movieId === "1" ? [{ personId: "p2", name: "Director One", photo: null }] : [],
+      credits: []
+    }));
+
+    const app = createApp();
+    const res = await request(app)
+      .get("/onboarding/celebrity-suggestions?genres=Drama&cursor=1")
+      .set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(discoverMovies).toHaveBeenCalledWith(["Drama"], [], 1);
+    expect(res.body.data.items[0]).toEqual({ personId: "p1", name: "Shared Actor", photo: null, appearsIn: 2 });
+    expect(res.body.data.items[1]).toEqual({ personId: "p2", name: "Director One", photo: null, appearsIn: 1 });
+    expect(res.body.data.nextCursor).toBe("2");
+  });
+
+  it("a cursor page returns nextCursor: null once TMDB's own totalPages is exhausted", async () => {
+    discoverMovies.mockResolvedValueOnce({ items: [], totalPages: 2 });
+
+    const app = createApp();
+    const res = await request(app).get("/onboarding/celebrity-suggestions?cursor=2").set("Authorization", "Bearer good");
+
+    expect(res.body.data.nextCursor).toBeNull();
   });
 });
 
