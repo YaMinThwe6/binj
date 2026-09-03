@@ -15,6 +15,7 @@ function renderWithRouter() {
       <Routes>
         <Route path="/" element={<FriendsAreWatching />} />
         <Route path="/profile/:uid" element={<p>Profile page</p>} />
+        <Route path="/movie/:movieId" element={<p>Movie page</p>} />
       </Routes>
     </MemoryRouter>
   )
@@ -51,5 +52,17 @@ describe('FriendsAreWatching', () => {
 
     fireEvent.click(await screen.findByText('Rohan'))
     expect(await screen.findByText('Profile page')).toBeInTheDocument()
+  })
+
+  it('opens the movie detail page when the card itself is clicked (not the person\'s name)', async () => {
+    getHomeActivity.mockResolvedValue({
+      items: [
+        { activityId: 'a1', uid: 'u1', displayName: 'Rohan', type: 'watched', movieId: 'm1', movieTitle: 'Dune: Part Two', moviePoster: null, createdAt: new Date().toISOString() }
+      ]
+    })
+    renderWithRouter()
+
+    fireEvent.click(await screen.findByLabelText('Open Dune: Part Two'))
+    expect(await screen.findByText('Movie page')).toBeInTheDocument()
   })
 })

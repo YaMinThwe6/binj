@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const getFriendsRecommendations = vi.fn()
 const markWatched = vi.fn()
@@ -20,17 +21,28 @@ afterEach(() => {
   addToWatchlist.mockReset()
 })
 
+function renderWithRouter() {
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<BecauseYourFriendsWatched />} />
+        <Route path="/movie/:movieId" element={<p>Movie page</p>} />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('BecauseYourFriendsWatched', () => {
   it('renders nothing when the caller has no connections yet (empty items)', async () => {
     getFriendsRecommendations.mockResolvedValue({ items: [] })
-    const { container } = render(<BecauseYourFriendsWatched />)
+    const { container } = renderWithRouter()
     await waitFor(() => expect(getFriendsRecommendations).toHaveBeenCalled())
     expect(container).toBeEmptyDOMElement()
   })
 
   it('renders each recommended movie with how many friends watched it', async () => {
     getFriendsRecommendations.mockResolvedValue({ items })
-    render(<BecauseYourFriendsWatched />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Whiplash')).toBeInTheDocument())
     expect(screen.getByText('The Prestige')).toBeInTheDocument()
@@ -41,12 +53,29 @@ describe('BecauseYourFriendsWatched', () => {
   it('marks a movie watched via the quick-add button', async () => {
     getFriendsRecommendations.mockResolvedValue({ items })
     markWatched.mockResolvedValue(undefined)
-    render(<BecauseYourFriendsWatched />)
+    renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Whiplash')).toBeInTheDocument())
     fireEvent.click(screen.getByLabelText('Add Whiplash'))
     fireEvent.click(screen.getByText('Watched'))
 
     await waitFor(() => expect(markWatched).toHaveBeenCalledWith('m1'))
+  })
+
+  it('opens the movie detail page when the card is clicked', async () => {
+    getFriendsRecommendations.mockResolvedValue({ items })
+    renderWithRouter()
+
+    fireEvent.click(await screen.findByLabelText('Open Whiplash'))
+    expect(await screen.findByText('Movie page')).toBeInTheDocument()
+  })
+
+  it('does not navigate when the quick-add button is clicked', async () => {
+    getFriendsRecommendations.mockResolvedValue({ items })
+    renderWithRouter()
+
+    fireEvent.click(await screen.findByLabelText('Add Whiplash'))
+    expect(screen.getByText('Watched')).toBeInTheDocument()
+    expect(screen.queryByText('Movie page')).not.toBeInTheDocument()
   })
 })

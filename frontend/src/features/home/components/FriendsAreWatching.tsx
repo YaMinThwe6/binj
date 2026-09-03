@@ -55,7 +55,19 @@ export function FriendsAreWatching() {
           const poster = posterUrl(item.moviePoster)
           return (
             <li key={item.activityId} className="w-33 flex-none">
-              <div className="h-20.5 w-33 overflow-hidden rounded-[11px] bg-surface-alt">
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${item.movieTitle ?? 'movie'}`}
+                onClick={() => navigate(`/movie/${item.movieId}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/movie/${item.movieId}`)
+                  }
+                }}
+                className="h-20.5 w-33 cursor-pointer overflow-hidden rounded-[11px] bg-surface-alt"
+              >
                 {poster && <img src={poster} alt="" className="h-full w-full object-cover" />}
               </div>
               <div className="mt-2 flex items-center gap-1.5">

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getRecommendations, type RecommendationItem } from '../services/homeApi'
 import { markWatched, addToWatchlist } from '../../movie/services/movieApi'
 import { posterUrl } from '../../../lib/images'
 
 export function TopPicks() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<RecommendationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -54,7 +56,24 @@ export function TopPicks() {
           const poster = posterUrl(movie.poster)
           return (
             <li key={movie.movieId} className="w-32 flex-none">
-              <div className="relative h-46 w-32 overflow-hidden rounded-xl bg-surface-alt">
+              {/* The whole card navigates to the movie's detail page — role="button"
+                  + tabIndex/onKeyDown since it wraps other real buttons (quick-add,
+                  the popover), so it can't itself be a <button> (invalid nesting).
+                  Those nested buttons stopPropagation so clicking them doesn't also
+                  navigate. */}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${movie.title}`}
+                onClick={() => navigate(`/movie/${movie.movieId}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/movie/${movie.movieId}`)
+                  }
+                }}
+                className="relative h-46 w-32 cursor-pointer overflow-hidden rounded-xl bg-surface-alt"
+              >
                 {poster ? (
                   <img src={poster} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -69,13 +88,19 @@ export function TopPicks() {
                   type="button"
                   aria-label={`Add ${movie.title}`}
                   aria-expanded={openPopoverId === movie.movieId}
-                  onClick={() => setOpenPopoverId(openPopoverId === movie.movieId ? null : movie.movieId)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpenPopoverId(openPopoverId === movie.movieId ? null : movie.movieId)
+                  }}
                   className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/25 bg-black/75 text-sm font-bold text-text"
                 >
                   +
                 </button>
                 {openPopoverId === movie.movieId && (
-                  <div className="absolute top-9 right-2 w-[106px] overflow-hidden rounded-[10px] border border-border bg-input shadow-[0_10px_22px_rgba(0,0,0,0.55)]">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-9 right-2 w-[106px] overflow-hidden rounded-[10px] border border-border bg-input shadow-[0_10px_22px_rgba(0,0,0,0.55)]"
+                  >
                     <button
                       type="button"
                       onClick={() => handleAdd(movie.movieId, 'watched')}

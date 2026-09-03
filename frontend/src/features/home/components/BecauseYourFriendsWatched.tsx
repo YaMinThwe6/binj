@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getFriendsRecommendations, type FriendsRecommendationItem } from '../services/homeApi'
 import { markWatched, addToWatchlist } from '../../movie/services/movieApi'
 import { posterUrl } from '../../../lib/images'
@@ -14,6 +15,7 @@ function watchedByLabel(count: number): string {
 // someone actually produces a recommendation, same "gate, don't fabricate" choice
 // PeopleYouMightVibeWith makes for taste matches.
 export function BecauseYourFriendsWatched() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<FriendsRecommendationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -68,7 +70,22 @@ export function BecauseYourFriendsWatched() {
           const poster = posterUrl(movie.poster)
           return (
             <li key={movie.movieId} className="w-32 flex-none lg:w-[92px]">
-              <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-surface-alt lg:rounded-[10px]">
+              {/* Whole card navigates to the movie's detail page — see TopPicks.tsx
+                  for why this is a role="button" div (wraps other real buttons)
+                  rather than a <button>, and why those nested buttons stopPropagation. */}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${movie.title}`}
+                onClick={() => navigate(`/movie/${movie.movieId}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/movie/${movie.movieId}`)
+                  }
+                }}
+                className="relative aspect-[2/3] w-full cursor-pointer overflow-hidden rounded-xl bg-surface-alt lg:rounded-[10px]"
+              >
                 {poster ? (
                   <img src={poster} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -78,13 +95,19 @@ export function BecauseYourFriendsWatched() {
                   type="button"
                   aria-label={`Add ${movie.title}`}
                   aria-expanded={openPopoverId === movie.movieId}
-                  onClick={() => setOpenPopoverId(openPopoverId === movie.movieId ? null : movie.movieId)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpenPopoverId(openPopoverId === movie.movieId ? null : movie.movieId)
+                  }}
                   className="absolute top-1.5 right-1.5 flex h-5.5 w-5.5 items-center justify-center rounded-full border border-white/25 bg-black/75 text-xs font-bold text-text lg:h-5 lg:w-5"
                 >
                   +
                 </button>
                 {openPopoverId === movie.movieId && (
-                  <div className="absolute top-7 right-1.5 w-[106px] overflow-hidden rounded-[10px] border border-border bg-input shadow-[0_10px_22px_rgba(0,0,0,0.55)]">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-7 right-1.5 w-[106px] overflow-hidden rounded-[10px] border border-border bg-input shadow-[0_10px_22px_rgba(0,0,0,0.55)]"
+                  >
                     <button
                       type="button"
                       onClick={() => handleAdd(movie.movieId, 'watched')}
