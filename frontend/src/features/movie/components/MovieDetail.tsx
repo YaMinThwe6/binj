@@ -19,6 +19,8 @@ import {
 import { WatchedByFriends } from './WatchedByFriends'
 import { useAuth } from '../../../lib/AuthContext'
 import { posterUrl } from '../../../lib/images'
+import { Sidebar } from '../../../components/Sidebar'
+import { AppHeader } from '../../../components/AppHeader'
 
 const EMPTY_STATUS: MovieStatus = { watchlisted: false, watched: false, liked: false, review: null }
 
@@ -59,7 +61,7 @@ export function MovieDetail() {
   const { movieId: movieIdParam } = useParams<{ movieId: string }>()
   const movieId = movieIdParam!
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, signOutUser } = useAuth()
   const isGuest = !user
   const [movie, setMovie] = useState<MovieDetailData | null>(null)
   const [movieError, setMovieError] = useState('')
@@ -224,9 +226,8 @@ export function MovieDetail() {
     </div>
   )
 
-  return (
-    <main className="min-h-svh bg-bg text-text">
-      <div className="lg:mx-auto lg:max-w-5xl lg:px-8 lg:pt-8">
+  const content = (
+    <div className="lg:mx-auto lg:max-w-5xl lg:px-8 lg:pt-8">
         {/* Hero backdrop — mobile only; desktop drops the backdrop treatment
             for a plain two-column poster+info row (Desktop.dc.html). */}
         <div
@@ -471,7 +472,28 @@ export function MovieDetail() {
             </section>
           </div>
         </div>
-      </div>
-    </main>
+    </div>
+  )
+
+  // Guests never see the signed-in Sidebar/AppHeader shell — same treatment
+  // Home/Search give a signed-out visitor (no nav for pages they can't use).
+  if (isGuest) {
+    return <main className="min-h-svh bg-bg text-text">{content}</main>
+  }
+
+  return (
+    <div className="flex min-h-svh bg-bg text-text">
+      <Sidebar />
+      {/* Matches Home.tsx's own shell structure exactly, sidebar-scrolls-with-page
+          behavior included — nothing here bounds the flex chain to viewport
+          height, so despite the lg:overflow-y-auto below, the whole page scrolls
+          as one rather than Sidebar staying pinned. That's an existing Home.tsx
+          characteristic (verified live), not something introduced here — true
+          parity means matching it, not fixing it unprompted on this page alone. */}
+      <main className="min-w-0 flex-1 lg:flex lg:flex-col">
+        <AppHeader onSignOut={() => void signOutUser()} />
+        <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">{content}</div>
+      </main>
+    </div>
   )
 }

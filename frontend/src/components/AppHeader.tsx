@@ -1,0 +1,86 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getMe, type Me } from '../lib/api'
+import { getNotifications } from '../features/home/services/homeApi'
+
+interface Props {
+  onSignOut: () => void
+}
+
+// The desktop-only top bar every signed-in page inside the Sidebar shell
+// shares — HomeDesktop.dc.html originated this design, and Desktop.dc.html
+// (movie detail) reuses the identical bar, not a bespoke one per page. Fetches
+// its own `me` and unread count so it's a true drop-in: a caller renders it
+// and passes nothing but onSignOut, no profile/notification state to plumb
+// down first. (Home.tsx predates this component and still owns its own
+// mobile+desktop header inline — a candidate to migrate onto this later, not
+// done here to keep this change scoped to what was actually asked.)
+export function AppHeader({ onSignOut }: Props) {
+  const navigate = useNavigate()
+  const [me, setMe] = useState<Me | null>(null)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    getMe()
+      .then((res) => {
+        if (!cancelled) setMe(res)
+      })
+      .catch(() => {})
+    getNotifications(true)
+      .then((res) => {
+        if (!cancelled) setUnreadCount(res.items.length)
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadCount(0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!me) return null // avoid a flash of an empty avatar/name before this resolves
+
+  const initial = (me.displayName || me.email || '?').charAt(0).toUpperCase()
+
+  return (
+    <header className="hidden items-center justify-between border-b border-border-soft px-7 py-4.5 lg:flex">
+      <button
+        type="button"
+        onClick={() => navigate('/search')}
+        className="flex max-w-[420px] flex-1 items-center gap-2 rounded-[10px] border border-border-soft bg-surface-alt px-3.5 py-2.5 text-left"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-faint" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3" />
+        </svg>
+        <span className="text-[12.5px] text-text-faint">Search movies, people, genres…</span>
+      </button>
+
+      <div className="flex items-center gap-3.5 pl-4">
+        <button
+          type="button"
+          aria-label={`${unreadCount} unread notifications`}
+          className="relative flex h-9 w-9 items-center justify-center rounded-[10px] border border-border-soft bg-surface-alt"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-secondary" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+          </svg>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1 text-[9.5px] font-bold text-bg">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(var(--accent-rgb),0.35)] bg-[rgba(var(--accent-rgb),0.16)] text-[13px] font-bold text-accent">
+          {initial}
+        </div>
+        <span className="text-[13px] font-semibold text-text">{me.displayName}</span>
+        <button type="button" onClick={onSignOut} className="text-[12.5px] font-semibold text-text-muted">
+          Sign out
+        </button>
+      </div>
+    </header>
+  )
+}

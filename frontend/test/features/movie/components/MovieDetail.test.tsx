@@ -33,6 +33,14 @@ vi.mock('../../../../src/features/movie/services/movieApi', () => ({
   getMovieWatchedBy
 }))
 
+// AppHeader's own dependencies (rendered for real below, not mocked away,
+// same as Sidebar/MobileTabBar — none of these three have anything specific
+// to MovieDetail worth asserting here beyond "the shell is there").
+const getMe = vi.fn().mockResolvedValue({ displayName: 'Yamin', email: 'yamin@example.com' })
+vi.mock('../../../../src/lib/api', () => ({ getMe }))
+const getNotifications = vi.fn().mockResolvedValue({ items: [] })
+vi.mock('../../../../src/features/home/services/homeApi', () => ({ getNotifications }))
+
 // Every test below exercises the signed-in path unless it opts into
 // mockAuthUser(null) itself — that matches this file's existing tests, which
 // all predate guest mode and assert signed-in behavior throughout.
@@ -310,6 +318,15 @@ describe('MovieDetail', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /back/i })[0])
     expect(await screen.findByText('Previous page')).toBeInTheDocument()
   })
+
+  it('renders the desktop Sidebar + AppHeader shell for a signed-in visitor', async () => {
+    mockDefaults()
+    renderWithRouter()
+
+    await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /our story/i })).toBeInTheDocument() // Sidebar nav
+    expect(await screen.findByText('Yamin')).toBeInTheDocument() // AppHeader's identity, once getMe resolves
+  })
 })
 
 describe('MovieDetail — signed-out visitor (public Discover)', () => {
@@ -321,6 +338,16 @@ describe('MovieDetail — signed-out visitor (public Discover)', () => {
     await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
     expect(getMovieStatus).not.toHaveBeenCalled()
     expect(getMovieWatchedBy).not.toHaveBeenCalled()
+  })
+
+  it('never shows the signed-in Sidebar/AppHeader shell for a guest', async () => {
+    mockAuthUser(null)
+    mockDefaults()
+    renderWithRouter()
+
+    await waitFor(() => expect(screen.getByText('Dune: Part Two')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /our story/i })).not.toBeInTheDocument()
+    expect(getMe).not.toHaveBeenCalled()
   })
 
   it('shows a sign-in prompt instead of the action bar, navigating to Get Started', async () => {
