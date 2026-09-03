@@ -4,7 +4,7 @@ import { updateMe } from '../../../lib/api'
 import { generateUsernameSuggestions } from '../usernameSuggestions'
 import { OnboardingShell } from './OnboardingShell'
 
-const USERNAME_RE = /^[a-z0-9._]{3,20}$/
+const USERNAME_RE = /^[a-z0-9._]{3,30}$/
 const DEBOUNCE_MS = 400
 const MAX_SUGGESTIONS = 4
 
@@ -108,32 +108,37 @@ export function UsernameStep({ initialDisplayName, email, onDone }: Props) {
   const isAvailable = availability === 'available'
 
   return (
-    <OnboardingShell step={1}>
+    <OnboardingShell
+      step={1}
+      desktopTitle="This is how people find you."
+      desktopSubtitle="Your name and username show up on reviews, watch parties and your public profile."
+    >
       <form onSubmit={handleSubmit} className="flex flex-1 flex-col px-7 pt-8 pb-10">
         <h1 className="font-serif text-[26px] font-semibold text-white">Create your profile</h1>
         <p className="mt-2 mb-7 text-[13.5px] text-text-muted">This is how people on BINJ will find and recognize you.</p>
 
-        <label htmlFor="onboarding-name" className="mb-2 text-xs font-semibold text-text-secondary">
+        {/* Implicit label association (no id/htmlFor) — this step's own
+            outer wrapper renders twice at once (a mobile copy and a desktop
+            copy, CSS-toggled per breakpoint, per OnboardingShell), and a
+            document-wide-unique id would collide between the two copies. */}
+        <label className="mb-2 text-xs font-semibold text-text-secondary">
           Full name
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Your name"
+            className="mt-2 mb-5 block w-full rounded-xl border border-border bg-surface-alt px-4 py-3.5 text-sm font-normal text-text outline-none focus:border-accent"
+          />
         </label>
-        <input
-          id="onboarding-name"
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="Your name"
-          className="mb-5 rounded-xl border border-border bg-surface-alt px-4 py-3.5 text-sm text-text outline-none focus:border-accent"
-        />
 
-        <label htmlFor="onboarding-username" className="mb-2 text-xs font-semibold text-text-secondary">
-          Username
-        </label>
+        <label className="mb-2 block text-xs font-semibold text-text-secondary">Username</label>
         <div
           className={`flex items-center gap-2 rounded-xl border bg-surface-alt px-4 py-3.5 ${isAvailable ? 'border-[rgba(61,220,132,0.5)]' : 'border-border'}`}
         >
           <span className="text-sm text-text-faint">@</span>
           <input
-            id="onboarding-username"
+            aria-label="Username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -156,7 +161,7 @@ export function UsernameStep({ initialDisplayName, email, onDone }: Props) {
         )}
         {availability === 'invalid' && (
           <p role="alert" className="mt-2 text-[11.5px] text-red-400">
-            3-20 characters: lowercase letters, numbers, dots, underscores
+            3-30 characters: lowercase letters, numbers, dots, underscores
           </p>
         )}
 

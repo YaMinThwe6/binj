@@ -33,6 +33,9 @@ afterEach(() => {
   unfollowCelebrity.mockReset()
 })
 
+// Every step goes through OnboardingShell, which renders its children twice
+// — a mobile copy and a desktop copy, CSS-toggled per breakpoint (same
+// pattern as Welcome.tsx) — so every query here picks [0].
 describe('OnboardingWizard', () => {
   it('walks the full step sequence and completes onboarding', async () => {
     checkUsernameAvailable.mockResolvedValue({ available: true })
@@ -44,28 +47,29 @@ describe('OnboardingWizard', () => {
     render(<OnboardingWizard initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onComplete={onComplete} />)
 
     // Username step (not skippable)
-    await waitFor(() => expect(screen.getByLabelText(/^username$/i)).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText(/^username$/i), { target: { value: 'arjunk' } })
-    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).not.toBeDisabled())
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(screen.getAllByLabelText(/^username$/i)[0]).toBeInTheDocument())
+    fireEvent.change(screen.getAllByLabelText(/^username$/i)[0], { target: { value: 'arjunk' } })
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled())
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
 
     // Genres step — skip
-    await waitFor(() => expect(screen.getByText(/what are you into/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    await waitFor(() => expect(screen.getAllByText(/what are you into/i)[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /skip/i })[0])
 
     // Language step — skip
-    await waitFor(() => expect(screen.getByText(/what do you watch/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    await waitFor(() => expect(screen.getAllByText(/what do you watch/i)[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /skip/i })[0])
 
     // Watched step — skip
-    await waitFor(() => expect(screen.getByText(/movies you.*watched/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    await waitFor(() => expect(screen.getAllByText(/movies you.*watched/i)[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /skip/i })[0])
 
     // Celebrities step — skip
-    await waitFor(() => expect(screen.getByText(/follow celebrities/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    await waitFor(() => expect(screen.getAllByText(/follow celebrities/i)[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: /skip/i })[0])
 
-    // Success step persists onboardingComplete and calls onComplete
+    // Success step (not wrapped in OnboardingShell, so it's a single copy) —
+    // persists onboardingComplete and calls onComplete
     await waitFor(() => expect(updateMe).toHaveBeenCalledWith({ onboardingComplete: true }))
     await waitFor(() => expect(onComplete).toHaveBeenCalled())
   })
@@ -78,18 +82,18 @@ describe('OnboardingWizard', () => {
 
     render(<OnboardingWizard initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onComplete={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByLabelText(/^username$/i)).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText(/^username$/i), { target: { value: 'arjunk' } })
-    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).not.toBeDisabled())
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(screen.getAllByLabelText(/^username$/i)[0]).toBeInTheDocument())
+    fireEvent.change(screen.getAllByLabelText(/^username$/i)[0], { target: { value: 'arjunk' } })
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled())
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
 
-    await waitFor(() => expect(screen.getByText('Comedy')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('Comedy'))
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    await waitFor(() => expect(screen.getAllByText('Comedy')[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByText('Comedy')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
 
-    await waitFor(() => expect(screen.getByText('Korean')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('Korean'))
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    await waitFor(() => expect(screen.getAllByText('Korean')[0]).toBeInTheDocument())
+    fireEvent.click(screen.getAllByText('Korean')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
 
     await waitFor(() => expect(getWatchedCandidates).toHaveBeenCalledWith(['Comedy'], ['ko']))
   })

@@ -220,9 +220,17 @@ export function Welcome() {
     )
   }
 
+  // The bottom "Back" link (mobile) and the top-right circular Back button
+  // (desktop) share this — verify returns to whichever form (signup or
+  // login) it came from, form returns to the splash.
+  function handleFormBack() {
+    navigate(stage === 'verify' ? `/get-started/${intent}` : '/get-started')
+  }
+
   return (
-    <main className="relative flex min-h-svh flex-1 flex-col overflow-hidden bg-bg text-text">
-      <div className="relative mx-auto flex w-full max-w-sm flex-1 flex-col">
+    <main className="relative flex min-h-svh flex-1 flex-col overflow-hidden bg-bg text-text md:h-svh md:min-h-0 md:flex-row">
+      {/* MOBILE — single centered column, unchanged from before desktop existed. */}
+      <div className="relative mx-auto flex w-full max-w-sm flex-1 flex-col md:hidden">
         {/* faint accent glow, top-right — Welcome.dc.html */}
         <div
           className="pointer-events-none absolute inset-0"
@@ -296,7 +304,7 @@ export function Welcome() {
               </p>
             )}
 
-            <button type="button" onClick={() => navigate('/get-started')} className="mt-6 text-center text-[13px] text-text-muted">
+            <button type="button" onClick={handleFormBack} className="mt-6 text-center text-[13px] text-text-muted">
               Back
             </button>
           </div>
@@ -346,11 +354,182 @@ export function Welcome() {
             >
               {loading ? 'Verifying…' : 'Verify & continue'}
             </button>
-            <button type="button" onClick={() => navigate(`/get-started/${intent}`)} className="mt-3 text-[13px] text-text-muted">
+            <button type="button" onClick={handleFormBack} className="mt-3 text-[13px] text-text-muted">
               Back
             </button>
           </form>
         )}
+      </div>
+
+      {/* DESKTOP — split panel (design canvas's LoginDesktop.dc.html /
+          SignupEmailOTPDesktop.dc.html): a fixed-width branding rail on the
+          left, the form centered in the remaining space on the right,
+          instead of the same mobile column just floating small and centered
+          in a huge dark viewport. */}
+      <div className="relative hidden w-[560px] flex-none overflow-hidden md:block">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(60% 60% at 80% 15%, rgba(150,170,200,0.16), transparent 60%), radial-gradient(70% 80% at 15% 90%, rgba(var(--accent-rgb),0.24), transparent 60%), linear-gradient(180deg, #1B1720 0%, #100E12 55%, #0A090B 100%)'
+          }}
+        />
+        <div className="relative flex h-full flex-col justify-between p-12">
+          <span className="font-serif text-2xl font-bold text-accent">BINJ</span>
+          <div>
+            <div className="font-serif text-[32px] leading-tight font-semibold text-white">
+              {stage === 'verify' ? 'One code. That’s it.' : intent === 'signup' ? 'Your next favorite movie is one tap away.' : 'Your watchlist missed you.'}
+            </div>
+            <p className="mt-3.5 max-w-[400px] text-sm leading-relaxed text-[#C9C5D1]">
+              {stage === 'verify'
+                ? "No password to create, forget or reset — just a 6-digit code, valid for a few minutes."
+                : intent === 'signup'
+                  ? 'Discover films worth watching, and the people who want to watch them with you.'
+                  : 'Pick up where you left off — new recommendations, watch parties and reviews from people you follow.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden flex-1 flex-col md:flex">
+        <div className="flex flex-none justify-end px-12 pt-8">
+          <button
+            type="button"
+            onClick={handleFormBack}
+            aria-label="Back"
+            className="flex h-[38px] w-[38px] items-center justify-center rounded-full border border-border-soft bg-surface-alt"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center px-12 pb-16">
+          <div className="w-full max-w-[400px]">
+            {stage === 'form' && (
+              <>
+                <h1 className="font-serif text-[28px] font-semibold text-white">{intent === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
+                <p className="mt-2 mb-8 text-sm text-text-muted">
+                  {intent === 'signup' ? "Choose how you'd like to sign up. No passwords to remember." : 'Log in to keep the watchlist going.'}
+                </p>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleProviderSignIn(signInWithGoogle)}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2.5 rounded-xl bg-white py-3.5 text-sm font-bold text-[#1A1A1A] disabled:opacity-60"
+                  >
+                    <GoogleIcon />
+                    {loading ? 'Signing in…' : 'Continue with Google'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleProviderSignIn(signInWithMicrosoft)}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2.5 rounded-xl border border-border bg-surface-alt py-3.5 text-sm font-bold text-text disabled:opacity-60"
+                  >
+                    <MicrosoftIcon />
+                    {loading ? 'Signing in…' : 'Continue with Microsoft'}
+                  </button>
+                </div>
+
+                <div className="my-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border-soft" />
+                  <span className="text-[11.5px] text-text-faint">or</span>
+                  <div className="h-px flex-1 bg-border-soft" />
+                </div>
+
+                <form onSubmit={handleSendCode} className="flex flex-col">
+                  <label htmlFor="login-email-desktop" className="mb-2 text-xs font-semibold text-text-secondary">
+                    Email address
+                  </label>
+                  <div className="mt-1.5 flex items-center gap-2.5 rounded-xl border border-border bg-surface-alt px-4 py-3.5">
+                    <MailIcon />
+                    <input
+                      id="login-email-desktop"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="flex-1 bg-transparent text-sm text-text outline-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="mt-4 flex items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg disabled:opacity-60"
+                  >
+                    {loading ? 'Sending…' : 'Send me a code'}
+                  </button>
+                </form>
+
+                {error && (
+                  <p role="alert" className="mt-4 text-[13px] text-red-400">
+                    {error}
+                  </p>
+                )}
+
+                <button type="button" onClick={() => navigate(`/get-started/${intent === 'signup' ? 'login' : 'signup'}`)} className="mt-6 text-center text-[13.5px] text-text-muted">
+                  {intent === 'signup' ? (
+                    <>
+                      Already have an account? <span className="font-bold text-accent">Log in</span>
+                    </>
+                  ) : (
+                    <>
+                      Don&rsquo;t have an account? <span className="font-bold text-accent">Sign up</span>
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+
+            {stage === 'verify' && (
+              <form onSubmit={handleVerifyCode}>
+                <h1 className="font-serif text-[28px] font-semibold text-white">Check your email</h1>
+                <p className="mt-2 mb-7 text-sm text-text-muted">
+                  We sent a 6-digit code to <span className="font-semibold text-text-secondary">{email}</span>
+                </p>
+
+                <label htmlFor="login-code-desktop" className="sr-only">
+                  Verification code
+                </label>
+                <input
+                  id="login-code-desktop"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="123456"
+                  className="w-full rounded-xl border border-accent bg-surface-alt py-4 text-center text-2xl font-bold tracking-[0.5em] text-text outline-none"
+                />
+
+                <div className="mt-5 text-center text-[13.5px] text-text-muted">
+                  Didn&rsquo;t get it?{' '}
+                  <button type="button" onClick={sendCode} className="font-bold text-accent">
+                    Resend code
+                  </button>
+                </div>
+
+                {error && (
+                  <p role="alert" className="mt-4 text-[13px] text-red-400">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="mt-6 flex w-full items-center justify-center rounded-xl bg-accent py-3.5 text-sm font-bold text-bg disabled:opacity-60"
+                >
+                  {loading ? 'Verifying…' : 'Verify & continue'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
       </div>
     </main>
   )

@@ -14,9 +14,11 @@ interface Props {
   onContinue: (selected: string[]) => Promise<void>
   onSkip: () => void
   onBack?: () => void
+  desktopTitle?: string
+  desktopSubtitle?: string
 }
 
-export function MultiSelectStep({ step, title, subtitle, options, onContinue, onSkip, onBack }: Props) {
+export function MultiSelectStep({ step, title, subtitle, options, onContinue, onSkip, onBack, desktopTitle, desktopSubtitle }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -43,7 +45,7 @@ export function MultiSelectStep({ step, title, subtitle, options, onContinue, on
   }
 
   return (
-    <OnboardingShell step={step} onBack={onBack}>
+    <OnboardingShell step={step} onBack={onBack} desktopTitle={desktopTitle} desktopSubtitle={desktopSubtitle}>
       <div className="flex flex-1 flex-col px-7 pt-8 pb-10">
         <h1 className="font-serif text-[26px] font-semibold text-white">{title}</h1>
         <p className="mt-2 mb-6 text-[13.5px] text-text-muted">{subtitle}</p>

@@ -20,20 +20,23 @@ afterEach(() => {
   unfollowCelebrity.mockReset()
 })
 
+// OnboardingShell renders its children twice — a mobile copy and a desktop
+// copy, CSS-toggled per breakpoint (same pattern as Welcome.tsx) — so every
+// query here picks [0].
 describe('CelebritiesStep', () => {
   it('loads and shows suggestions including minor-role people', async () => {
     getCelebritySuggestions.mockResolvedValue({ items: suggestions })
     render(<CelebritiesStep onContinue={vi.fn()} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('Jane Doe')).toBeInTheDocument())
-    expect(screen.getByText('Small Role Actor')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('Jane Doe').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('Small Role Actor').length).toBeGreaterThan(0)
   })
 
   it('shows an empty-state message when there are no suggestions', async () => {
     getCelebritySuggestions.mockResolvedValue({ items: [] })
     render(<CelebritiesStep onContinue={vi.fn()} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText(/no suggestions yet/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText(/no suggestions yet/i).length).toBeGreaterThan(0))
   })
 
   it('follows a celebrity on click', async () => {
@@ -41,8 +44,8 @@ describe('CelebritiesStep', () => {
     followCelebrity.mockResolvedValue(undefined)
     render(<CelebritiesStep onContinue={vi.fn()} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('Jane Doe')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('Jane Doe'))
+    await waitFor(() => expect(screen.getAllByText('Jane Doe').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText('Jane Doe')[0])
 
     await waitFor(() => expect(followCelebrity).toHaveBeenCalledWith('p1'))
   })
@@ -52,8 +55,8 @@ describe('CelebritiesStep', () => {
     const onContinue = vi.fn()
     render(<CelebritiesStep onContinue={onContinue} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText(/no suggestions/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    await waitFor(() => expect(screen.getAllByText(/no suggestions/i).length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
     expect(onContinue).toHaveBeenCalled()
   })
 })

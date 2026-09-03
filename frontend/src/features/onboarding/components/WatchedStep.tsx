@@ -52,7 +52,12 @@ export function WatchedStep({ genres, languages, onContinue, onSkip, onBack }: P
   }
 
   return (
-    <OnboardingShell step={4} onBack={onBack}>
+    <OnboardingShell
+      step={4}
+      onBack={onBack}
+      desktopTitle="Every rating starts somewhere."
+      desktopSubtitle="Tell us what you've already seen and we'll start building your taste profile from day one."
+    >
       <div className="flex flex-1 flex-col px-7 pt-8 pb-8">
         <h1 className="font-serif text-[26px] font-semibold text-white">Movies you&rsquo;ve watched</h1>
         <p className="mt-2 mb-6 text-[13.5px] text-text-muted">This helps us build your taste profile (optional)</p>

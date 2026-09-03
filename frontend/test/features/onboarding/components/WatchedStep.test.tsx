@@ -21,12 +21,15 @@ afterEach(() => {
   unmarkWatched.mockReset()
 })
 
+// OnboardingShell renders its children twice — a mobile copy and a desktop
+// copy, CSS-toggled per breakpoint (same pattern as Welcome.tsx) — so every
+// query here picks [0].
 describe('WatchedStep', () => {
   it('fetches candidates filtered by the chosen genres/languages', async () => {
     getWatchedCandidates.mockResolvedValue({ items: candidates })
     render(<WatchedStep genres={['Drama']} languages={['en']} onContinue={vi.fn()} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText(/Movie One/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText(/Movie One/).length).toBeGreaterThan(0))
     expect(getWatchedCandidates).toHaveBeenCalledWith(['Drama'], ['en'])
   })
 
@@ -35,11 +38,11 @@ describe('WatchedStep', () => {
     markWatched.mockResolvedValue(undefined)
     render(<WatchedStep genres={[]} languages={[]} onContinue={vi.fn()} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText(/Movie One/)).toBeInTheDocument())
-    fireEvent.click(screen.getByText(/Movie One/))
+    await waitFor(() => expect(screen.getAllByText(/Movie One/).length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText(/Movie One/)[0])
 
     await waitFor(() => expect(markWatched).toHaveBeenCalledWith('m1'))
-    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    expect(screen.getAllByText('1 selected').length).toBeGreaterThan(0)
   })
 
   it('rolls back the toggle when markWatched fails', async () => {
@@ -47,11 +50,11 @@ describe('WatchedStep', () => {
     markWatched.mockRejectedValue(new Error('nope'))
     render(<WatchedStep genres={[]} languages={[]} onContinue={vi.fn()} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText(/Movie One/)).toBeInTheDocument())
-    fireEvent.click(screen.getByText(/Movie One/))
+    await waitFor(() => expect(screen.getAllByText(/Movie One/).length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText(/Movie One/)[0])
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('nope'))
-    expect(screen.getByText('0 selected')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByRole('alert')[0]).toHaveTextContent('nope'))
+    expect(screen.getAllByText('0 selected').length).toBeGreaterThan(0)
   })
 
   it('passes only the watched movies to onContinue', async () => {
@@ -60,11 +63,11 @@ describe('WatchedStep', () => {
     const onContinue = vi.fn()
     render(<WatchedStep genres={[]} languages={[]} onContinue={onContinue} onSkip={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText(/Movie One/)).toBeInTheDocument())
-    fireEvent.click(screen.getByText(/Movie One/))
+    await waitFor(() => expect(screen.getAllByText(/Movie One/).length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText(/Movie One/)[0])
     await waitFor(() => expect(markWatched).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /^continue$/i })[0])
     expect(onContinue).toHaveBeenCalledWith([candidates[0]])
   })
 })

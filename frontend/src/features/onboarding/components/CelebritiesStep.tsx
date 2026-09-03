@@ -45,7 +45,12 @@ export function CelebritiesStep({ onContinue, onSkip, onBack }: Props) {
   }
 
   return (
-    <OnboardingShell step={5} onBack={onBack}>
+    <OnboardingShell
+      step={5}
+      onBack={onBack}
+      desktopTitle="Follow the people behind the films."
+      desktopSubtitle="Actors and directors you follow show up first when they're in something new."
+    >
       <div className="flex flex-1 flex-col px-7 pt-8 pb-8">
         <h1 className="font-serif text-[26px] font-semibold text-white">Follow celebrities</h1>
         <p className="mt-2 mb-6 text-[13.5px] text-text-muted">

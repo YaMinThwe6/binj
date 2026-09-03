@@ -2,7 +2,7 @@ import type { UserProfile, PublicProfile } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { AppError } from "../utils/AppError.js";
 
-const USERNAME_RE = /^[a-z0-9._]{3,20}$/;
+const USERNAME_RE = /^[a-z0-9._]{3,30}$/;
 
 interface UserDoc {
   uid: string;
@@ -85,7 +85,7 @@ export async function getOrCreateUser(uid: string, claims: Claims): Promise<User
 export async function isUsernameAvailable(rawUsername: string): Promise<boolean> {
   const username = rawUsername.trim().toLowerCase();
   if (!USERNAME_RE.test(username)) {
-    throw new AppError("INVALID_USERNAME", "Username must be 3-20 characters: lowercase letters, numbers, dots, underscores", 400);
+    throw new AppError("INVALID_USERNAME", "Username must be 3-30 characters: lowercase letters, numbers, dots, underscores", 400);
   }
 
   const db = requireDb();
@@ -122,7 +122,7 @@ export async function updateUser(uid: string, claims: Claims, body: Record<strin
   if (wantsUsername) {
     newUsername = String(body.username ?? "").trim().toLowerCase();
     if (!USERNAME_RE.test(newUsername)) {
-      throw new AppError("INVALID_USERNAME", "Username must be 3-20 characters: lowercase letters, numbers, dots, underscores", 400);
+      throw new AppError("INVALID_USERNAME", "Username must be 3-30 characters: lowercase letters, numbers, dots, underscores", 400);
     }
   }
 

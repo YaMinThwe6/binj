@@ -63,15 +63,15 @@ describe('Welcome — splash', () => {
   it('opens the sign-in form with signup framing when Get Started is clicked', () => {
     render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
-    expect(screen.getByText(/create your account/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
+    expect(screen.getAllByText(/create your account/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /continue with google/i }).length).toBeGreaterThan(0)
   })
 
   it('opens the same sign-in form with login framing when "Log in" is clicked', () => {
     render()
     fireEvent.click(screen.getByRole('button', { name: /already have an account/i }))
-    expect(screen.getByText(/welcome back/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
+    expect(screen.getAllByText(/welcome back/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /continue with google/i }).length).toBeGreaterThan(0)
   })
 })
 
@@ -79,9 +79,9 @@ describe('Welcome — per-stage URLs', () => {
   it('Back from the signup form returns to the splash', () => {
     render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
-    expect(screen.getByText(/create your account/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/create your account/i).length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /^back$/i })[0])
     expect(screen.getByRole('button', { name: /^get started$/i })).toBeInTheDocument()
     expect(screen.queryByText(/create your account/i)).not.toBeInTheDocument()
   })
@@ -96,13 +96,13 @@ describe('Welcome — per-stage URLs', () => {
 
     render()
     fireEvent.click(screen.getByRole('button', { name: /already have an account/i })) // login framing
-    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /send me a code/i }))
+    fireEvent.change(screen.getAllByLabelText(/email address/i)[0], { target: { value: 'a@example.com' } })
+    fireEvent.click(screen.getAllByRole('button', { name: /send me a code/i })[0])
 
-    await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
+    await waitFor(() => expect(screen.getAllByText(/check your email/i).length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByRole('button', { name: /^back$/i })[0])
 
-    expect(screen.getByText(/welcome back/i)).toBeInTheDocument() // still login framing, not reset to signup
+    expect(screen.getAllByText(/welcome back/i).length).toBeGreaterThan(0) // still login framing, not reset to signup
   })
 
   it('a direct load of /get-started/verify with an email in the URL shows it and can resend', async () => {
@@ -121,8 +121,8 @@ describe('Welcome — per-stage URLs', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('a@example.com')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /resend code/i }))
+    expect(screen.getAllByText('a@example.com').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getAllByRole('button', { name: /resend code/i })[0])
     await waitFor(() =>
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/auth/email/start'),
@@ -136,14 +136,14 @@ describe('Welcome — OAuth providers', () => {
   it('calls signInWithGoogle when "Continue with Google" is clicked', () => {
     render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
-    fireEvent.click(screen.getByRole('button', { name: /continue with google/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /continue with google/i })[0])
     expect(signInWithGoogle).toHaveBeenCalledTimes(1)
   })
 
   it('calls signInWithMicrosoft when "Continue with Microsoft" is clicked', () => {
     render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
-    fireEvent.click(screen.getByRole('button', { name: /continue with microsoft/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /continue with microsoft/i })[0])
     expect(signInWithMicrosoft).toHaveBeenCalledTimes(1)
   })
 })
@@ -167,23 +167,23 @@ describe('Welcome — Email + OTP flow', () => {
     render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
 
-    fireEvent.change(screen.getByLabelText(/email address/i), {
+    fireEvent.change(screen.getAllByLabelText(/email address/i)[0], {
       target: { value: 'a@example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /send me a code/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /send me a code/i })[0])
 
     await waitFor(() =>
-      expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument()
+      expect(screen.getAllByLabelText(/verification code/i).length).toBeGreaterThan(0)
     )
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/auth/email/start'),
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: 'a@example.com' }) })
     )
 
-    fireEvent.change(screen.getByLabelText(/verification code/i), {
+    fireEvent.change(screen.getAllByLabelText(/verification code/i)[0], {
       target: { value: '123456' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /verify & continue/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /verify & continue/i })[0])
 
     await waitFor(() => expect(signInWithToken).toHaveBeenCalledWith('fake-custom-token'))
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -210,14 +210,14 @@ describe('Welcome — Email + OTP flow', () => {
     render()
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
 
-    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /send me a code/i }))
+    fireEvent.change(screen.getAllByLabelText(/email address/i)[0], { target: { value: 'a@example.com' } })
+    fireEvent.click(screen.getAllByRole('button', { name: /send me a code/i })[0])
 
-    await waitFor(() => screen.getByLabelText(/verification code/i))
-    fireEvent.change(screen.getByLabelText(/verification code/i), { target: { value: '000000' } })
-    fireEvent.click(screen.getByRole('button', { name: /verify & continue/i }))
+    await waitFor(() => screen.getAllByLabelText(/verification code/i)[0])
+    fireEvent.change(screen.getAllByLabelText(/verification code/i)[0], { target: { value: '000000' } })
+    fireEvent.click(screen.getAllByRole('button', { name: /verify & continue/i })[0])
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Incorrect code'))
+    await waitFor(() => expect(screen.getAllByRole('alert')[0]).toHaveTextContent('Incorrect code'))
     expect(signInWithToken).not.toHaveBeenCalled()
   })
 })

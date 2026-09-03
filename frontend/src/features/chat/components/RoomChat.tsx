@@ -95,7 +95,12 @@ export function RoomChat() {
   const visibleMessages = messages.filter((m) => !m.deleted)
 
   return (
-    <main className="flex min-h-svh flex-col bg-bg text-text">
+    // No design-canvas reference exists for this screen (it was built
+    // free-form, unlike the auth/onboarding/movie/profile screens) — a
+    // simple centered, width-capped column rather than a bespoke desktop
+    // layout, so the chat surface doesn't stretch edge-to-edge on a wide
+    // viewport.
+    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col bg-bg text-text md:h-svh md:min-h-0 md:border-x md:border-border-soft">
       <header className="flex items-center gap-3 border-b border-border-soft px-4 py-3.5">
         <button
           type="button"
