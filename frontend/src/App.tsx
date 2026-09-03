@@ -10,6 +10,7 @@ import { MovieSearch } from './features/movie/components/MovieSearch'
 import { MovieDetail } from './features/movie/components/MovieDetail'
 import { Profile } from './features/profile/components/Profile'
 import { RoomChat } from './features/chat/components/RoomChat'
+import { About } from './features/about/components/About'
 import './App.css'
 
 function App() {
@@ -47,6 +48,7 @@ function App() {
       <Routes>
         <Route path="/get-started" element={<Welcome />} />
         <Route path="/movie/:movieId" element={<MovieDetail />} />
+        <Route path="/story" element={<About />} />
         <Route path="*" element={<MovieSearch />} />
       </Routes>
     )
@@ -85,6 +87,7 @@ function App() {
       <Route path="/movie/:movieId" element={<MovieDetail />} />
       <Route path="/profile/:uid" element={<Profile />} />
       <Route path="/rooms/:roomId" element={<RoomChat />} />
+      <Route path="/story" element={<About />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

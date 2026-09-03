@@ -39,6 +39,7 @@ function renderWithRouter(initialEntry: '/search' | '/' = '/search') {
         <Route path="/" element={initialEntry === '/' ? <MovieSearch /> : <p>Home page</p>} />
         <Route path="/get-started" element={<p>Get started page</p>} />
         <Route path="/movie/:movieId" element={<p>Movie detail page</p>} />
+        <Route path="/story" element={<p>About page</p>} />
       </Routes>
     </MemoryRouter>
   )
@@ -72,6 +73,17 @@ describe('MovieSearch — guest usage (public Discover)', () => {
     renderWithRouter('/')
     fireEvent.click(screen.getByRole('button', { name: /^get started$/i }))
     expect(await screen.findByText('Get started page')).toBeInTheDocument()
+  })
+
+  it('offers an Our Story link, absent for a signed-in visitor', async () => {
+    authUser = null
+    renderWithRouter('/')
+    fireEvent.click(screen.getByRole('button', { name: /our story/i }))
+    expect(await screen.findByText('About page')).toBeInTheDocument()
+
+    authUser = { uid: 'uid-1' }
+    renderWithRouter()
+    expect(screen.queryByRole('button', { name: /our story/i })).not.toBeInTheDocument()
   })
 })
 

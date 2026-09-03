@@ -67,6 +67,7 @@ function renderWithRouter(onSignOut: () => void) {
       <Routes>
         <Route path="/" element={<Home me={me} onSignOut={onSignOut} />} />
         <Route path="/search" element={<p>Search page</p>} />
+        <Route path="/story" element={<p>About page</p>} />
       </Routes>
     </MemoryRouter>
   )
@@ -97,5 +98,13 @@ describe('Home', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /sign out/i }))
     expect(onSignOut).toHaveBeenCalled()
+  })
+
+  it('offers an Our Story link, both in the desktop sidebar and the mobile footer', async () => {
+    mockAllEmpty()
+    renderWithRouter(vi.fn())
+
+    fireEvent.click(screen.getAllByRole('button', { name: /our story/i })[0])
+    expect(await screen.findByText('About page')).toBeInTheDocument()
   })
 })

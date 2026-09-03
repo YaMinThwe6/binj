@@ -190,6 +190,12 @@ export function MovieSearch() {
             </ul>
           </section>
         )}
+
+        {isGuest && (
+          <button type="button" onClick={() => navigate('/story')} className="mt-10 block text-[11.5px] font-semibold text-text-faint underline">
+            Our Story
+          </button>
+        )}
       </div>
     </main>
   )

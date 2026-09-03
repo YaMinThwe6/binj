@@ -6,7 +6,10 @@
 // one place that turns that into an actual loadable URL.
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p'
 
-export type PosterSize = 'w185' | 'w342' | 'w500'
+// 'w92' is TMDB's small "logo" bucket (provider/network logos), not a poster
+// size — this helper just builds a CDN URL from a relative path, so it's
+// reused for both.
+export type PosterSize = 'w92' | 'w185' | 'w342' | 'w500'
 
 export function posterUrl(path: string | null, size: PosterSize = 'w342'): string | null {
   return path ? `${TMDB_IMAGE_BASE}/${size}${path}` : null

@@ -316,15 +316,26 @@ export function MovieDetail() {
             <section>
               <h2 className="mb-3 text-[15px] font-bold text-text">Where can I watch?</h2>
               <ul className="flex flex-wrap gap-2.5">
-                {movie.streamingProviders.map((p, i) => (
-                  // TMDB can list the same provider more than once under different
-                  // offer types (e.g. "Apple TV Store" as both rent and buy) — name
-                  // alone isn't a unique key, so index disambiguates duplicates.
-                  <li key={`${p.name}-${i}`} className="rounded-full border border-border bg-input px-3.5 py-2 text-[12.5px] font-semibold text-text">
-                    {p.name}
-                  </li>
-                ))}
+                {movie.streamingProviders.map((p, i) => {
+                  const logo = posterUrl(p.logo || null, 'w92')
+                  return (
+                    // TMDB can list the same provider more than once under different
+                    // offer types (e.g. "Apple TV Store" as both rent and buy) — name
+                    // alone isn't a unique key, so index disambiguates duplicates.
+                    <li
+                      key={`${p.name}-${i}`}
+                      className="flex items-center gap-2 rounded-full border border-border bg-input py-2 pr-3.5 pl-2 text-[12.5px] font-semibold text-text"
+                    >
+                      {logo && <img src={logo} alt="" className="h-5 w-5 flex-none rounded-[5px] object-cover" />}
+                      {p.name}
+                    </li>
+                  )
+                })}
               </ul>
+              {/* This data comes from JustWatch via the TMDB API — TMDB requires a
+                  reference alongside each place it's shown, not just a one-time
+                  credit elsewhere (see /story). */}
+              <p className="mt-2.5 text-[10.5px] text-text-faint">Streaming availability data provided by JustWatch.</p>
             </section>
           )}
 

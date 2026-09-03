@@ -116,6 +116,10 @@ export function Home({ me, onSignOut }: Props) {
             Inbox
           </span>
         </nav>
+
+        <button type="button" onClick={() => navigate('/story')} className="mt-4 block text-center text-[10.5px] font-semibold text-text-faint underline lg:hidden">
+          Our Story
+        </button>
       </main>
     </div>
   )
