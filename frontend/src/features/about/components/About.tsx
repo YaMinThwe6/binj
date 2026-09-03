@@ -15,7 +15,7 @@ export function About() {
 
   return (
     <main className="min-h-svh bg-bg text-text">
-      <div className="mx-auto max-w-lg px-6 py-8 lg:py-12">
+      <div className="mx-auto w-full max-w-2xl px-5 py-6 lg:py-10">{/* same container as Discover (MovieSearch.tsx) */}
         <button
           type="button"
           onClick={() => navigate(-1)}
