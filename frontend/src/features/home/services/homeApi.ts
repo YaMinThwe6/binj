@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../lib/api'
-export type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent } from '@binj/shared-types'
-import type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent } from '@binj/shared-types'
+export type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent, FriendsRecommendationItem } from '@binj/shared-types'
+import type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent, FriendsRecommendationItem } from '@binj/shared-types'
 
 export function getHomeGreeting(): Promise<Greeting> {
   return apiFetch('/home/greeting', { auth: true })
@@ -8,6 +8,10 @@ export function getHomeGreeting(): Promise<Greeting> {
 
 export function getHomeActivity(): Promise<{ items: ActivityItem[] }> {
   return apiFetch('/home/activity', { auth: true })
+}
+
+export function getFriendsRecommendations(): Promise<{ items: FriendsRecommendationItem[] }> {
+  return apiFetch('/home/friends-recommendations', { auth: true })
 }
 
 export function getRecommendations(): Promise<{ items: RecommendationItem[] }> {

@@ -8,6 +8,7 @@ const getRecommendations = vi.fn()
 const getTasteMatches = vi.fn()
 const getUpcomingEvents = vi.fn()
 const getHomeActivity = vi.fn()
+const getFriendsRecommendations = vi.fn()
 
 vi.mock('../../../../src/features/home/services/homeApi', () => ({
   getNotifications,
@@ -15,7 +16,8 @@ vi.mock('../../../../src/features/home/services/homeApi', () => ({
   getRecommendations,
   getTasteMatches,
   getUpcomingEvents,
-  getHomeActivity
+  getHomeActivity,
+  getFriendsRecommendations
 }))
 
 vi.mock('../../../../src/features/movie/services/movieApi', () => ({
@@ -50,6 +52,7 @@ afterEach(() => {
   getTasteMatches.mockReset()
   getUpcomingEvents.mockReset()
   getHomeActivity.mockReset()
+  getFriendsRecommendations.mockReset()
 })
 
 function mockAllEmpty() {
@@ -59,6 +62,7 @@ function mockAllEmpty() {
   getTasteMatches.mockResolvedValue({ items: [] })
   getUpcomingEvents.mockResolvedValue({ items: [] })
   getHomeActivity.mockResolvedValue({ items: [] })
+  getFriendsRecommendations.mockResolvedValue({ items: [] })
 }
 
 function renderWithRouter(onSignOut: () => void) {

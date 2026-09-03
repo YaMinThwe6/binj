@@ -5,6 +5,7 @@ import { getNotifications } from '../services/homeApi'
 import { GreetingHero } from './GreetingHero'
 import { TopPicks } from './TopPicks'
 import { PeopleYouMightVibeWith } from './PeopleYouMightVibeWith'
+import { BecauseYourFriendsWatched } from './BecauseYourFriendsWatched'
 import { UpcomingEvents } from './UpcomingEvents'
 import { NearbyEvents } from './NearbyEvents'
 import { FriendsAreWatching } from './FriendsAreWatching'
@@ -88,15 +89,24 @@ export function Home({ me, onSignOut }: Props) {
 
         <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           <div className="flex flex-col gap-7 pt-4 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8 lg:px-7 lg:pt-7 lg:pb-10">
-            <div className="flex flex-col gap-7 lg:col-start-1 lg:gap-8">
+            {/* min-w-0 overrides a grid item's default min-width:auto — without
+                it this column refuses to shrink below the combined max-content
+                width of its horizontally-scrolling carousels (TopPicks etc.),
+                which silently blows out the 1fr track past the viewport and
+                pushes the 320px right rail into an invisible horizontal-scroll
+                region (found live: PeopleYouMightVibeWith rendering correctly
+                in the DOM but sitting off-screen at x:2048 on a 1440px-wide
+                viewport). */}
+            <div className="flex min-w-0 flex-col gap-7 lg:col-start-1 lg:gap-8">
               <GreetingHero displayName={me.displayName} />
               <TopPicks />
               <UpcomingEvents />
               <NearbyEvents />
               <FriendsAreWatching />
             </div>
-            <div className="lg:col-start-2 lg:row-start-1">
+            <div className="flex flex-col gap-7 lg:col-start-2 lg:row-start-1 lg:gap-8">
               <PeopleYouMightVibeWith />
+              <BecauseYourFriendsWatched />
             </div>
           </div>
         </div>

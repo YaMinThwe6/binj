@@ -143,9 +143,13 @@ GET /search/movies?q=:query                → 200 { items: [{ movieId, title, p
 GET /home/greeting                         → 200 { quote, attribution, source: "watched" | "random" }
 GET /home/activity                         → 200 { items: [{ activityId, uid, displayName, type, movieId,
                                                               movieTitle, moviePoster, createdAt }] }
+GET /home/friends-recommendations           → 200 { items: [{ movieId, title, poster, year, genres,
+                                                              voteAverage, watchedByCount }] }
 ```
 
 **Implementation note (mockup-driven, no prior hld.md flow):** `/home/greeting` is hld.md §6/§13's movie-dialogue greeting — a small curated quote set (`backend/src/data/movieQuotes.ts`, tagged by real TMDB movie id) prefers a match against the caller's watched list (`source: "watched"`) and falls back to a random pick otherwise (`source: "random"`), which is exactly the "first Home visit is already personalized" behavior §13 called for. `/home/activity` is "Friends are watching" — same fan-out shape as §5a (bounded by the caller's own `following` list, never a global feed), reading a new top-level `activity/{activityId}` collection (schema.md) that `watchlist`/`watched` writes append to (skipped for a `watched` entry marked `visibility: "private"`, respecting §5a's per-entry override). Types are currently `"watched"` and `"watchlist_added"` — `"rated"`/`"reviewed"` join once Reviews (§20) exists.
+
+**Implementation note (added once `/home/friends-recommendations` was actually built, 2026-09-04):** "Because your friends watched these" — HomeDesktop's right rail, under `PeopleYouMightVibeWith`. Unlike §6's Recommendations, this has **no trending/cold-start fallback**: a caller who follows no one gets `items: []`, full stop, and the frontend hides the section entirely rather than showing a generic feed — it only makes sense once there's an actual social signal, the same "gate, don't fabricate" choice §5b's taste matches made. Ranking source is followed people's complete `watched` history (not the `activity` log above, which is capped to the most recent entries and built for a feed, not a ranking corpus) — `watchedByCount` is how many of the caller's followed people watched a title, movies the caller has already watched or watchlisted excluded. Respects §5a's per-entry `visibility: "private"` override exactly like `/home/activity` does, even though nothing here is attributed to a name. Live in `backend/src/services/home.service.ts` (`getFriendsRecommendations`).
 
 ## 8. Events (§7, §9) 🔒 unless noted
 
