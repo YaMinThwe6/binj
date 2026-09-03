@@ -17,6 +17,8 @@ import {
   type Review
 } from '../services/movieApi'
 import { WatchedByFriends } from './WatchedByFriends'
+import { SimilarPicks } from './SimilarPicks'
+import { WatchTogether } from './WatchTogether'
 import { useAuth } from '../../../lib/AuthContext'
 import { posterUrl } from '../../../lib/images'
 import { Sidebar } from '../../../components/Sidebar'
@@ -227,7 +229,7 @@ export function MovieDetail() {
   )
 
   const content = (
-    <div className="lg:mx-auto lg:max-w-5xl lg:px-8 lg:pt-8">
+    <div className={isGuest ? 'lg:mx-auto lg:max-w-5xl lg:px-8 lg:pt-8' : 'lg:px-8 lg:pt-8'}>
         {/* Hero backdrop — mobile only; desktop drops the backdrop treatment
             for a plain two-column poster+info row (Desktop.dc.html). */}
         <div
@@ -253,6 +255,18 @@ export function MovieDetail() {
           </div>
         </div>
 
+        {/* Signed-in only: a 320px right rail (Similar taste picks, Watch
+            together) alongside the content below — grid-cols-[1fr_320px], same
+            shape Home.tsx uses. min-w-0 on the left column matters here for
+            the same reason it did on Home: without it, this column refuses to
+            shrink below its content's max-content width (the horizontally-
+            scrolling Cast row, in this case) and silently pushes the right
+            rail off-screen — see Home.tsx's own comment on this exact bug.
+            Guests get neither column treatment nor the rail itself; the div
+            below is otherwise a no-op wrapper for them (no className, no
+            grid). */}
+        <div className={isGuest ? undefined : 'lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8'}>
+        <div className={isGuest ? undefined : 'min-w-0'}>
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -471,6 +485,15 @@ export function MovieDetail() {
               )}
             </section>
           </div>
+        </div>
+        </div>
+
+        {!isGuest && (
+          <div className="hidden flex-col gap-7 lg:col-start-2 lg:row-start-1 lg:flex">
+            <SimilarPicks movieId={movieId} />
+            <WatchTogether movieId={movieId} />
+          </div>
+        )}
         </div>
     </div>
   )

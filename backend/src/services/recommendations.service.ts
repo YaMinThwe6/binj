@@ -1,9 +1,11 @@
-import type { RecommendationItem } from "@binj/shared-types";
+import type { RecommendationItem, SimilarMovieItem } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
+import { AppError } from "../utils/AppError.js";
 
 const CANDIDATE_POOL = 30;
 const RESULT_LIMIT = 10;
 const MAX_GENRES = 10; // Firestore array-contains-any caps at 10 values
+const SIMILAR_MOVIES_LIMIT = 6;
 
 // Heuristic, not a learned model: 70% weight on how much of the caller's preferred
 // genres this movie covers, 30% weight on its own TMDB rating. Only meaningful when
@@ -86,6 +88,50 @@ export async function getRecommendations(uid: string): Promise<{ items: Recommen
     .filter((d) => !excludeIds.has(d.id))
     .slice(0, RESULT_LIMIT)
     .map((d) => toSummary(d.id, d.data(), preferredGenres));
+
+  return { items };
+}
+
+// GET /movies/:movieId/similar — "Similar taste picks for you" (movie detail's
+// right rail, mockup-driven like home.service.ts's friends-recommendations).
+// Movie-to-movie, not the user-preference content-based scoring above: same
+// array-contains-any-on-genres query getRecommendations already uses, just
+// keyed off the movie being viewed instead of the caller's own history, and
+// with no matchScore (there's no user preference here to score against).
+// Public, unauthenticated — same as GET /movies/:movieId itself.
+export async function getSimilarMovies(movieId: string): Promise<{ items: SimilarMovieItem[] }> {
+  const db = requireDb();
+  const movieSnap = await db.collection("movies").doc(movieId).get();
+  if (!movieSnap.exists) {
+    throw new AppError("MOVIE_NOT_FOUND", "No such movie", 404);
+  }
+
+  const genres = ((movieSnap.data()?.genres as string[] | undefined) ?? []).slice(0, MAX_GENRES);
+  if (genres.length === 0) return { items: [] };
+
+  // +1 over the result limit: the source movie itself always matches its own
+  // genres and would otherwise crowd out a genuine "different movie" result
+  // when it's filtered out below.
+  const candidates = await db
+    .collection("movies")
+    .where("genres", "array-contains-any", genres)
+    .orderBy("voteAverage", "desc")
+    .limit(SIMILAR_MOVIES_LIMIT + 1)
+    .get();
+
+  const items: SimilarMovieItem[] = candidates.docs
+    .filter((d) => d.id !== movieId)
+    .slice(0, SIMILAR_MOVIES_LIMIT)
+    .map((d) => {
+      const data = d.data();
+      return {
+        movieId: d.id,
+        title: data.title,
+        poster: data.poster ?? null,
+        year: data.year ?? null,
+        voteAverage: data.voteAverage ?? 0
+      };
+    });
 
   return { items };
 }

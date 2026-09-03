@@ -70,6 +70,18 @@ export interface RecommendationItem {
   matchScore: number | null
 }
 
+// GET /movies/:movieId/similar item — mockup's "Similar taste picks for you"
+// (movie detail's right rail). Movie-to-movie, not user-to-movie like
+// RecommendationItem above, so no matchScore/genres — just enough to render a
+// poster tile, same minimal shape MovieSummary already establishes plus rating.
+export interface SimilarMovieItem {
+  movieId: string
+  title: string
+  poster: string | null
+  year: number | null
+  voteAverage: number
+}
+
 // GET /onboarding/watched-candidates item — filtered by the genres/languages
 // picked earlier in onboarding, no exclusion (unlike RecommendationItem).
 export interface MovieCandidate {

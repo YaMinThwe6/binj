@@ -141,6 +141,13 @@ GET /recommendations                       → 200 { items: [{ movieId, title, p
 
 **Implementation note:** `matchScore` (0-100, "Top picks for you"'s % badge) is a heuristic, not a learned model — 70% weight on how much of the caller's preferred-genre set a candidate covers, 30% weight on its own TMDB rating. It's `null` for the trending/cold-start fallback, which has no preference to score against — the frontend shows the rating alone in that case, no "% match" badge.
 
+```
+GET /movies/:movieId/similar                → 200 { items: [{ movieId, title, poster, year, voteAverage }] }
+                                              // movie-to-movie, not user-to-movie — no auth, no matchScore
+```
+
+**Implementation note (added once this was actually built, 2026-09-04):** "Similar taste picks for you" — movie detail's right rail (mockup-driven, no prior hld.md flow, same footing as §7b's Home additions). A sibling to `GET /recommendations` above, not a variant of it: same array-contains-any-on-genres query, just keyed off the movie being viewed rather than the caller's watch history, and with no `matchScore` since there's no user preference here to score against. Public, unauthenticated, same as `GET /movies/:movieId` itself. 404 `MOVIE_NOT_FOUND` for a nonexistent movie; `items: []` for a movie with no genres on record (nothing to match against — not treated as an error). Live in `backend/src/services/recommendations.service.ts` (`getSimilarMovies`), routed from `recommendations.route.ts` rather than `movies.route.ts` purely to avoid a concurrent-edit collision with that file during the session that built this (see git history around 2026-09-04) — grouped by feature either way, same reasoning §5's `watchedBy`/`tasteMatches` endpoints already use for living apart from their literal URL prefix.
+
 ## 7. Search (§18)
 
 ```
@@ -173,10 +180,11 @@ POST   /events                             body: { movieId, title?, datetime, mo
                                               // host auto-joins; a rooms/{roomId} doc is created alongside so §16's
                                               // chat has something real to attach to later, even though the chat
                                               // UI itself isn't built yet
-GET    /events/upcoming                    query: { limit? } → 200 { items: [{ ...event fields, movieTitle, moviePoster }] }
+GET    /events/upcoming                    query: { limit?, movieId? } → 200 { items: [{ ...event fields, movieTitle, moviePoster }] }
                                               // public + future only, sorted by datetime asc — powers Home's
-                                              // "Upcoming watch events". Not yet personalized (invited/joined-only
-                                              // browsing, §9 nearby, and a movieId-scoped variant are still planned)
+                                              // "Upcoming watch events"; movieId narrows to one movie's events —
+                                              // movie detail's "Watch together" right rail (added 2026-09-04).
+                                              // Not yet personalized — invited/joined-only browsing is still planned
 
 PUT    /events/:eventId/join               → 200 { status: "joined" | "pending" }
                                               // branches on the event's own requiresApproval, re-checked server-side;

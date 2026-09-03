@@ -46,3 +46,17 @@ export interface UpcomingEvent extends EventSummary {
 export interface NearbyEvent extends UpcomingEvent {
   distanceKm: number
 }
+
+// POST /events request body — hld.md §7 "Create Event", api-contracts.md §8.
+// `location` is required only for mode: 'in-person' (events.service.ts's
+// createEvent rejects an in-person event without one); ignored for 'online'.
+export interface CreateEventInput {
+  movieId: string
+  datetime: string // ISO
+  mode: 'online' | 'in-person'
+  visibility: 'public' | 'private'
+  participantLimit: number
+  requiresApproval: boolean
+  title?: string | null
+  location?: { area: string; city: string; lat: number; lng: number } | null
+}

@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../lib/api'
-export type { MovieSummary, MovieDetail, MovieStatus, MovieStatusLite, MovieStatusMap, DiscoverMoviesResponse, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
-import type { MovieSummary, MovieDetail, MovieStatus, MovieStatusMap, DiscoverMoviesResponse, Review, MyReview, WatchedByEntry } from '@binj/shared-types'
+export type { MovieSummary, MovieDetail, MovieStatus, MovieStatusLite, MovieStatusMap, DiscoverMoviesResponse, Review, MyReview, WatchedByEntry, SimilarMovieItem } from '@binj/shared-types'
+import type { MovieSummary, MovieDetail, MovieStatus, MovieStatusMap, DiscoverMoviesResponse, Review, MyReview, WatchedByEntry, SimilarMovieItem } from '@binj/shared-types'
 
 export function searchMovies(query: string): Promise<{ items: MovieSummary[] }> {
   return apiFetch(`/search/movies?q=${encodeURIComponent(query)}`)
@@ -84,4 +84,10 @@ export function unmarkWatched(movieId: string): Promise<void> {
 
 export function getMovieWatchedBy(movieId: string): Promise<{ items: WatchedByEntry[]; nextCursor: string | null }> {
   return apiFetch(`/movies/${encodeURIComponent(movieId)}/watchedBy`, { auth: true })
+}
+
+// No auth — public, same as getMovie itself. "Similar taste picks for you"
+// (movie detail's right rail).
+export function getSimilarMovies(movieId: string): Promise<{ items: SimilarMovieItem[] }> {
+  return apiFetch(`/movies/${encodeURIComponent(movieId)}/similar`)
 }

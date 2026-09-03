@@ -17,6 +17,9 @@ const unlikeMovie = vi.fn()
 // doesn't need setup in every test (vi.clearAllMocks() below clears call
 // history, not this mockResolvedValue).
 const getMovieWatchedBy = vi.fn().mockResolvedValue({ items: [], nextCursor: null })
+// SimilarPicks' own dependency — same "rendered for real, not the focus of
+// these tests" treatment as getMovieWatchedBy above.
+const getSimilarMovies = vi.fn().mockResolvedValue({ items: [] })
 
 vi.mock('../../../../src/features/movie/services/movieApi', () => ({
   getMovie,
@@ -30,16 +33,20 @@ vi.mock('../../../../src/features/movie/services/movieApi', () => ({
   unmarkWatched,
   likeMovie,
   unlikeMovie,
-  getMovieWatchedBy
+  getMovieWatchedBy,
+  getSimilarMovies
 }))
 
-// AppHeader's own dependencies (rendered for real below, not mocked away,
-// same as Sidebar/MobileTabBar — none of these three have anything specific
-// to MovieDetail worth asserting here beyond "the shell is there").
+// AppHeader's + WatchTogether's own dependencies (rendered for real below,
+// not mocked away, same as Sidebar/MobileTabBar — none of these have anything
+// specific to MovieDetail worth asserting here beyond "the shell is there").
 const getMe = vi.fn().mockResolvedValue({ displayName: 'Yamin', email: 'yamin@example.com' })
 vi.mock('../../../../src/lib/api', () => ({ getMe }))
 const getNotifications = vi.fn().mockResolvedValue({ items: [] })
-vi.mock('../../../../src/features/home/services/homeApi', () => ({ getNotifications }))
+const getUpcomingEvents = vi.fn().mockResolvedValue({ items: [] })
+const joinEvent = vi.fn()
+const createEvent = vi.fn()
+vi.mock('../../../../src/features/home/services/homeApi', () => ({ getNotifications, getUpcomingEvents, joinEvent, createEvent }))
 
 // Every test below exercises the signed-in path unless it opts into
 // mockAuthUser(null) itself — that matches this file's existing tests, which

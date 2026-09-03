@@ -190,19 +190,22 @@ export async function createEvent(hostId: string, body: CreateEventInput, option
 
 // GET /events/upcoming — public events browse/upcoming list (schema.md §6's
 // documented-but-not-yet-flowed index: visibility asc + datetime asc). Powers
-// Home's "Upcoming watch events" section.
-export async function listUpcomingEvents(rawLimit: unknown): Promise<{ items: UpcomingEvent[] }> {
+// Home's "Upcoming watch events" section, and — with `movieId` given — movie
+// detail's "Watch together" right-rail section (api-contracts.md §8): same
+// query, narrowed to one movie rather than a whole extra endpoint.
+export async function listUpcomingEvents(rawLimit: unknown, rawMovieId?: unknown): Promise<{ items: UpcomingEvent[] }> {
   const db = requireDb();
   const parsedLimit = Number(rawLimit);
   const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, MAX_UPCOMING_LIMIT) : DEFAULT_UPCOMING_LIMIT;
+  const movieId = typeof rawMovieId === "string" && rawMovieId.trim() ? rawMovieId.trim() : null;
 
-  const snap = await db
+  let query = db
     .collection("events")
     .where("visibility", "==", "public")
-    .where("datetime", ">=", new Date())
-    .orderBy("datetime", "asc")
-    .limit(limit)
-    .get();
+    .where("datetime", ">=", new Date());
+  if (movieId) query = query.where("movieId", "==", movieId);
+
+  const snap = await query.orderBy("datetime", "asc").limit(limit).get();
 
   // §21's soft-delete filtered in application code, not a third Firestore
   // range/inequality filter alongside the two already on this query

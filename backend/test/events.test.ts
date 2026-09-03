@@ -288,6 +288,17 @@ describe("GET /events/upcoming", () => {
     expect(res.body.data.items[0].location).toEqual({ area: "MG Road", city: "Bangalore" });
     expect(res.body.data.items[0].preciseLocation).toBeNull();
   });
+
+  it("filters to just one movie's events when movieId is given — the movie detail page's Watch together section", async () => {
+    store.set("movies/movie-2", { title: "Interstellar", poster: "/interstellar.jpg" });
+    store.set("events/for-movie-1", { hostId: "host-1", movieId: "movie-1", visibility: "public", datetime: new Date("2099-06-01"), participantCount: 1, participantLimit: 5, requiresApproval: false });
+    store.set("events/for-movie-2", { hostId: "host-1", movieId: "movie-2", visibility: "public", datetime: new Date("2099-06-01"), participantCount: 1, participantLimit: 5, requiresApproval: false });
+
+    const app = createApp();
+    const res = await authed(app, "get", "/events/upcoming?movieId=movie-2");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.map((e: { eventId: string }) => e.eventId)).toEqual(["for-movie-2"]);
+  });
 });
 
 describe("PUT /events/:eventId/join", () => {
