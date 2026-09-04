@@ -108,7 +108,12 @@ const SIMPLE_PATCHABLE_FIELDS = [
   "preferredLanguages",
   "onboardingComplete",
   "themePreference",
-  "accentTheme"
+  "accentTheme",
+  // Settings' "Email me about activity" toggle (frontend/src/features/settings) —
+  // notificationPrefs existed on UserProfile/UserDoc since onboarding, but PATCH
+  // never accepted it. Same plain pass-through as every other field here; no
+  // sub-field validation, same as e.g. favoriteGenres/preferredLanguages above.
+  "notificationPrefs"
 ] as const;
 
 // PATCH /users/me — api-contracts.md §11. `username` is handled separately from

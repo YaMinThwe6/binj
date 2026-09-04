@@ -56,7 +56,7 @@ export function getMe(): Promise<Me> {
   return apiFetch('/users/me', { auth: true })
 }
 
-export function updateMe(patch: Partial<Pick<Me, 'displayName' | 'username' | 'listVisible' | 'followRequiresApproval' | 'favoriteGenres' | 'preferredLanguages' | 'onboardingComplete' | 'themePreference' | 'accentTheme'>>): Promise<Me> {
+export function updateMe(patch: Partial<Pick<Me, 'displayName' | 'username' | 'listVisible' | 'followRequiresApproval' | 'favoriteGenres' | 'preferredLanguages' | 'onboardingComplete' | 'themePreference' | 'accentTheme' | 'notificationPrefs'>>): Promise<Me> {
   return apiFetch('/users/me', { method: 'PATCH', body: patch, auth: true })
 }
 

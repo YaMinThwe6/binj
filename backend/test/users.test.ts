@@ -327,6 +327,20 @@ describe("PATCH /users/me", () => {
     expect(res.body.data.onboardingComplete).toBe(true);
   });
 
+  it("updates notificationPrefs (Settings' Email me about activity toggle)", async () => {
+    store.set("users/uid-14", { uid: "uid-14", notificationPrefs: { emailEnabled: true } });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-14", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app)
+      .patch("/users/me")
+      .set("Authorization", "Bearer good")
+      .send({ notificationPrefs: { emailEnabled: false } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.notificationPrefs).toEqual({ emailEnabled: false });
+    expect(store.get("users/uid-14")?.notificationPrefs).toEqual({ emailEnabled: false });
+  });
+
   describe("username", () => {
     it("400s on an invalid username", async () => {
       store.set("users/uid-7", { uid: "uid-7", username: null });
