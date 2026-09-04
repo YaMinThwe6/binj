@@ -301,9 +301,94 @@ describe('Profile', () => {
     renderWithRouter()
 
     await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
-    const homeRow = screen.getByRole('button', { name: 'Home' })
-    const profileRow = await screen.findByRole('button', { name: 'Profile' })
+    // Scoped to <aside> — MobileTabBar (below) also renders its own "Home"
+    // button, so an unscoped query is now ambiguous between the two.
+    const sidebar = within(document.querySelector('aside')!)
+    const homeRow = sidebar.getByRole('button', { name: 'Home' })
+    const profileRow = await sidebar.findByRole('button', { name: 'Profile' })
     expect(homeRow.querySelector('span')).not.toHaveClass('text-accent')
     expect(profileRow.querySelector('span')).toHaveClass('text-accent')
+  })
+
+  // QA (docs/qa/profile-bugs.md #2): Profile never rendered MobileTabBar, so
+  // mobile visitors had no bottom nav at all on this page, unlike Home/Search.
+  it('renders the mobile bottom nav (MobileTabBar), matching Home/Search', async () => {
+    getUserProfile.mockResolvedValue(baseProfile)
+    renderWithRouter()
+
+    await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
+    // Sidebar and MobileTabBar both render a "Coming soon" Inbox row (Profile's
+    // own tab row has no Inbox tab, unlike Events/Watched/etc., so this one is
+    // unambiguous) — two present means MobileTabBar is actually mounted, not
+    // just Sidebar's own.
+    expect(screen.getAllByText('Inbox')).toHaveLength(2)
+  })
+
+  // QA #3: the button flipped to "Following" immediately, but Followers kept
+  // showing its stale pre-follow count until a reload — toggleConnect only
+  // ever patched `relationship`, never the stat counters next to it.
+  it('updates the Followers count immediately after connecting, not just the button', async () => {
+    getUserProfile.mockResolvedValue(baseProfile) // followerCount: 12
+    followUser.mockResolvedValue({ status: 'following' })
+    renderWithRouter()
+
+    const stats = await screen.findByTestId('profile-stats')
+    expect(within(stats).getByText('12')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+
+    await waitFor(() => expect(within(stats).getByText('13')).toBeInTheDocument())
+  })
+
+  it('reverts the Followers count if the follow request fails', async () => {
+    getUserProfile.mockResolvedValue(baseProfile) // followerCount: 12
+    followUser.mockRejectedValue(new Error('network error'))
+    renderWithRouter()
+
+    const stats = await screen.findByTestId('profile-stats')
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(within(stats).getByText('13')).toBeInTheDocument())
+    await waitFor(() => expect(within(stats).getByText('12')).toBeInTheDocument())
+  })
+
+  it('decrements the Followers count immediately after unfollowing', async () => {
+    getUserProfile.mockResolvedValue({ ...baseProfile, relationship: 'following' }) // followerCount: 12
+    unfollowUser.mockResolvedValue(undefined)
+    renderWithRouter()
+
+    const stats = await screen.findByTestId('profile-stats')
+    expect(within(stats).getByText('12')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Following' }))
+
+    await waitFor(() => expect(within(stats).getByText('11')).toBeInTheDocument())
+  })
+
+  // QA #4: the disabled "Message" button's SVG was the standard three-node
+  // "Share" glyph, not a message/chat-bubble icon — reads as "Share" despite
+  // its accessible name and evident intent being "Message".
+  it('uses a chat-bubble icon (not the Share glyph) on the disabled Message button', async () => {
+    getUserProfile.mockResolvedValue(baseProfile)
+    renderWithRouter()
+
+    const messageButton = await screen.findByRole('button', { name: 'Message' })
+    const path = messageButton.querySelector('svg path')
+    expect(path).toHaveAttribute('d', 'M21 11.5a8.4 8.4 0 0 1-8.9 8.4 8.6 8.6 0 0 1-3.6-.8L3 20l1-4.9A8.4 8.4 0 1 1 21 11.5z')
+  })
+
+  // QA #5: the Connect/Following button had no in-flight guard, so a fast
+  // double-click fired two overlapping follow/unfollow requests.
+  it('ignores a second click on Connect while the first request is still in flight', async () => {
+    getUserProfile.mockResolvedValue(baseProfile)
+    let resolveFollow!: (v: { status: 'following' | 'pending' }) => void
+    followUser.mockReturnValue(new Promise((resolve) => { resolveFollow = resolve }))
+    renderWithRouter()
+
+    const button = await screen.findByRole('button', { name: 'Connect' })
+    fireEvent.click(button)
+    fireEvent.click(button)
+    fireEvent.click(button)
+
+    resolveFollow({ status: 'following' })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Following' })).toBeInTheDocument())
+    expect(followUser).toHaveBeenCalledTimes(1)
   })
 })

@@ -6,6 +6,7 @@ import { posterUrl } from '../../../lib/images'
 import { useAuth } from '../../../lib/AuthContext'
 import { Sidebar } from '../../../components/Sidebar'
 import { AppHeader } from '../../../components/AppHeader'
+import { MobileTabBar } from '../../../components/MobileTabBar'
 
 const COMING_SOON_TABS = ['Watched', 'Watchlist', 'Reviews', 'Events']
 
@@ -115,6 +116,9 @@ export function Profile() {
   const { signOutUser } = useAuth()
   const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [error, setError] = useState('')
+  // QA (docs/qa/profile-bugs.md #5): Connect/Following had no in-flight guard,
+  // so a fast double-click fired two overlapping follow/unfollow requests.
+  const [connectPending, setConnectPending] = useState(false)
 
   useEffect(() => {
     setProfile(null)
@@ -125,27 +129,32 @@ export function Profile() {
   }, [uid])
 
   async function toggleConnect() {
-    if (!profile) return
+    if (!profile || connectPending) return
     const previous = profile.relationship
+    setConnectPending(true)
 
+    // QA #3: the button flipped state immediately but Followers kept showing
+    // its stale count until a reload — patch the counter optimistically too,
+    // right alongside relationship, not just the button label.
     if (previous === 'none') {
-      setProfile({ ...profile, relationship: 'pending' })
+      setProfile({ ...profile, relationship: 'pending', followerCount: profile.followerCount + 1 })
       try {
         const { status } = await followUser(uid)
         setProfile((prev) => (prev ? { ...prev, relationship: status } : prev))
       } catch (err) {
-        setProfile((prev) => (prev ? { ...prev, relationship: 'none' } : prev))
+        setProfile((prev) => (prev ? { ...prev, relationship: 'none', followerCount: prev.followerCount - 1 } : prev))
         setError(err instanceof Error ? err.message : 'Failed to connect')
       }
     } else {
-      setProfile({ ...profile, relationship: 'none' })
+      setProfile({ ...profile, relationship: 'none', followerCount: Math.max(0, profile.followerCount - 1) })
       try {
         await unfollowUser(uid)
       } catch (err) {
-        setProfile((prev) => (prev ? { ...prev, relationship: previous } : prev))
+        setProfile((prev) => (prev ? { ...prev, relationship: previous, followerCount: prev.followerCount + 1 } : prev))
         setError(err instanceof Error ? err.message : 'Failed to update')
       }
     }
+    setConnectPending(false)
   }
 
   if (error && !profile) {
@@ -236,12 +245,13 @@ export function Profile() {
               <button
                 type="button"
                 onClick={toggleConnect}
+                disabled={connectPending}
                 className={
                   connectButton === 'Connect'
-                    ? 'min-w-[150px] rounded-xl bg-accent px-6 py-3 text-[13.5px] font-bold text-bg'
+                    ? 'min-w-[150px] rounded-xl bg-accent px-6 py-3 text-[13.5px] font-bold text-bg disabled:opacity-70'
                     : connectButton === 'Following'
-                      ? 'min-w-[150px] rounded-xl border border-accent bg-transparent px-6 py-3 text-[13.5px] font-bold text-accent'
-                      : 'min-w-[150px] rounded-xl border border-border bg-surface-alt px-6 py-3 text-[13.5px] font-bold text-text-muted'
+                      ? 'min-w-[150px] rounded-xl border border-accent bg-transparent px-6 py-3 text-[13.5px] font-bold text-accent disabled:opacity-70'
+                      : 'min-w-[150px] rounded-xl border border-border bg-surface-alt px-6 py-3 text-[13.5px] font-bold text-text-muted disabled:opacity-70'
                 }
               >
                 {connectButton}
@@ -254,7 +264,9 @@ export function Profile() {
                 className="flex h-11 w-11 flex-none cursor-default items-center justify-center rounded-xl border border-border bg-input text-text-faint"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M18 8a3 3 0 1 0-2.83-4H15a3 3 0 0 0 .09 6.19L8.9 13.5a3 3 0 1 0 0 3l6.2 3.31A3 3 0 1 0 15 18l-6.09-3.31a3 3 0 0 0 0-1.38L15 10a3 3 0 0 0 3-2z" />
+                  {/* QA #4: this was the Share glyph, not a message/chat icon —
+                      same chat-bubble path Sidebar's own Inbox row uses. */}
+                  <path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 8.6 8.6 0 0 1-3.6-.8L3 20l1-4.9A8.4 8.4 0 1 1 21 11.5z" />
                 </svg>
               </button>
             </>
@@ -390,11 +402,20 @@ export function Profile() {
   )
 
   return (
-    <div className="flex min-h-svh bg-bg text-text">
+    // QA (docs/qa/profile-bugs.md #1): the shell's outer container only set a
+    // *minimum* height, so the inner lg:overflow-y-auto column never had a
+    // bounded parent to actually scroll within — the browser scrolled <body>
+    // instead, taking Sidebar/AppHeader with it. lg:h-svh caps the row to the
+    // viewport (mobile keeps the old min-h-svh, which is what lets it grow
+    // freely with content there — no sidebar/overflow-y-auto trick applies
+    // below lg anyway). Same fix applied to Home.tsx/MovieDetail.tsx, which
+    // share this exact shell shape and had the identical bug.
+    <div className="flex min-h-svh bg-bg text-text lg:h-svh">
       <Sidebar active="profile" />
       <main className="min-w-0 flex-1 lg:flex lg:flex-col">
         <AppHeader onSignOut={() => void signOutUser()} />
         <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">{content}</div>
+        <MobileTabBar active="profile" />
       </main>
     </div>
   )

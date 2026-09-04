@@ -505,14 +505,16 @@ export function MovieDetail() {
   }
 
   return (
-    <div className="flex min-h-svh bg-bg text-text">
+    // QA (docs/qa/profile-bugs.md #1 — a real bug, not a shell characteristic
+    // to match): the outer container only set a *minimum* height, so the inner
+    // lg:overflow-y-auto column never had a bounded parent to actually scroll
+    // within — the whole page scrolled instead, taking Sidebar/AppHeader with
+    // it. lg:h-svh caps the row to the viewport; mobile keeps the old
+    // min-h-svh (grows freely with content, no sidebar/overflow-y-auto trick
+    // applies below lg anyway). Same fix applied to Home.tsx/Profile.tsx,
+    // which share this exact shell shape and had the identical bug.
+    <div className="flex min-h-svh bg-bg text-text lg:h-svh">
       <Sidebar />
-      {/* Matches Home.tsx's own shell structure exactly, sidebar-scrolls-with-page
-          behavior included — nothing here bounds the flex chain to viewport
-          height, so despite the lg:overflow-y-auto below, the whole page scrolls
-          as one rather than Sidebar staying pinned. That's an existing Home.tsx
-          characteristic (verified live), not something introduced here — true
-          parity means matching it, not fixing it unprompted on this page alone. */}
       <main className="min-w-0 flex-1 lg:flex lg:flex-col">
         <AppHeader onSignOut={() => void signOutUser()} />
         <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">{content}</div>

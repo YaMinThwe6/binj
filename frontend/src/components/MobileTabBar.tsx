@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom'
 // Mobile/tablet bottom nav (below lg — the Sidebar owns nav from lg up).
 // Shared by the signed-in top-level pages so switching between them keeps the
 // same nav surface; `active` marks the current tab. Events/People/Inbox
-// mirror the Sidebar's "Coming soon" disabled treatment.
-export function MobileTabBar({ active }: { active: 'home' | 'search' }) {
+// mirror the Sidebar's "Coming soon" disabled treatment. 'profile' isn't one
+// of this bar's own tabs (Profile has no Home/Search-style icon here, same as
+// Sidebar's own nav doesn't duplicate itself) — passing it just means neither
+// Home nor Search should show as active, both render as ordinary buttons.
+export function MobileTabBar({ active }: { active: 'home' | 'search' | 'profile' }) {
   const navigate = useNavigate()
 
   const tab = (on: boolean) =>

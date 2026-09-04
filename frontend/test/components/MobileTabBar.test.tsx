@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { MobileTabBar } from '../../src/components/MobileTabBar'
 
-function renderAt(active: 'home' | 'search') {
+function renderAt(active: 'home' | 'search' | 'profile') {
   return render(
     <MemoryRouter initialEntries={['/start']}>
       <Routes>
@@ -42,5 +42,14 @@ describe('MobileTabBar', () => {
       expect(screen.queryByRole('button', { name: new RegExp(`^${label}$`, 'i') })).not.toBeInTheDocument()
       expect(screen.getByText(label)).toBeInTheDocument()
     }
+  })
+
+  // Profile.tsx renders this bar too, but Profile has no icon of its own here
+  // (unlike Sidebar, which does have a Profile row) — active="profile" should
+  // just leave both Home and Search as ordinary clickable, non-highlighted tabs.
+  it('highlights neither Home nor Search when active is "profile"', () => {
+    renderAt('profile')
+    expect(screen.getByRole('button', { name: /^home$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^search$/i })).toBeInTheDocument()
   })
 })

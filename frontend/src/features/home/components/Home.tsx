@@ -30,7 +30,14 @@ export function Home({ me, onSignOut }: Props) {
   const initial = (me.displayName || me.email || '?').charAt(0).toUpperCase()
 
   return (
-    <div className="flex min-h-svh bg-bg text-text">
+    // QA (docs/qa/profile-bugs.md #1 — found on Profile, same bug reproduces
+    // here since Profile copied this exact shell): the outer container only
+    // set a *minimum* height, so the inner lg:overflow-y-auto column never had
+    // a bounded parent to actually scroll within — the whole page scrolled
+    // instead, taking Sidebar/AppHeader with it. lg:h-svh caps the row to the
+    // viewport; mobile keeps the old min-h-svh (grows freely with content,
+    // no sidebar/overflow-y-auto trick applies below lg anyway).
+    <div className="flex min-h-svh bg-bg text-text lg:h-svh">
       {/* Desktop-only left nav (design canvas's HomeDesktop.dc.html) — the
           mobile bottom nav below still owns navigation under lg. */}
       <Sidebar active="home" />
