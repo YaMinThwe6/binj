@@ -366,9 +366,13 @@ export function Profile() {
 
       <section className="px-6 py-7 lg:px-0">
         <h2 className="mb-3 text-[15px] font-bold text-text">Recently watched</h2>
-        {!profile.watchedListVisible && <p className="text-sm text-text-muted">This user's watched list is private.</p>}
-        {profile.watchedListVisible && profile.watched.length === 0 && <p className="text-sm text-text-muted">No public watched movies yet.</p>}
-        {profile.watchedListVisible && profile.watched.length > 0 && (
+        {/* QA (docs/qa/settings-bugs.md #2): watchedListVisible reports whether
+            OTHERS can see this list — the backend already returns the owner's
+            own data regardless of it, so self needs the same "|| isSelf" here
+            or the owner would see the "private" message on their own list. */}
+        {!profile.watchedListVisible && !isSelf && <p className="text-sm text-text-muted">This user's watched list is private.</p>}
+        {(profile.watchedListVisible || isSelf) && profile.watched.length === 0 && <p className="text-sm text-text-muted">No public watched movies yet.</p>}
+        {(profile.watchedListVisible || isSelf) && profile.watched.length > 0 && (
           <ul className="flex flex-col gap-3 lg:grid lg:grid-cols-6 lg:gap-4">
             {profile.watched.map((entry) => {
               const poster = posterUrl(entry.poster, 'w185')
@@ -388,7 +392,7 @@ export function Profile() {
         )}
       </section>
 
-      {profile.watchedListVisible && profile.recentActivity.length > 0 && (
+      {(profile.watchedListVisible || isSelf) && profile.recentActivity.length > 0 && (
         <section className="px-6 pb-9 lg:px-0">
           <h2 className="mb-3 text-[14px] font-bold text-text">Recent Activity</h2>
           <ul className="flex flex-col gap-3.5">

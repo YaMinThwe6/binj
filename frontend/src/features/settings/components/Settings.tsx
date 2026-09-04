@@ -380,7 +380,11 @@ export function Settings({ me, onUpdateMe }: Props) {
     <div className="flex min-h-svh bg-bg text-text lg:h-svh">
       <Sidebar active="settings" />
       <main className="min-w-0 flex-1 lg:flex lg:flex-col">
-        <AppHeader onSignOut={() => void signOutUser()} />
+        {/* QA (docs/qa/settings-bugs.md #1): passing our own live `me` here
+            (rather than letting AppHeader fetch its own once on mount) is
+            what makes a saved displayName/etc. show up in the header
+            immediately instead of only after a reload. */}
+        <AppHeader onSignOut={() => void signOutUser()} me={me} />
         {/* Desktop-only page title — SettingsDesktop.dc.html's own content top
             bar shows "Settings" here; AppHeader above is the shared
             search/notifications/avatar bar every page reuses and has no page

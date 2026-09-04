@@ -33,11 +33,11 @@ afterEach(() => {
   getNotifications.mockReset()
 })
 
-function renderWithRouter(onSignOut = vi.fn()) {
+function renderWithRouter(onSignOut = vi.fn(), meProp?: typeof me) {
   return render(
     <MemoryRouter initialEntries={['/']}>
       <Routes>
-        <Route path="/" element={<AppHeader onSignOut={onSignOut} />} />
+        <Route path="/" element={<AppHeader onSignOut={onSignOut} me={meProp} />} />
         <Route path="/search" element={<p>Search page</p>} />
       </Routes>
     </MemoryRouter>
@@ -89,5 +89,32 @@ describe('AppHeader', () => {
 
     expect(await screen.findByText('Arjun')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByLabelText('0 unread notifications')).toBeInTheDocument())
+  })
+
+  // QA (docs/qa/settings-bugs.md #1): AppHeader fetched its own `me` once on
+  // mount and never observed a caller's own live-updating state (e.g. after
+  // Settings saves a new displayName), so it stayed stale until a reload —
+  // even on pages whose own `me` state had already updated correctly.
+  it('uses a caller-supplied `me` prop instead of fetching its own, and reflects it updating', async () => {
+    getNotifications.mockResolvedValue({ items: [] })
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<AppHeader onSignOut={vi.fn()} me={me} />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Arjun')).toBeInTheDocument()
+    expect(getMe).not.toHaveBeenCalled() // a supplied `me` means no independent fetch at all
+
+    rerender(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<AppHeader onSignOut={vi.fn()} me={{ ...me, displayName: 'Updated Name' }} />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(await screen.findByText('Updated Name')).toBeInTheDocument()
   })
 })

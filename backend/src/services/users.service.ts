@@ -299,12 +299,20 @@ export async function getPublicProfile(callerUid: string, targetUid: string): Pr
     relationship = followingCallerSnap.exists ? "following" : requestSnap.exists ? "pending" : "none";
   }
 
+  // watchedListVisible reports the setting as-is (whether OTHERS can see this
+  // list) — it stays false when the owner has turned it off, since that's a
+  // real fact the frontend may want to show them (e.g. "this is currently
+  // hidden from others"). It's just not what gates the actual data below:
+  // the owner viewing their own profile always sees their own watched list
+  // regardless (QA docs/qa/settings-bugs.md #2 — this toggle hides your list
+  // from other visitors, not from you).
   const watchedListVisible = target.listVisible === true;
+  const isSelf = targetUid === callerUid;
   const watchedDocsByRecency = [...allWatchedSnap.docs].sort((a, b) => toMillis(b.data().watchedAt) - toMillis(a.data().watchedAt));
 
   let watched: PublicProfile["watched"] = [];
   let recentActivity: ActivityItem[] = [];
-  if (watchedListVisible) {
+  if (watchedListVisible || isSelf) {
     const publicEntries = watchedDocsByRecency.filter((d) => d.data().visibility !== "private").slice(0, PROFILE_WATCHED_PREVIEW);
     [watched, recentActivity] = await Promise.all([
       Promise.all(

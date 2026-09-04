@@ -513,6 +513,22 @@ describe("GET /users/:uid", () => {
     expect(res.body.data.displayName).toBe("Rohan");
   });
 
+  // QA (docs/qa/settings-bugs.md #2): turning off "Show my watched list" also
+  // hid the list from the owner's own profile view, not just other visitors —
+  // the toggle is meant to gate what *other people* see, not the owner.
+  it("still shows the caller their own watched list even when they've turned list-level visibility off", async () => {
+    store.set("users/uid-1", { displayName: "Arjun", listVisible: false });
+    store.set("movies/movie-1", { title: "Interstellar", poster: "/inter.jpg" });
+    store.set("users/uid-1/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-1").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.relationship).toBe("self");
+    expect(res.body.data.watched).toEqual([{ movieId: "movie-1", title: "Interstellar", poster: "/inter.jpg", watchedAt: expect.any(String) }]);
+  });
+
   it("excludes a private-marked entry even though the list is otherwise public", async () => {
     store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
     store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "private" });

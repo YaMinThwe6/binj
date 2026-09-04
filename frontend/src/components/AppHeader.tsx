@@ -5,28 +5,46 @@ import { getNotifications } from '../features/home/services/homeApi'
 
 interface Props {
   onSignOut: () => void
+  // Optional: when a caller already owns a live-updating `me` (e.g. Settings,
+  // threaded from App.tsx's own state), pass it here so this header reflects
+  // a change — a saved displayName, say — the same render, not just on next
+  // mount. QA (docs/qa/settings-bugs.md #1) found this genuinely stale
+  // otherwise: AppHeader's own one-time fetch below never observed a caller's
+  // state updating, even on the very page that made the change. Omit it (as
+  // MovieDetail.tsx/Profile.tsx currently do — neither has `me` in scope from
+  // App.tsx) and this falls back to fetching its own copy, unchanged.
+  me?: Me
 }
 
 // The desktop-only top bar every signed-in page inside the Sidebar shell
 // shares — HomeDesktop.dc.html originated this design, and Desktop.dc.html
-// (movie detail) reuses the identical bar, not a bespoke one per page. Fetches
-// its own `me` and unread count so it's a true drop-in: a caller renders it
-// and passes nothing but onSignOut, no profile/notification state to plumb
-// down first. (Home.tsx predates this component and still owns its own
-// mobile+desktop header inline — a candidate to migrate onto this later, not
-// done here to keep this change scoped to what was actually asked.)
-export function AppHeader({ onSignOut }: Props) {
+// (movie detail) reuses the identical bar, not a bespoke one per page.
+// (Home.tsx predates this component and still owns its own mobile+desktop
+// header inline — a candidate to migrate onto this later, not done here to
+// keep this change scoped to what was actually asked.)
+export function AppHeader({ onSignOut, me: meProp }: Props) {
   const navigate = useNavigate()
-  const [me, setMe] = useState<Me | null>(null)
+  const [fetchedMe, setFetchedMe] = useState<Me | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
+    if (meProp) return // caller already supplies a live `me` — nothing to fetch
     let cancelled = false
     getMe()
       .then((res) => {
-        if (!cancelled) setMe(res)
+        if (!cancelled) setFetchedMe(res)
       })
       .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // Only re-runs if a caller starts/stops supplying `me` — not on every
+    // change of its value, which would just refetch pointlessly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!meProp])
+
+  useEffect(() => {
+    let cancelled = false
     getNotifications(true)
       .then((res) => {
         if (!cancelled) setUnreadCount(res.items.length)
@@ -39,6 +57,7 @@ export function AppHeader({ onSignOut }: Props) {
     }
   }, [])
 
+  const me = meProp ?? fetchedMe
   if (!me) return null // avoid a flash of an empty avatar/name before this resolves
 
   const initial = (me.displayName || me.email || '?').charAt(0).toUpperCase()

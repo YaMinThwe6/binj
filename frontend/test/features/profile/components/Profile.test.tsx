@@ -140,6 +140,20 @@ describe('Profile', () => {
     expect(await screen.findByText(/private/i)).toBeInTheDocument()
   })
 
+  // QA (docs/qa/settings-bugs.md #2): turning off "Show my watched list" also
+  // hid it from the owner's own profile — the backend now still returns the
+  // owner's own data regardless of watchedListVisible; this is the frontend
+  // half of the fix, rendering it instead of the "private" message for self.
+  it('shows your own watched list even when watchedListVisible is false, since that toggle only hides it from others', async () => {
+    getUserProfile.mockResolvedValue({ ...baseProfile, relationship: 'self', tasteMatchScore: null, watchedListVisible: false })
+    renderWithRouter()
+
+    await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
+    expect(screen.queryByText(/private/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Interstellar')).toBeInTheDocument()
+    expect(screen.getByText(/Hereditary/)).toBeInTheDocument()
+  })
+
   it('shows an empty-state message when the list is visible but nothing public has been watched', async () => {
     getUserProfile.mockResolvedValue({ ...baseProfile, watchedListVisible: true, watched: [] })
     renderWithRouter()

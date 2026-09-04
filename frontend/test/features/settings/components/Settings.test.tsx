@@ -210,7 +210,13 @@ describe('Settings', () => {
 
     expect(screen.getByText('ananya.rao@gmail.com')).toBeInTheDocument()
     expect(screen.getByText('GOOGLE')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /sign out/i }))
+    // Two "Sign out" buttons render now that AppHeader gets a live `me` prop
+    // (docs/qa/settings-bugs.md #1) and no longer waits on its own async
+    // fetch to appear: AppHeader's own top-bar one, and this page's Account
+    // section one. Both call the same signOutUser — the second is Settings'.
+    const signOutButtons = screen.getAllByRole('button', { name: /sign out/i })
+    expect(signOutButtons).toHaveLength(2)
+    fireEvent.click(signOutButtons[1])
     expect(signOutUser).toHaveBeenCalled()
   })
 
