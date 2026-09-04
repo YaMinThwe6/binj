@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getMe } from '../lib/api'
 
 interface NavItem {
   label: string
@@ -40,11 +42,26 @@ function NavRow({ label, active, disabled, icon, onClick }: NavItem) {
 // Desktop-only left nav shell (design canvas's HomeDesktop.dc.html) — the
 // mobile bottom-nav (MobileTabBar) stays the nav surface below lg. Shared by
 // every top-level signed-in page so they read as one app rather than
-// separate screens; `active` highlights the current one. Only Home/Search
-// are wired to real navigation; the rest mirror the same "Coming soon"
-// disabled treatment the mobile bottom nav already uses.
-export function Sidebar({ active = 'home' }: { active?: 'home' | 'search' }) {
+// separate screens; `active` highlights the current one. Only Home/Search/
+// Profile are wired to real navigation; the rest mirror the same
+// "Coming soon" disabled treatment the mobile bottom nav already uses.
+export function Sidebar({ active = 'home' }: { active?: 'home' | 'search' | 'profile' }) {
   const navigate = useNavigate()
+  // Self-sufficient fetch, same pattern as AppHeader's own `getMe()` call —
+  // the Profile nav row below needs the caller's own uid to link to
+  // "/profile/:uid", which this component otherwise has no reason to know.
+  const [myUid, setMyUid] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    getMe()
+      .then((me) => {
+        if (!cancelled) setMyUid(me.uid)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
   return (
     <aside className="hidden w-58 flex-none flex-col gap-7 border-r border-border-soft px-4.5 py-6 lg:flex">
       <div>
@@ -107,6 +124,17 @@ export function Sidebar({ active = 'home' }: { active?: 'home' | 'search' }) {
           icon={
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 8.6 8.6 0 0 1-3.6-.8L3 20l1-4.9A8.4 8.4 0 1 1 21 11.5z" />
+            </svg>
+          }
+        />
+        <NavRow
+          label="Profile"
+          active={active === 'profile'}
+          onClick={myUid ? () => navigate(`/profile/${myUid}`) : undefined}
+          icon={
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
             </svg>
           }
         />

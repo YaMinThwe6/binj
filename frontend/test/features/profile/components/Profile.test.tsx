@@ -13,7 +13,7 @@ vi.mock('../../../../src/features/home/services/homeApi', () => ({ followUser, u
 // AppHeader's own dependency (rendered for real below, not mocked away, same
 // as MovieDetail.test.tsx treats Sidebar/AppHeader) — nothing specific to
 // Profile worth asserting beyond "the signed-in shell is there".
-const getMe = vi.fn().mockResolvedValue({ displayName: 'Yamin', email: 'yamin@example.com' })
+const getMe = vi.fn().mockResolvedValue({ uid: 'caller-1', displayName: 'Yamin', email: 'yamin@example.com' })
 vi.mock('../../../../src/lib/api', () => ({ getMe }))
 
 // Profile is only ever reached signed-in (App.tsx's "/profile/:uid" route
@@ -233,5 +233,77 @@ describe('Profile', () => {
     await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
     expect(screen.getByRole('tab', { name: 'Overview', selected: true })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Watched' })).toHaveAttribute('title', 'Coming soon')
+  })
+
+  it('gives the Following state its own accent-outline style, distinct from the muted Requested state', async () => {
+    getUserProfile.mockResolvedValue({ ...baseProfile, relationship: 'following' })
+    renderWithRouter()
+
+    const button = await screen.findByRole('button', { name: 'Following' })
+    expect(button).toHaveClass('border-accent')
+    expect(button).toHaveClass('text-accent')
+    expect(button).not.toHaveClass('bg-accent')
+  })
+
+  it('gives the Requested (pending) state a muted style, distinct from Following', async () => {
+    getUserProfile.mockResolvedValue({ ...baseProfile, relationship: 'pending' })
+    renderWithRouter()
+
+    const button = await screen.findByRole('button', { name: 'Requested' })
+    expect(button).toHaveClass('text-text-muted')
+    expect(button).not.toHaveClass('border-accent')
+    expect(button).not.toHaveClass('bg-accent')
+  })
+
+  it('renders the taste-match score as a proportional progress ring, not a flat circle', async () => {
+    getUserProfile.mockResolvedValue({ ...baseProfile, tasteMatchScore: 25 })
+    renderWithRouter()
+
+    const ring = await screen.findByTestId('taste-match-progress')
+    const offset = Number(ring.getAttribute('stroke-dashoffset'))
+    // circumference for r=28 is ~175.93 — a low 25% score should leave most
+    // of the ring "empty" (a large offset), unlike a full/flat circle.
+    expect(offset).toBeGreaterThan(120)
+    expect(offset).toBeLessThan(140)
+  })
+
+  it('shows a smaller stroke-dashoffset (more filled ring) for a higher taste-match score', async () => {
+    getUserProfile.mockResolvedValue({ ...baseProfile, tasteMatchScore: 90 })
+    renderWithRouter()
+
+    const ring = await screen.findByTestId('taste-match-progress')
+    const offset = Number(ring.getAttribute('stroke-dashoffset'))
+    expect(offset).toBeLessThan(20)
+  })
+
+  it('shows a relative "time ago" timestamp on recent activity entries', async () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+    getUserProfile.mockResolvedValue({
+      ...baseProfile,
+      recentActivity: [{ ...baseProfile.recentActivity[0], createdAt: twoHoursAgo }]
+    })
+    renderWithRouter()
+
+    expect(await screen.findByText(/2h ago/)).toBeInTheDocument()
+  })
+
+  it('does not render the raw favoriteGenres/preferredLanguages text block (superseded by the genre-percentage bars)', async () => {
+    getUserProfile.mockResolvedValue(baseProfile)
+    renderWithRouter()
+
+    await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
+    expect(screen.queryByText(/Favorite genres:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Preferred languages:/)).not.toBeInTheDocument()
+  })
+
+  it('highlights the Sidebar\'s Profile nav row, not Home, while viewing a profile page', async () => {
+    getUserProfile.mockResolvedValue(baseProfile)
+    renderWithRouter()
+
+    await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
+    const homeRow = screen.getByRole('button', { name: 'Home' })
+    const profileRow = await screen.findByRole('button', { name: 'Profile' })
+    expect(homeRow.querySelector('span')).not.toHaveClass('text-accent')
+    expect(profileRow.querySelector('span')).toHaveClass('text-accent')
   })
 })

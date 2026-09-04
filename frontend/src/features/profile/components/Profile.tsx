@@ -25,6 +25,35 @@ function formatJoined(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
 }
 
+// Mirrors the design canvas's "2h ago" / "1d ago" copy on Recent Activity
+// (MyProfile.dc.html / OtherUserProfile.dc.html) — falls back to an absolute
+// date past a month out, same as most activity feeds, rather than "4w ago"
+// drifting indefinitely.
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return ''
+  const diffMs = Math.max(0, Date.now() - new Date(iso).getTime())
+  const minutes = Math.floor(diffMs / 60000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 5) return `${weeks}w ago`
+  return formatWatchedAt(iso)
+}
+
+// Taste-match "progress ring" geometry — a real proportional SVG ring
+// (design canvas's dc-script draws it via stroke-dasharray/stroke-dashoffset
+// on a fixed r=30/36 circle) rather than a flat, score-independent circle.
+const TASTE_RING_RADIUS = 28
+const TASTE_RING_CIRCUMFERENCE = 2 * Math.PI * TASTE_RING_RADIUS
+
+function tasteMatchRingOffset(score: number): number {
+  return TASTE_RING_CIRCUMFERENCE * (1 - Math.min(100, Math.max(0, score)) / 100)
+}
+
 // >=70 mirrors the design canvas's "Great match!" copy on both the mobile and
 // desktop OtherUserProfile artboards — the only threshold the mockup actually
 // shows a value for, so the lower bands are this component's own judgment
@@ -48,7 +77,7 @@ function ActivityLine({ item }: { item: PublicProfile['recentActivity'][number] 
           <span className="font-bold">{title}</span>
           {item.type === 'watchlist_added' && ' to watchlist'}
         </p>
-        <p className="mt-0.5 text-[11px] text-text-muted">{formatWatchedAt(item.createdAt)}</p>
+        <p className="mt-0.5 text-[11px] text-text-muted">{formatRelativeTime(item.createdAt)}</p>
       </div>
     </li>
   )
@@ -210,7 +239,9 @@ export function Profile() {
                 className={
                   connectButton === 'Connect'
                     ? 'min-w-[150px] rounded-xl bg-accent px-6 py-3 text-[13.5px] font-bold text-bg'
-                    : 'min-w-[150px] rounded-xl border border-border bg-surface-alt px-6 py-3 text-[13.5px] font-bold text-text'
+                    : connectButton === 'Following'
+                      ? 'min-w-[150px] rounded-xl border border-accent bg-transparent px-6 py-3 text-[13.5px] font-bold text-accent'
+                      : 'min-w-[150px] rounded-xl border border-border bg-surface-alt px-6 py-3 text-[13.5px] font-bold text-text-muted'
                 }
               >
                 {connectButton}
@@ -296,31 +327,30 @@ export function Profile() {
           <section className="mx-6 mt-6 rounded-2xl border border-border-soft bg-surface-alt p-5 text-left lg:mx-0">
             <h2 className="mb-3.5 text-[14px] font-bold text-text">Taste Match with you</h2>
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 flex-none items-center justify-center rounded-full border-4 border-accent/30 text-[15px] font-extrabold text-text">
-                {profile.tasteMatchScore}%
-              </div>
+              <svg width="72" height="72" viewBox="0 0 72 72" className="flex-none">
+                <circle cx="36" cy="36" r={TASTE_RING_RADIUS} fill="none" strokeWidth="7" className="stroke-border-soft" />
+                <circle
+                  data-testid="taste-match-progress"
+                  cx="36"
+                  cy="36"
+                  r={TASTE_RING_RADIUS}
+                  fill="none"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeDasharray={TASTE_RING_CIRCUMFERENCE}
+                  strokeDashoffset={tasteMatchRingOffset(profile.tasteMatchScore!)}
+                  transform="rotate(-90 36 36)"
+                  className="stroke-accent"
+                />
+                <text x="36" y="41" textAnchor="middle" className="fill-text text-[15px] font-extrabold">
+                  {profile.tasteMatchScore}%
+                </text>
+              </svg>
               <p className="text-[12px] font-bold text-accent">{tasteMatchLabel(profile.tasteMatchScore!)}</p>
             </div>
           </section>
         )}
       </div>
-
-      {(profile.favoriteGenres?.length || profile.preferredLanguages?.length) && (
-        <section className="px-6 pt-6 text-left lg:px-0">
-          {profile.favoriteGenres?.length ? (
-            <p className="mb-2 text-[12.5px] text-text-secondary">
-              <span className="font-semibold text-text">Favorite genres: </span>
-              {profile.favoriteGenres.join(', ')}
-            </p>
-          ) : null}
-          {profile.preferredLanguages?.length ? (
-            <p className="text-[12.5px] text-text-secondary">
-              <span className="font-semibold text-text">Preferred languages: </span>
-              {profile.preferredLanguages.join(', ')}
-            </p>
-          ) : null}
-        </section>
-      )}
 
       <section className="px-6 py-7 lg:px-0">
         <h2 className="mb-3 text-[15px] font-bold text-text">Recently watched</h2>
@@ -361,7 +391,7 @@ export function Profile() {
 
   return (
     <div className="flex min-h-svh bg-bg text-text">
-      <Sidebar />
+      <Sidebar active="profile" />
       <main className="min-w-0 flex-1 lg:flex lg:flex-col">
         <AppHeader onSignOut={() => void signOutUser()} />
         <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">{content}</div>
