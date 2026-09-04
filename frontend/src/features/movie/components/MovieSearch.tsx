@@ -396,10 +396,15 @@ export function MovieSearch() {
   }
 
   return (
-    <div className="flex min-h-svh bg-bg text-text">
+    // lg:h-svh (not just min-h-svh) so the inner lg:overflow-y-auto column has
+    // a viewport-bounded parent to scroll within — otherwise the whole page
+    // scrolls and takes the Sidebar with it. Same shared-shell fix as
+    // Home/MovieDetail/Profile (docs/qa/profile-bugs.md #1); mobile keeps
+    // min-h-svh and grows freely.
+    <div className="flex min-h-svh bg-bg text-text lg:h-svh">
       <Sidebar active="search" />
 
-      <main className="flex min-w-0 flex-1 flex-col pb-6 lg:pb-0">
+      <main className="min-w-0 flex-1 pb-6 lg:flex lg:flex-col lg:pb-0">
         <header className="flex items-center gap-3 border-b border-border-soft px-5 py-4 lg:px-7">
           <button type="button" onClick={() => navigate('/')} className="cursor-pointer text-sm font-semibold text-text-secondary lg:hidden">
             ← Home
@@ -407,7 +412,9 @@ export function MovieSearch() {
           <h1 className="text-[15px] font-bold text-text">Search</h1>
         </header>
 
-        <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-6 lg:px-7">{searchPanel}</div>
+        <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          <div className="mx-auto w-full max-w-4xl px-5 py-6 lg:px-7">{searchPanel}</div>
+        </div>
 
         <MobileTabBar active="search" />
       </main>
