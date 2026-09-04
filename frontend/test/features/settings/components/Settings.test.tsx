@@ -13,9 +13,13 @@ const getNotifications = vi.fn().mockResolvedValue({ items: [] })
 vi.mock('../../../../src/features/home/services/homeApi', () => ({ getNotifications }))
 
 const signOutUser = vi.fn()
+// Mutable so individual tests can simulate the OTP/custom-token sign-in path
+// (Welcome.tsx), which leaves providerData empty unlike a Google/Microsoft
+// popup sign-in.
+let authProviderData: { providerId: string }[] = [{ providerId: 'google.com' }]
 vi.mock('../../../../src/lib/AuthContext', () => ({
   useAuth: () => ({
-    user: { uid: 'caller-1', providerData: [{ providerId: 'google.com' }] },
+    user: { uid: 'caller-1', get providerData() { return authProviderData } },
     loading: false,
     signInWithGoogle: vi.fn(),
     signInWithMicrosoft: vi.fn(),
@@ -50,6 +54,7 @@ afterEach(() => {
   getMe.mockClear()
   getNotifications.mockClear()
   signOutUser.mockReset()
+  authProviderData = [{ providerId: 'google.com' }]
 })
 
 function renderSettings(me = baseMe, onUpdateMe = vi.fn()) {
@@ -204,8 +209,17 @@ describe('Settings', () => {
     renderSettings()
 
     expect(screen.getByText('ananya.rao@gmail.com')).toBeInTheDocument()
+    expect(screen.getByText('GOOGLE')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /sign out/i }))
     expect(signOutUser).toHaveBeenCalled()
+  })
+
+  it('falls back to an EMAIL provider badge when Firebase providerData is empty (the OTP/custom-token sign-in path)', () => {
+    authProviderData = []
+    renderSettings()
+
+    expect(screen.getByText('EMAIL')).toBeInTheDocument()
+    expect(screen.getByText(/signed in with email as/i)).toBeInTheDocument()
   })
 
   it('renders Delete account disabled with "Coming soon", not wired to anything', () => {

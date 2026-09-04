@@ -51,12 +51,15 @@ function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange
   )
 }
 
-function providerLabel(providerId: string | undefined): string | null {
-  if (!providerId) return null
+// Always returns a label — Welcome.tsx's OTP-then-signInWithToken flow (the
+// only sign-in path besides Google/Microsoft popups) leaves Firebase's
+// providerData empty even though it's a real signed-in account, so this
+// falls back to EMAIL rather than the badge just disappearing (design
+// review: the mockup's Account row always shows a provider badge).
+function providerLabel(providerId: string | undefined): string {
   if (providerId === 'google.com') return 'GOOGLE'
   if (providerId === 'microsoft.com') return 'MICROSOFT'
-  if (providerId === 'password') return 'EMAIL'
-  return providerId.toUpperCase()
+  return 'EMAIL'
 }
 
 // Matches the design canvas's Settings.dc.html (mobile) and
@@ -197,35 +200,45 @@ export function Settings({ me, onUpdateMe }: Props) {
         <h1 className="text-[19px] font-bold text-text">Settings</h1>
       </div>
 
-      {/* PROFILE */}
+      {/* PROFILE — a compact card with stacked rows on mobile (matches
+          Settings.dc.html's Profile card, same treatment Privacy/Notifications
+          use below), a plain side-by-side input-box pair on desktop (matches
+          SettingsDesktop.dc.html). One set of inputs, not two — Tailwind's
+          lg: prefixes reflow the same elements rather than rendering a second
+          copy, so getByLabelText et al still resolve to a single node. */}
       <section id="settings-profile">
         <h2 className="mb-1 text-[15px] font-bold text-text">Profile</h2>
         <p className="mb-4 text-[11.5px] text-text-muted">This is how you appear across BINJ.</p>
-        <form onSubmit={handleSaveProfile} className="flex flex-col gap-4 lg:flex-row lg:gap-4">
-          <label className="flex-1 text-[11px] font-semibold text-text-muted">
-            Display name
+        <form
+          onSubmit={handleSaveProfile}
+          className="overflow-hidden rounded-2xl border border-border-soft bg-surface lg:flex lg:gap-4 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent"
+        >
+          <label className="block border-b border-border-soft px-4.5 py-3.5 lg:flex-1 lg:border-0 lg:px-0 lg:py-0">
+            <span className="block text-[10.5px] font-semibold text-text-muted lg:mb-1.5 lg:text-[11px]">Display name</span>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="mt-1.5 block w-full rounded-[10px] border border-border bg-surface-alt px-3.5 py-2.75 text-[13px] font-medium text-text outline-none focus:border-accent"
+              className="mt-1.5 block w-full bg-transparent text-[13.5px] font-semibold text-text outline-none lg:mt-0 lg:rounded-[10px] lg:border lg:border-border lg:bg-surface-alt lg:px-3.5 lg:py-2.75 lg:text-[13px] lg:font-medium lg:focus:border-accent"
             />
           </label>
-          <label className="flex-1 text-[11px] font-semibold text-text-muted">
-            Username
-            <div className={`mt-1.5 flex items-center gap-1.5 rounded-[10px] border bg-surface-alt px-3.5 py-2.75 ${availability === 'available' ? 'border-accent' : 'border-border'}`}>
-              <span className="text-[13px] text-text-faint">@</span>
+          <label className="block px-4.5 py-3.5 lg:flex-1 lg:px-0 lg:py-0">
+            <span className="block text-[10.5px] font-semibold text-text-muted lg:mb-1.5 lg:text-[11px]">Username</span>
+            <span
+              className={`mt-1.5 flex items-center gap-1.5 lg:mt-0 lg:rounded-[10px] lg:border lg:bg-surface-alt lg:px-3.5 lg:py-2.75 ${availability === 'available' ? 'lg:border-accent' : 'lg:border-border'}`}
+            >
+              <span className="text-[13.5px] text-text-faint lg:text-[13px]">@</span>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="flex-1 bg-transparent text-[13px] font-medium text-text outline-none"
+                className="flex-1 bg-transparent text-[13.5px] font-semibold text-text outline-none lg:text-[13px] lg:font-medium"
               />
-            </div>
+            </span>
           </label>
         </form>
 
-        <div className="mt-2 min-h-4.5">
+        <div className="mt-3 min-h-4.5">
           {availability === 'checking' && <p className="text-[11.5px] text-text-muted">Checking…</p>}
           {availability === 'available' && <p className="text-[11.5px] text-accent">This username is available</p>}
           {availability === 'taken' && (
@@ -265,25 +278,30 @@ export function Settings({ me, onUpdateMe }: Props) {
       <section id="settings-appearance">
         <h2 className="mb-1 text-[15px] font-bold text-text">Appearance</h2>
         <p className="mb-4 text-[11.5px] text-text-muted">Accent colour tints highlights, buttons and links across BINJ.</p>
-        <div className="flex gap-4 overflow-x-auto pb-1">
-          {ACCENT_SWATCHES.map((s) => {
-            const selected = s.key === me.accentTheme
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => handlePickAccent(s.key)}
-                aria-pressed={selected}
-                aria-label={s.label}
-                className="flex flex-none flex-col items-center gap-1.5"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full p-0.75" style={{ border: selected ? `2px solid ${s.hex}` : '2px solid transparent' }}>
-                  <span className="h-full w-full rounded-full" style={{ background: s.hex }} />
-                </span>
-                <span className="text-[10px] font-semibold text-text-secondary">{s.label}</span>
-              </button>
-            )
-          })}
+        {/* Card-wrapped on mobile, matching Privacy/Notifications below (and
+            Settings.dc.html's own Appearance card) — flattens on desktop,
+            matching SettingsDesktop.dc.html's bare swatch row. */}
+        <div className="rounded-2xl border border-border-soft bg-surface p-4 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">
+          <div className="flex gap-4 overflow-x-auto pb-1">
+            {ACCENT_SWATCHES.map((s) => {
+              const selected = s.key === me.accentTheme
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => handlePickAccent(s.key)}
+                  aria-pressed={selected}
+                  aria-label={s.label}
+                  className="flex flex-none flex-col items-center gap-1.5"
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full p-0.75" style={{ border: selected ? `2px solid ${s.hex}` : '2px solid transparent' }}>
+                    <span className="h-full w-full rounded-full" style={{ background: s.hex }} />
+                  </span>
+                  <span className="text-[10px] font-semibold text-text-secondary">{s.label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       </section>
 
@@ -333,11 +351,13 @@ export function Settings({ me, onUpdateMe }: Props) {
       {/* ACCOUNT */}
       <section id="settings-account">
         <h2 className="mb-1 text-[15px] font-bold text-text">Account</h2>
-        <p className="mb-4 text-[11.5px] text-text-muted">{provider ? `Signed in with ${provider === 'GOOGLE' ? 'Google' : provider === 'MICROSOFT' ? 'Microsoft' : provider} as ${me.email}.` : `Signed in as ${me.email}.`}</p>
+        <p className="mb-4 text-[11.5px] text-text-muted">
+          Signed in with {provider === 'GOOGLE' ? 'Google' : provider === 'MICROSOFT' ? 'Microsoft' : 'email'} as {me.email}.
+        </p>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-9 rounded-[10px] border border-border bg-surface-alt px-4.5 py-2.75">
             <span className="text-[12.5px] font-semibold text-text">{me.email}</span>
-            {provider && <span className="text-[10px] font-bold text-text-muted">{provider}</span>}
+            <span className="text-[10px] font-bold text-text-muted">{provider}</span>
           </div>
           <button type="button" onClick={() => void signOutUser()} className="flex items-center gap-2 rounded-[10px] border border-border bg-surface-alt px-4.5 py-2.75 text-[12.5px] font-bold text-red-400">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -361,6 +381,13 @@ export function Settings({ me, onUpdateMe }: Props) {
       <Sidebar active="settings" />
       <main className="min-w-0 flex-1 lg:flex lg:flex-col">
         <AppHeader onSignOut={() => void signOutUser()} />
+        {/* Desktop-only page title — SettingsDesktop.dc.html's own content top
+            bar shows "Settings" here; AppHeader above is the shared
+            search/notifications/avatar bar every page reuses and has no page
+            title of its own, and the mobile header's <h1> is lg:hidden. */}
+        <div className="hidden items-center border-b border-border-soft px-7 py-4.5 lg:flex">
+          <h1 className="text-[18px] font-bold text-text">Settings</h1>
+        </div>
         <div className="lg:flex lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           {/* desktop settings sub-nav — a static section index, not a scroll-spy;
               the mockup never shows any row but Profile as active. */}
