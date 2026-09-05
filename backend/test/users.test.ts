@@ -40,28 +40,63 @@ function sortValue(v: unknown): number {
   return 0;
 }
 
+type Entry = [string, DocData];
+
+function toDocs(entries: Entry[]) {
+  return entries.map(([key, data]) => ({ id: key.split("/").pop()!, data: () => data }));
+}
+
+function orderEntries(entries: Entry[], field: string, dir: "asc" | "desc") {
+  return [...entries].sort((a, b) => {
+    const av = sortValue(a[1][field]);
+    const bv = sortValue(b[1][field]);
+    return dir === "desc" ? bv - av : av - bv;
+  });
+}
+
+function whereEntries(entries: Entry[], field: string, op: string, value: unknown) {
+  return entries.filter(([, data]) => {
+    const v = data[field];
+    if (op === "==") return v === value;
+    if (op === "in") return Array.isArray(value) && (value as unknown[]).includes(v);
+    return true;
+  });
+}
+
+// A minimal chainable query object (where/orderBy/limit/get) over a fixed
+// entry list — used both directly (collectionRef.where) and re-wrapped after
+// each further chain call, mirroring the real Firestore Query builder shape
+// closely enough for what users.service.ts actually calls.
+function makeQuery(entries: Entry[]) {
+  return {
+    get: async () => ({ docs: toDocs(entries) }),
+    where: (field: string, op: string, value: unknown) => makeQuery(whereEntries(entries, field, op, value)),
+    orderBy: (field: string, dir: "asc" | "desc" = "asc") => makeQuery(orderEntries(entries, field, dir)),
+    limit: (n: number) => makeQuery(entries.slice(0, n))
+  };
+}
+
 function makeCollectionRef(path: string) {
-  function ordered(field: string, dir: "asc" | "desc") {
-    return directChildren(path).sort((a, b) => {
-      const av = sortValue(a[1][field]);
-      const bv = sortValue(b[1][field]);
-      return dir === "desc" ? bv - av : av - bv;
-    });
-  }
   return {
     doc: (id: string) => ({ ...makeDocRef(`${path}/${id}`), __path: `${path}/${id}` }),
-    get: async () => ({ docs: directChildren(path).map(([key, data]) => ({ id: key.split("/").pop()!, data: () => data })) }),
-    orderBy: (field: string, dir: "asc" | "desc" = "asc") => ({
-      get: async () => ({ docs: ordered(field, dir).map(([key, data]) => ({ id: key.split("/").pop()!, data: () => data })) }),
-      limit: (n: number) => ({
-        get: async () => ({ docs: ordered(field, dir).slice(0, n).map(([key, data]) => ({ id: key.split("/").pop()!, data: () => data })) })
-      })
-    })
+    ...makeQuery(directChildren(path))
   };
+}
+
+// Firestore's collectionGroup(id) — every doc across the whole store whose
+// immediate parent collection is named `name`, regardless of depth (mirrors
+// movies/{movieId}/reviews/{uid} for users.service.ts's review-count read).
+function makeCollectionGroupRef(name: string) {
+  const entries = [...store.entries()].filter(([key]) => {
+    const segments = key.split("/");
+    return segments[segments.length - 2] === name;
+  }) as Entry[];
+  return makeQuery(entries);
 }
 
 const db = {
   collection: (name: string) => makeCollectionRef(name),
+  collectionGroup: (name: string) => makeCollectionGroupRef(name),
   runTransaction: async (fn: (tx: unknown) => Promise<void>) => {
     const tx = {
       get: async (ref: { get: () => Promise<unknown> }) => ref.get(),
@@ -165,28 +200,48 @@ describe("GET /users/me", () => {
 });
 
 describe("GET /users/username-available", () => {
+  it("401s with no Authorization header", async () => {
+    const app = createApp();
+    const res = await request(app).get("/users/username-available?username=arjun.movies");
+    expect(res.status).toBe(401);
+  });
+
   it("400s on an invalid username", async () => {
     const app = createApp();
-    const res = await request(app).get("/users/username-available?username=a");
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const res = await request(app)
+      .get("/users/username-available?username=a")
+      .set("Authorization", "Bearer good");
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("INVALID_USERNAME");
   });
 
-  it("is unauthenticated — no token required", async () => {
-    const app = createApp();
-    const res = await request(app).get("/users/username-available?username=arjun.movies");
-    expect(res.status).toBe(200);
-  });
-
-  it("reports available:true when unclaimed, false when claimed", async () => {
+  it("reports available:true when unclaimed, false when claimed by someone else", async () => {
     store.set("usernames/taken", { uid: "someone-else" });
     const app = createApp();
 
-    const freeRes = await request(app).get("/users/username-available?username=free");
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const freeRes = await request(app)
+      .get("/users/username-available?username=free")
+      .set("Authorization", "Bearer good");
     expect(freeRes.body.data).toEqual({ available: true });
 
-    const takenRes = await request(app).get("/users/username-available?username=taken");
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const takenRes = await request(app)
+      .get("/users/username-available?username=taken")
+      .set("Authorization", "Bearer good");
     expect(takenRes.body.data).toEqual({ available: false });
+  });
+
+  it("reports available:true for a username the caller already owns", async () => {
+    store.set("usernames/mine", { uid: "uid-1" });
+    const app = createApp();
+
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const res = await request(app)
+      .get("/users/username-available?username=mine")
+      .set("Authorization", "Bearer good");
+    expect(res.body.data).toEqual({ available: true });
   });
 });
 
@@ -270,6 +325,20 @@ describe("PATCH /users/me", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.onboardingComplete).toBe(true);
+  });
+
+  it("updates notificationPrefs (Settings' Email me about activity toggle)", async () => {
+    store.set("users/uid-14", { uid: "uid-14", notificationPrefs: { emailEnabled: true } });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-14", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app)
+      .patch("/users/me")
+      .set("Authorization", "Bearer good")
+      .send({ notificationPrefs: { emailEnabled: false } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.notificationPrefs).toEqual({ emailEnabled: false });
+    expect(store.get("users/uid-14")?.notificationPrefs).toEqual({ emailEnabled: false });
   });
 
   describe("username", () => {
@@ -444,6 +513,22 @@ describe("GET /users/:uid", () => {
     expect(res.body.data.displayName).toBe("Rohan");
   });
 
+  // QA (docs/qa/settings-bugs.md #2): turning off "Show my watched list" also
+  // hid the list from the owner's own profile view, not just other visitors —
+  // the toggle is meant to gate what *other people* see, not the owner.
+  it("still shows the caller their own watched list even when they've turned list-level visibility off", async () => {
+    store.set("users/uid-1", { displayName: "Arjun", listVisible: false });
+    store.set("movies/movie-1", { title: "Interstellar", poster: "/inter.jpg" });
+    store.set("users/uid-1/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-1").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.relationship).toBe("self");
+    expect(res.body.data.watched).toEqual([{ movieId: "movie-1", title: "Interstellar", poster: "/inter.jpg", watchedAt: expect.any(String) }]);
+  });
+
   it("excludes a private-marked entry even though the list is otherwise public", async () => {
     store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
     store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "private" });
@@ -470,5 +555,131 @@ describe("GET /users/:uid", () => {
       { movieId: "movie-2", title: "Inception", poster: "/incep.jpg", watchedAt: "2026-02-01T00:00:00.000Z" },
       { movieId: "movie-1", title: "Interstellar", poster: "/inter.jpg", watchedAt: "2026-01-01T00:00:00.000Z" }
     ]);
+  });
+
+  it("returns joinedAt from the stored createdAt, watchedCount/watchlistCount independent of list-level privacy", async () => {
+    store.set("users/uid-2", {
+      displayName: "Rohan",
+      listVisible: false, // list-level privacy hides the itemized `watched` array, not these aggregate counts
+      createdAt: new Date("2026-06-01T00:00:00.000Z")
+    });
+    store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-2/watched/movie-2", { watchedAt: new Date(), visibility: "private" });
+    store.set("users/uid-2/watchlist/movie-3", { addedAt: new Date() });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-2").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.joinedAt).toBe("2026-06-01T00:00:00.000Z");
+    expect(res.body.data.watchedCount).toBe(2);
+    expect(res.body.data.watchlistCount).toBe(1);
+  });
+
+  it("computes topGenres as the % of watched movies carrying each genre, sorted high to low", async () => {
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    store.set("movies/movie-1", { title: "A", genres: ["Sci-Fi", "Thriller"] });
+    store.set("movies/movie-2", { title: "B", genres: ["Sci-Fi"] });
+    store.set("movies/movie-3", { title: "C", genres: ["Drama"] });
+    store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-2/watched/movie-2", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-2/watched/movie-3", { watchedAt: new Date(), visibility: "public" });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-2").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.topGenres).toEqual([
+      { genre: "Sci-Fi", percent: 67 },
+      { genre: "Drama", percent: 33 },
+      { genre: "Thriller", percent: 33 }
+    ]);
+  });
+
+  it("counts reviews written by the target across movies, ignoring soft-deleted ones", async () => {
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    store.set("movies/movie-1/reviews/uid-2", { rating: 5, deleted: false });
+    store.set("movies/movie-2/reviews/uid-2", { rating: 3, deleted: false });
+    store.set("movies/movie-2/reviews/uid-9", { rating: 2, deleted: false }); // someone else's review — must not count
+    store.set("movies/movie-3/reviews/uid-2", { rating: 4, deleted: true }); // soft-deleted — must not count
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-2").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.reviewCount).toBe(2);
+  });
+
+  it("hides recentActivity (but not the aggregate counts) when the target's list-level visibility is off", async () => {
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: false });
+    store.set("activity/a1", { uid: "uid-2", type: "watched", movieId: "movie-1", createdAt: new Date() });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-2").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.recentActivity).toEqual([]);
+  });
+
+  it("returns recentActivity joined with movie title/poster, most recent first, scoped to the target uid", async () => {
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    store.set("movies/movie-1", { title: "Interstellar", poster: "/inter.jpg" });
+    store.set("movies/movie-2", { title: "Inception", poster: "/incep.jpg" });
+    store.set("activity/a1", { uid: "uid-2", type: "watched", movieId: "movie-1", createdAt: new Date("2026-01-01T00:00:00.000Z") });
+    store.set("activity/a2", { uid: "uid-2", type: "watchlist_added", movieId: "movie-2", createdAt: new Date("2026-02-01T00:00:00.000Z") });
+    store.set("activity/a3", { uid: "someone-else", type: "watched", movieId: "movie-1", createdAt: new Date("2026-03-01T00:00:00.000Z") });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-2").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.recentActivity).toEqual([
+      {
+        activityId: "a2",
+        uid: "uid-2",
+        displayName: "Rohan",
+        type: "watchlist_added",
+        movieId: "movie-2",
+        movieTitle: "Inception",
+        moviePoster: "/incep.jpg",
+        createdAt: "2026-02-01T00:00:00.000Z"
+      },
+      {
+        activityId: "a1",
+        uid: "uid-2",
+        displayName: "Rohan",
+        type: "watched",
+        movieId: "movie-1",
+        movieTitle: "Interstellar",
+        moviePoster: "/inter.jpg",
+        createdAt: "2026-01-01T00:00:00.000Z"
+      }
+    ]);
+  });
+
+  it("returns tasteMatchScore from the caller's own precomputed tasteMatches doc for the target, null when viewing self", async () => {
+    store.set("users/uid-1", { displayName: "Arjun", listVisible: true });
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    store.set("users/uid-1/tasteMatches/uid-2", { score: 87, computedAt: new Date() });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-2").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.tasteMatchScore).toBe(87);
+
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const selfRes = await request(app).get("/users/uid-1").set("Authorization", "Bearer good");
+    expect(selfRes.body.data.tasteMatchScore).toBeNull();
+  });
+
+  it("returns null tasteMatchScore when no score has been precomputed for this pair", async () => {
+    store.set("users/uid-2", { displayName: "Rohan", listVisible: true });
+    verifyIdToken.mockResolvedValueOnce({ uid: "uid-1", email: "x@example.com" });
+    const app = createApp();
+    const res = await request(app).get("/users/uid-2").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.tasteMatchScore).toBeNull();
   });
 });

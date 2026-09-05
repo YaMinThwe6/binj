@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const getNearbyEvents = vi.fn()
 const joinEvent = vi.fn()
@@ -50,9 +51,20 @@ afterEach(() => {
   Object.defineProperty(navigator, 'geolocation', { value: originalGeolocation, configurable: true })
 })
 
+function renderWithRouter() {
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<NearbyEvents />} />
+        <Route path="/rooms/:roomId" element={<p>Room chat page</p>} />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('NearbyEvents', () => {
   it('shows a "Find events near me" button before any location is requested', () => {
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     expect(screen.getByRole('button', { name: /find events near me/i })).toBeInTheDocument()
     expect(getNearbyEvents).not.toHaveBeenCalled()
   })
@@ -68,7 +80,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
 
     await waitFor(() => expect(getNearbyEvents).toHaveBeenCalledWith(12.9716, 77.5946, 25))
@@ -88,7 +100,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
     await screen.findByText('Rooftop Watch Party')
 
@@ -108,16 +120,15 @@ describe('NearbyEvents', () => {
         }
       }
     })
-    const onOpenChat = vi.fn()
 
-    render(<NearbyEvents onOpenChat={onOpenChat} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
     await screen.findByText('Rooftop Watch Party')
 
     fireEvent.click(screen.getByRole('button', { name: /^join$/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^chat$/i }))
 
-    expect(onOpenChat).toHaveBeenCalledWith('room-1')
+    expect(await screen.findByText('Room chat page')).toBeInTheDocument()
   })
 
   it('shows a gentle message, not an error, when location permission is denied', async () => {
@@ -133,7 +144,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
 
     await waitFor(() => expect(screen.getByText(/enable location access/i)).toBeInTheDocument())
@@ -143,7 +154,7 @@ describe('NearbyEvents', () => {
 
   it('shows an error when the browser has no geolocation support at all', () => {
     Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
     expect(screen.getByRole('alert')).toHaveTextContent(/not available/i)
   })
@@ -160,7 +171,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
     await screen.findByText('Rooftop Watch Party')
 
@@ -179,7 +190,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
 
     await waitFor(() => expect(screen.getByTestId('nearby-events-map')).toBeInTheDocument())
@@ -198,7 +209,7 @@ describe('NearbyEvents', () => {
       }
     })
 
-    render(<NearbyEvents onOpenChat={vi.fn()} />)
+    renderWithRouter()
     fireEvent.click(screen.getByRole('button', { name: /find events near me/i }))
 
     await waitFor(() => expect(screen.getByText(/no watch parties nearby/i)).toBeInTheDocument())

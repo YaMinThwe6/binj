@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const getMovieWatchedBy = vi.fn()
 vi.mock('../../../../src/features/movie/services/movieApi', () => ({ getMovieWatchedBy }))
@@ -8,23 +9,34 @@ const { WatchedByFriends } = await import('../../../../src/features/movie/compon
 
 afterEach(() => getMovieWatchedBy.mockReset())
 
+function renderWithRouter(ui: React.ReactElement) {
+  return render(
+    <MemoryRouter initialEntries={['/movie/movie-1']}>
+      <Routes>
+        <Route path="/movie/:movieId" element={ui} />
+        <Route path="/profile/:uid" element={<p>Profile page</p>} />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('WatchedByFriends', () => {
   it('renders nothing while loading', () => {
     getMovieWatchedBy.mockReturnValue(new Promise(() => {})) // never resolves
-    const { container } = render(<WatchedByFriends movieId="movie-1" onOpenProfile={vi.fn()} />)
+    const { container } = renderWithRouter(<WatchedByFriends movieId="movie-1" />)
     expect(container).toBeEmptyDOMElement()
   })
 
   it('renders nothing when there are no qualifying watchers', async () => {
     getMovieWatchedBy.mockResolvedValue({ items: [], nextCursor: null })
-    const { container } = render(<WatchedByFriends movieId="movie-1" onOpenProfile={vi.fn()} />)
+    const { container } = renderWithRouter(<WatchedByFriends movieId="movie-1" />)
     await waitFor(() => expect(getMovieWatchedBy).toHaveBeenCalledWith('movie-1'))
     expect(container).toBeEmptyDOMElement()
   })
 
   it('renders nothing when the request fails', async () => {
     getMovieWatchedBy.mockRejectedValue(new Error('boom'))
-    const { container } = render(<WatchedByFriends movieId="movie-1" onOpenProfile={vi.fn()} />)
+    const { container } = renderWithRouter(<WatchedByFriends movieId="movie-1" />)
     await waitFor(() => expect(getMovieWatchedBy).toHaveBeenCalled())
     expect(container).toBeEmptyDOMElement()
   })
@@ -37,7 +49,7 @@ describe('WatchedByFriends', () => {
       ],
       nextCursor: null
     })
-    render(<WatchedByFriends movieId="movie-1" onOpenProfile={vi.fn()} />)
+    renderWithRouter(<WatchedByFriends movieId="movie-1" />)
 
     await waitFor(() => expect(screen.getByText('Rohan')).toBeInTheDocument())
     expect(screen.getByText('Meera')).toBeInTheDocument()
@@ -48,10 +60,9 @@ describe('WatchedByFriends', () => {
       items: [{ uid: 'u1', displayName: 'Rohan', watchedAt: '2026-01-01T00:00:00.000Z' }],
       nextCursor: null
     })
-    const onOpenProfile = vi.fn()
-    render(<WatchedByFriends movieId="movie-1" onOpenProfile={onOpenProfile} />)
+    renderWithRouter(<WatchedByFriends movieId="movie-1" />)
 
     fireEvent.click(await screen.findByText('Rohan'))
-    expect(onOpenProfile).toHaveBeenCalledWith('u1')
+    expect(await screen.findByText('Profile page')).toBeInTheDocument()
   })
 })

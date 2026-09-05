@@ -17,7 +17,7 @@ export async function getUserProfile(req: Request, res: Response): Promise<void>
 
 export async function checkUsernameAvailable(req: Request, res: Response): Promise<void> {
   const username = String(req.query.username ?? "");
-  const available = await isUsernameAvailable(username);
+  const available = await isUsernameAvailable(username, req.uid);
   Responder.success(res, { available });
 }
 

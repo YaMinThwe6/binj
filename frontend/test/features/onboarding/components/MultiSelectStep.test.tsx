@@ -7,22 +7,26 @@ const options = [
   { value: 'b', label: 'Beta' }
 ]
 
+// OnboardingShell renders its children twice — a mobile copy and a desktop
+// copy, CSS-toggled per breakpoint (same pattern as Welcome.tsx) — so every
+// query here picks [0], same convention used throughout this app's tests
+// wherever a component has its own responsive dual-render.
 describe('MultiSelectStep', () => {
   it('toggles chip selection and passes selected values to onContinue', async () => {
     const onContinue = vi.fn().mockResolvedValue(undefined)
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
 
-    fireEvent.click(screen.getByText('Alpha'))
-    expect(screen.getByText('Alpha')).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getAllByText('Alpha')[0])
+    expect(screen.getAllByText('Alpha')[0]).toHaveAttribute('aria-pressed', 'true')
 
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
     await waitFor(() => expect(onContinue).toHaveBeenCalledWith(['a']))
   })
 
   it('deselects a chip on second click', () => {
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={vi.fn()} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={vi.fn()} />)
 
-    const alpha = screen.getByText('Alpha')
+    const alpha = screen.getAllByText('Alpha')[0]
     fireEvent.click(alpha)
     fireEvent.click(alpha)
     expect(alpha).toHaveAttribute('aria-pressed', 'false')
@@ -30,17 +34,26 @@ describe('MultiSelectStep', () => {
 
   it('calls onSkip without requiring a selection', () => {
     const onSkip = vi.fn()
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={onSkip} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={vi.fn()} onSkip={onSkip} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /skip/i })[0])
     expect(onSkip).toHaveBeenCalled()
+  })
+
+  it('pre-selects chips from initialSelected when the step is revisited', () => {
+    render(
+      <MultiSelectStep step={2} title="T" subtitle="S" options={options} initialSelected={['b']} onContinue={vi.fn()} onSkip={vi.fn()} />
+    )
+
+    expect(screen.getAllByText('Beta')[0]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByText('Alpha')[0]).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('shows an error message when onContinue rejects', async () => {
     const onContinue = vi.fn().mockRejectedValue(new Error('boom'))
-    render(<MultiSelectStep title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
+    render(<MultiSelectStep step={2} title="T" subtitle="S" options={options} onContinue={onContinue} onSkip={vi.fn()} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('boom'))
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
+    await waitFor(() => expect(screen.getAllByRole('alert')[0]).toHaveTextContent('boom'))
   })
 })

@@ -8,7 +8,7 @@ export async function postEvent(req: Request, res: Response): Promise<void> {
 }
 
 export async function getUpcomingEvents(req: Request, res: Response): Promise<void> {
-  const result = await eventsService.listUpcomingEvents(req.query.limit);
+  const result = await eventsService.listUpcomingEvents(req.query.limit, req.query.movieId);
   Responder.success(res, result);
 }
 
@@ -43,7 +43,7 @@ export async function postDenyJoinRequest(req: Request, res: Response): Promise<
 }
 
 export async function getEvent(req: Request, res: Response): Promise<void> {
-  const result = await eventsService.getEvent(req.params.eventId);
+  const result = await eventsService.getEvent(req.params.eventId, req.uid!);
   Responder.success(res, result);
 }
 

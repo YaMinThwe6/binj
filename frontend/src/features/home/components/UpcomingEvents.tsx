@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getUpcomingEvents, joinEvent, type UpcomingEvent } from '../services/homeApi'
+import { posterUrl } from '../../../lib/images'
 
 function formatDate(iso: string | null): string {
   if (!iso) return ''
@@ -8,11 +10,8 @@ function formatDate(iso: string | null): string {
     ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-interface Props {
-  onOpenChat: (roomId: string) => void
-}
-
-export function UpcomingEvents({ onOpenChat }: Props) {
+export function UpcomingEvents() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<UpcomingEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -34,28 +33,72 @@ export function UpcomingEvents({ onOpenChat }: Props) {
     }
   }
 
-  if (loading) return <section className="home-section"><h2>Upcoming watch events</h2><p>Loading…</p></section>
-  if (error) return <section className="home-section"><h2>Upcoming watch events</h2><p role="alert">{error}</p></section>
+  if (loading)
+    return (
+      <section className="px-5">
+        <h2 className="mb-3 text-[15px] font-bold text-text">Upcoming watch events</h2>
+        <p className="text-sm text-text-muted">Loading…</p>
+      </section>
+    )
+  if (error)
+    return (
+      <section className="px-5">
+        <h2 className="mb-3 text-[15px] font-bold text-text">Upcoming watch events</h2>
+        <p role="alert" className="text-sm text-red-400">
+          {error}
+        </p>
+      </section>
+    )
 
   return (
-    <section className="home-section">
-      <h2>Upcoming watch events</h2>
-      {items.length === 0 && <p>No public events coming up yet — be the first to host one.</p>}
-      <ul className="event-list">
+    <section className="px-5">
+      <h2 className="mb-3 text-[15px] font-bold text-text">Upcoming watch events</h2>
+      {items.length === 0 && <p className="text-sm text-text-muted">No public events coming up yet — be the first to host one.</p>}
+      <ul className="flex flex-col gap-3">
         {items.map((event) => {
-          const status = joinStatus[event.eventId];
+          const status = joinStatus[event.eventId]
+          const poster = posterUrl(event.moviePoster)
           return (
-            <li key={event.eventId} className="event-card">
-              <span className={`mode-badge mode-${event.mode}`}>{event.mode === 'online' ? 'Online' : 'In-person'}</span>
-              <div className="event-title">{event.title ?? event.movieTitle ?? 'Watch party'}</div>
-              <div className="event-meta">{formatDate(event.datetime)}</div>
-              <div className="event-meta">{event.participantCount}/{event.participantLimit} going</div>
-              <button type="button" disabled={!!status} onClick={() => handleJoin(event.eventId)}>
-                {status === 'joined' ? 'Joined' : status === 'pending' ? 'Requested' : 'Join'}
-              </button>
-              {status === 'joined' && (
-                <button type="button" onClick={() => onOpenChat(event.roomId)}>Chat</button>
-              )}
+            <li key={event.eventId} className="flex items-center gap-3 rounded-2xl border border-border-soft bg-surface p-3">
+              <div className="h-14 w-14 flex-none overflow-hidden rounded-[10px] bg-surface-alt">
+                {poster && <img src={poster} alt="" className="h-full w-full object-cover" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span
+                  className={
+                    event.mode === 'online'
+                      ? 'inline-block rounded-md bg-[rgba(var(--accent-rgb),0.14)] px-2 py-0.5 text-[9.5px] font-bold text-accent'
+                      : 'inline-block rounded-md bg-[rgba(155,171,196,0.14)] px-2 py-0.5 text-[9.5px] font-bold text-[#9BABC4]'
+                  }
+                >
+                  {event.mode === 'online' ? 'Online' : 'In-person'}
+                </span>
+                <div className="mt-1 truncate text-[13px] font-bold text-text">{event.title ?? event.movieTitle ?? 'Watch party'}</div>
+                <div className="mt-0.5 text-[10.5px] text-text-muted">{formatDate(event.datetime)}</div>
+                {event.mode === 'in-person' && event.location && (
+                  <div className="mt-0.5 text-[10.5px] text-text-muted">
+                    {event.location.area}, {event.location.city}
+                  </div>
+                )}
+                <div className="mt-0.5 text-[10.5px] text-text-muted">
+                  {event.participantCount}/{event.participantLimit} going
+                </div>
+              </div>
+              <div className="flex flex-none flex-col items-end gap-1.5">
+                <button
+                  type="button"
+                  disabled={!!status}
+                  onClick={() => handleJoin(event.eventId)}
+                  className="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-bg disabled:opacity-60"
+                >
+                  {status === 'joined' ? 'Joined' : status === 'pending' ? 'Requested' : 'Join'}
+                </button>
+                {status === 'joined' && (
+                  <button type="button" onClick={() => navigate(`/rooms/${event.roomId}`)} className="text-[11px] font-semibold text-text-muted">
+                    Chat
+                  </button>
+                )}
+              </div>
             </li>
           )
         })}

@@ -123,3 +123,57 @@ describe("GET /home/activity", () => {
     expect(res.body.data.items[0]).toMatchObject({ displayName: "Rohan", type: "watchlist_added", movieTitle: "Dune: Part Two" });
   });
 });
+
+describe("GET /home/friends-recommendations", () => {
+  it("returns an empty list when the caller follows no one", async () => {
+    const app = createApp();
+    const res = await authed(app, "/home/friends-recommendations");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("ranks movies by how many followed people watched them, excluding a stranger's watches", async () => {
+    store.set("users/uid-1/following/uid-2", { createdAt: new Date() });
+    store.set("users/uid-1/following/uid-3", { createdAt: new Date() });
+    store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-3/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-3/watched/movie-2", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-4/watched/movie-2", { watchedAt: new Date(), visibility: "public" }); // uid-4 not followed
+    store.set("movies/movie-1", { title: "Dune: Part Two", poster: "/dune.jpg", year: 2024, genres: ["Sci-Fi"], voteAverage: 8.2 });
+    store.set("movies/movie-2", { title: "Whiplash", poster: "/whiplash.jpg", year: 2014, genres: ["Drama"], voteAverage: 8.5 });
+
+    const app = createApp();
+    const res = await authed(app, "/home/friends-recommendations");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([
+      { movieId: "movie-1", title: "Dune: Part Two", poster: "/dune.jpg", year: 2024, genres: ["Sci-Fi"], voteAverage: 8.2, watchedByCount: 2 },
+      { movieId: "movie-2", title: "Whiplash", poster: "/whiplash.jpg", year: 2014, genres: ["Drama"], voteAverage: 8.5, watchedByCount: 1 }
+    ]);
+  });
+
+  it("excludes movies the caller has already watched or has on their watchlist", async () => {
+    store.set("users/uid-1/following/uid-2", { createdAt: new Date() });
+    store.set("users/uid-1/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-1/watchlist/movie-2", { addedAt: new Date() });
+    store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-2/watched/movie-2", { watchedAt: new Date(), visibility: "public" });
+    store.set("users/uid-2/watched/movie-3", { watchedAt: new Date(), visibility: "public" });
+    store.set("movies/movie-3", { title: "The Prestige", poster: null, year: 2006, genres: ["Mystery"], voteAverage: 8.1 });
+
+    const app = createApp();
+    const res = await authed(app, "/home/friends-recommendations");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.map((i: { movieId: string }) => i.movieId)).toEqual(["movie-3"]);
+  });
+
+  it("skips a followed person's watched entry marked private, same §5a per-entry override the activity feed respects", async () => {
+    store.set("users/uid-1/following/uid-2", { createdAt: new Date() });
+    store.set("users/uid-2/watched/movie-1", { watchedAt: new Date(), visibility: "private" });
+    store.set("movies/movie-1", { title: "Dune: Part Two", poster: "/dune.jpg", year: 2024, genres: ["Sci-Fi"], voteAverage: 8.2 });
+
+    const app = createApp();
+    const res = await authed(app, "/home/friends-recommendations");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+});

@@ -35,3 +35,13 @@
   flex-direction: column;
   gap: 0.5rem;
 }
+
+/* movie-detail-page itself is still unstyled (queued for the Tailwind pass
+   already underway on the other bare screens) — just enough here so the
+   poster doesn't render at its raw 500px-wide size on a narrow viewport. */
+.movie-detail-page .poster {
+  max-width: 220px;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}

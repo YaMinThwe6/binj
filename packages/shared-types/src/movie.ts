@@ -9,6 +9,17 @@ export interface MovieSummary {
   year: number | null
 }
 
+// GET /discover/movies?genre=Horror&language=ko&page=1 — a browse-by-facet
+// listing (not a text search): every movie TMDB has in that genre and/or
+// original language, popularity-ordered, paginated. `page`/`totalPages` drive
+// the frontend's "load more" — there's no opaque cursor, it's literally
+// TMDB's own discover paging passed through.
+export interface DiscoverMoviesResponse {
+  items: MovieSummary[]
+  page: number
+  totalPages: number
+}
+
 export interface CastMember {
   personId: string
   name: string
@@ -32,6 +43,7 @@ export interface StreamingProvider {
 export interface MovieDetail extends MovieSummary {
   runtime: number | null
   genres: string[]
+  originalLanguage: string // ISO 639-1, e.g. "en" — always written by getMovieDetail's full-detail fetch, defaults to "en" if TMDB omits it
   synopsis: string | null
   cast: CastMember[]
   crew: CrewMember[]
@@ -56,6 +68,18 @@ export interface RecommendationItem {
   genres: string[]
   voteAverage: number
   matchScore: number | null
+}
+
+// GET /movies/:movieId/similar item — mockup's "Similar taste picks for you"
+// (movie detail's right rail). Movie-to-movie, not user-to-movie like
+// RecommendationItem above, so no matchScore/genres — just enough to render a
+// poster tile, same minimal shape MovieSummary already establishes plus rating.
+export interface SimilarMovieItem {
+  movieId: string
+  title: string
+  poster: string | null
+  year: number | null
+  voteAverage: number
 }
 
 // GET /onboarding/watched-candidates item — filtered by the genres/languages

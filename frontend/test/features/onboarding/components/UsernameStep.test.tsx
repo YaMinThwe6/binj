@@ -14,6 +14,9 @@ afterEach(() => {
   updateMe.mockReset()
 })
 
+// OnboardingShell renders its children twice — a mobile copy and a desktop
+// copy, CSS-toggled per breakpoint (same pattern as Welcome.tsx) — so every
+// query here picks [0].
 describe('UsernameStep', () => {
   it('loads and shows available suggestions derived from name/email', async () => {
     checkUsernameAvailable.mockImplementation(async (username: string) => ({
@@ -22,8 +25,8 @@ describe('UsernameStep', () => {
 
     render(<UsernameStep initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onDone={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('arjun.kumar')).toBeInTheDocument())
-    expect(screen.getByText('arjunkumar')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('arjun.kumar').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('arjunkumar').length).toBeGreaterThan(0)
     expect(screen.queryByText('arjun_kumar')).not.toBeInTheDocument() // was reported unavailable
   })
 
@@ -31,30 +34,30 @@ describe('UsernameStep', () => {
     checkUsernameAvailable.mockResolvedValue({ available: true })
     render(<UsernameStep initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onDone={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('arjun.kumar')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('arjun.kumar'))
+    await waitFor(() => expect(screen.getAllByText('arjun.kumar').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText('arjun.kumar')[0])
 
-    expect(screen.getByLabelText(/username/i)).toHaveValue('arjun.kumar')
+    expect(screen.getAllByLabelText(/username/i)[0]).toHaveValue('arjun.kumar')
   })
 
   it('debounced-checks a manually typed username and enables Continue once available', async () => {
     checkUsernameAvailable.mockResolvedValue({ available: true })
     render(<UsernameStep initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onDone={vi.fn()} />)
 
-    fireEvent.change(screen.getByLabelText(/^username$/i), { target: { value: 'custom_name' } })
+    fireEvent.change(screen.getAllByLabelText(/^username$/i)[0], { target: { value: 'custom_name' } })
 
-    await waitFor(() => expect(screen.getByText('This username is available')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /continue/i })).not.toBeDisabled()
+    await waitFor(() => expect(screen.getAllByText('This username is available').length).toBeGreaterThan(0))
+    expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled()
   })
 
   it('shows an error and keeps Continue disabled when the username is taken', async () => {
     checkUsernameAvailable.mockResolvedValue({ available: false })
     render(<UsernameStep initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onDone={vi.fn()} />)
 
-    fireEvent.change(screen.getByLabelText(/^username$/i), { target: { value: 'taken_name' } })
+    fireEvent.change(screen.getAllByLabelText(/^username$/i)[0], { target: { value: 'taken_name' } })
 
-    await waitFor(() => expect(screen.getByText('That username is taken')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
+    await waitFor(() => expect(screen.getAllByText('That username is taken').length).toBeGreaterThan(0))
+    expect(screen.getAllByRole('button', { name: /continue/i })[0]).toBeDisabled()
   })
 
   it('submits displayName + username and calls onDone', async () => {
@@ -63,12 +66,30 @@ describe('UsernameStep', () => {
     const onDone = vi.fn()
     render(<UsernameStep initialDisplayName="Arjun Kumar" email="arjun.kumar@gmail.com" onDone={onDone} />)
 
-    fireEvent.change(screen.getByLabelText(/^username$/i), { target: { value: 'custom_name' } })
-    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).not.toBeDisabled())
+    fireEvent.change(screen.getAllByLabelText(/^username$/i)[0], { target: { value: 'custom_name' } })
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /continue/i })[0]).not.toBeDisabled())
 
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
 
     await waitFor(() => expect(onDone).toHaveBeenCalled())
     expect(updateMe).toHaveBeenCalledWith({ displayName: 'Arjun Kumar', username: 'custom_name' })
+    expect(onDone).toHaveBeenCalledWith('Arjun Kumar', 'custom_name')
+  })
+
+  it('pre-fills the username field from initialUsername when the step is revisited', async () => {
+    checkUsernameAvailable.mockResolvedValue({ available: true })
+    render(
+      <UsernameStep
+        initialDisplayName="Arjun Kumar"
+        initialUsername="already_saved"
+        email="arjun.kumar@gmail.com"
+        onDone={vi.fn()}
+      />
+    )
+
+    expect(screen.getAllByLabelText(/^username$/i)[0]).toHaveValue('already_saved')
+    // The pre-filled username is the caller's own — it must resolve as
+    // available (not "taken"), so Continue isn't stuck disabled.
+    await waitFor(() => expect(screen.getAllByText('This username is available').length).toBeGreaterThan(0))
   })
 })

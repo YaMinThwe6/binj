@@ -14,8 +14,8 @@ describe('GenresStep', () => {
     const onDone = vi.fn()
     render(<GenresStep onDone={onDone} />)
 
-    fireEvent.click(screen.getByText('Comedy'))
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    fireEvent.click(screen.getAllByText('Comedy')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith(['Comedy']))
     expect(updateMe).toHaveBeenCalledWith({ favoriteGenres: ['Comedy'] })
@@ -25,7 +25,7 @@ describe('GenresStep', () => {
     const onDone = vi.fn()
     render(<GenresStep onDone={onDone} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /skip/i })[0])
 
     expect(onDone).toHaveBeenCalledWith([])
     expect(updateMe).not.toHaveBeenCalled()

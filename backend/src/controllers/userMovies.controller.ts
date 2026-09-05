@@ -51,6 +51,11 @@ export async function deleteLike(req: Request, res: Response): Promise<void> {
   Responder.noContent(res);
 }
 
+export async function getMovieStatuses(req: Request, res: Response): Promise<void> {
+  const result = await userMoviesService.getMovieStatuses(req.uid!, req.query.ids);
+  Responder.success(res, result);
+}
+
 export async function getMovieStatus(req: Request, res: Response): Promise<void> {
   const status = await userMoviesService.getMovieStatus(req.uid!, req.params.movieId);
   Responder.success(res, status);

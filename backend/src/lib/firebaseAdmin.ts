@@ -9,10 +9,15 @@ let db: Firestore | null = null;
 let auth: Auth | null = null;
 
 if (firebaseConfigured) {
-  const app: App = getApps()[0] ?? initializeApp({
-    credential: cert(env.GOOGLE_APPLICATION_CREDENTIALS as string),
-    projectId: env.FIREBASE_PROJECT_ID
-  });
+  // Local dev supplies a service-account key file via GOOGLE_APPLICATION_CREDENTIALS;
+  // Cloud Run doesn't need one at all — its attached service account already
+  // provides Application Default Credentials, which firebase-admin picks up
+  // automatically when no explicit `credential` is given.
+  const app: App = getApps()[0] ?? initializeApp(
+    env.GOOGLE_APPLICATION_CREDENTIALS
+      ? { credential: cert(env.GOOGLE_APPLICATION_CREDENTIALS), projectId: env.FIREBASE_PROJECT_ID }
+      : { projectId: env.FIREBASE_PROJECT_ID }
+  );
   db = getFirestore(app);
   auth = getAuth(app);
 } else {

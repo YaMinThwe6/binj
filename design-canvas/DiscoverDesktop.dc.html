@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600;6..96,700&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    a { color: #B7B2BF; text-decoration:none; }
+    a:hover { color: #F3F1ED; }
+    ::-webkit-scrollbar { display: none; }
+    .shimmer {
+      background: linear-gradient(90deg, #201E24 0%, #2A2730 50%, #201E24 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</helmet>
+
+<div style="width:1440px; height:960px; background:#0E0D10; font-family:'Manrope',sans-serif; color:#F3F1ED; display:flex; flex-direction:column; overflow:hidden;">
+
+  <!-- top bar — unchanged from the live guest header (MovieSearch.tsx) -->
+  <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid #201E24;">
+    <span style="font-family:'Bodoni Moda',serif; font-size:20px; font-weight:700; color:{{accentHex}};">BINJ</span>
+    <div style="display:flex; align-items:center; gap:20px;">
+      <span style="font-size:13px; font-weight:600; color:#B7B2BF;">Our Story</span>
+      <div style="padding:9px 18px; border-radius:8px; background:{{accentHex}};"><span style="font-size:13px; font-weight:700; color:#0E0D10;">Get Started</span></div>
+    </div>
+  </div>
+
+  <!-- content | right rail -->
+  <div style="flex:1; min-height:0; display:flex; overflow:hidden;">
+
+    <!-- LEFT: existing Discover content, unchanged copy/markup -->
+    <div style="flex:1; min-width:0; overflow-y:auto; padding:28px 32px 40px;">
+      <div style="max-width:720px; margin:0 auto;">
+        <div style="font-family:'Bodoni Moda',serif; font-size:26px; font-weight:600; color:#fff;">Discover movies</div>
+        <div style="margin-top:4px; font-size:13.5px; color:#8B8794;">Search, browse, and see what BINJ&rsquo;s community thinks &mdash; sign in to rate, save, and connect.</div>
+
+        <div style="display:flex; gap:8px; margin-top:20px;">
+          <div style="flex:1; border-radius:12px; border:1px solid #2A2730; background:#17161A; padding:12px 16px; font-size:14px; color:#6E6A78;">Search for a movie&hellip;</div>
+          <div style="border-radius:12px; background:{{accentHex}}; padding:12px 20px; font-size:14px; font-weight:700; color:#0E0D10;">Search</div>
+        </div>
+
+        <div style="margin-top:28px; font-size:15px; font-weight:600; color:#F3F1ED;">Recently released</div>
+        <div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin-top:12px;">
+          <sc-for list="{{movies}}" as="movie" hint-placeholder-count="8">
+            <div style="border-radius:12px; border:1px solid #2A2730; background:#161419; overflow:hidden;">
+              <div style="aspect-ratio:2/3; width:100%; background:{{movie.gradient}};"></div>
+              <div style="padding:10px;">
+                <div style="font-size:13px; font-weight:600; color:#F3F1ED;">{{movie.title}}</div>
+                <div style="margin-top:2px; font-size:11.5px; color:#8B8794;">{{movie.year}}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT RAIL: real signed-in-only content, teased for a guest —
+         same card anatomy as HomeDesktop's right rail, gated instead of
+         removed, so a visitor sees BINJ is already alive with people and
+         events rather than an empty marketing panel. -->
+    <div style="width:320px; flex:0 0 auto; height:100%; overflow-y:auto; border-left:1px solid #201E24; padding:24px 22px 40px; display:flex; flex-direction:column; gap:26px;">
+
+      <!-- People you might vibe with — an honest loading-skeleton state, not
+           fabricated names/percentages: no real matching happens until you
+           have an account, so inventing sample matches here would read as
+           fake social proof. One clear CTA, not a per-row claim. -->
+      <div>
+        <div style="font-size:13.5px; font-weight:700; color:#F3F1ED; margin-bottom:14px;">People you might vibe with</div>
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <sc-for list="{{skeletonRows}}" as="row" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="shimmer" style="width:38px; height:38px; border-radius:50%; flex:0 0 auto;"></div>
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
+                <div class="shimmer" style="width:{{row.w1}}; height:9px; border-radius:5px;"></div>
+                <div class="shimmer" style="width:{{row.w2}}; height:8px; border-radius:5px;"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:16px; text-align:center; padding:11px; border-radius:10px; border:1px solid {{accentHex}};">
+          <span style="font-size:12px; font-weight:700; color:{{accentHex}};">Sign up / sign in to view</span>
+        </div>
+      </div>
+
+      <!-- Upcoming events — real, public info stays visible; joining/details are gated -->
+      <div>
+        <div style="font-size:13.5px; font-weight:700; color:#F3F1ED; margin-bottom:14px;">Upcoming events</div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; gap:12px; padding:12px; border-radius:12px; background:#17161A; border:1px solid #2A2730;">
+            <div style="width:52px; height:52px; border-radius:10px; flex:0 0 auto; background:radial-gradient(140% 100% at 30% 10%, rgba({{accentRgb}},0.28), transparent 60%), linear-gradient(160deg, #23202A 0%, #14121A 100%);"></div>
+            <div style="flex:1; min-width:0;">
+              <span style="display:inline-block; padding:2px 8px; border-radius:6px; background:rgba({{accentRgb}},0.14); font-size:9.5px; font-weight:700; color:{{accentHex}};">Online</span>
+              <div style="font-size:12.5px; font-weight:700; color:#F3F1ED; margin-top:5px;">Interstellar Watch Party</div>
+              <div style="font-size:10.5px; color:#8B8794; margin-top:2px;">Sat, 12 Sep &middot; 8:00 PM</div>
+              <div style="font-size:10.5px; font-weight:700; color:#6E6A78; margin-top:6px;">Sign in to join</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:12px; padding:12px; border-radius:12px; background:#17161A; border:1px solid #2A2730;">
+            <div style="width:52px; height:52px; border-radius:10px; flex:0 0 auto; background:linear-gradient(160deg, #201C26 0%, #121016 100%);"></div>
+            <div style="flex:1; min-width:0;">
+              <span style="display:inline-block; padding:2px 8px; border-radius:6px; background:rgba(155,171,196,0.14); font-size:9.5px; font-weight:700; color:#9BABC4;">In-person</span>
+              <div style="font-size:12.5px; font-weight:700; color:#F3F1ED; margin-top:5px;">LOTR Trilogy Marathon</div>
+              <div style="font-size:10.5px; color:#8B8794; margin-top:2px;">Sun, 13 Sep &middot; Bandra West, Mumbai</div>
+              <div style="font-size:10.5px; font-weight:700; color:#6E6A78; margin-top:6px;">Sign in to join</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "accent":{"editor":"enum","default":"emerald","options":["emerald","cyan","purple","pink","amber","red"],"section":"Theme"}
+}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      emerald: { hex: '#00C896', rgb: '0,200,150' },
+      cyan:    { hex: '#00E5FF', rgb: '0,229,255' },
+      purple:  { hex: '#A855F7', rgb: '168,85,247' },
+      pink:    { hex: '#FF7AC2', rgb: '255,122,194' },
+      amber:   { hex: '#FFB020', rgb: '255,176,32' },
+      red:     { hex: '#FF385C', rgb: '255,56,92' }
+    };
+    const t = themes[this.props.accent] || themes.emerald;
+    return {
+      accentHex: t.hex,
+      accentRgb: t.rgb,
+      skeletonRows: [
+        { w1: '68%', w2: '42%' },
+        { w1: '55%', w2: '48%' },
+        { w1: '72%', w2: '38%' }
+      ],
+      movies: [
+        { title: "Dune: Part Two", year: "2024", gradient: "linear-gradient(160deg, #3a3244, #17161a)" },
+        { title: "Interstellar", year: "2014", gradient: "linear-gradient(160deg, #2b3a44, #17161a)" },
+        { title: "Spider-Man: Brand New Day", year: "2026", gradient: "linear-gradient(160deg, #442b2b, #17161a)" },
+        { title: "Vishwanath &amp; Sons", year: "2026", gradient: "linear-gradient(160deg, #2f4438, #17161a)" },
+        { title: "Mutiny", year: "2026", gradient: "linear-gradient(160deg, #3a3a2b, #17161a)" },
+        { title: "Toxic: A Fairy Tale for Grown-ups", year: "2026", gradient: "linear-gradient(160deg, #44302b, #17161a)" },
+        { title: "The End of Oak Street", year: "2026", gradient: "linear-gradient(160deg, #2b3944, #17161a)" },
+        { title: "Insidious: Out of the Further", year: "2026", gradient: "linear-gradient(160deg, #2b2f44, #17161a)" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

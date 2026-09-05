@@ -26,6 +26,19 @@ Triggers the cache → Firestore → TMDB fallback chain server-side (§2); stre
 
 **Implementation note (added once this was actually built):** `binjRating`/`likeCount` are normalized in the response to `{sum:0,count:0}`/`0` when absent from storage (a movie nobody's rated or liked yet has no reason to have those fields actually written) — the client never has to special-case "missing" vs. "zero". `isAdult` from the original sketch above isn't currently returned (it's fetched from TMDB and stored, just not surfaced in the response yet — no feature depends on it client-side).
 
+```
+GET /movies/recent   → 200 { items: [{ movieId, title, poster, year }] }
+```
+Powers the public Discover page's default "recently released" section — the browse-without-a-query view shown below the search bar. TMDB's `now_playing` list (theatrical releases currently in cinemas), region-scoped to the same hardcoded India region as §8's streaming availability. Unauthenticated, same as `GET /search/movies`. 502 `TMDB_UPSTREAM_ERROR` on failure, matching search's own error shape.
+
+```
+GET /discover/movies?genre=:name&language=:code&page=:n
+→ 200 { items: [{ movieId, title, poster, year }], page, totalPages }
+```
+Browse-by-facet listing (added for the Search page's "Browse Korean films" / "Browse Horror movies" chip) — distinct from `GET /search/movies` in §7, which is text-relevance ranked; this is "every movie in this genre and/or original language, popularity-ordered." At least one of `genre` (a TMDB genre name, e.g. `Horror`) or `language` (ISO 639-1, e.g. `ko`) is required — 400 `MISSING_FILTER` if neither is a recognized value. `page` is 1-based and passed straight through to TMDB's own `/discover/movie` paging (`totalPages` bounds the frontend's "load more"; both capped at TMDB's page-500 limit). Unauthenticated, same as search. Every page's results are upserted into the local search index (`titleSearchTerms`) so a tapped card opens from Firestore rather than a cold TMDB fetch. 502 `TMDB_UPSTREAM_ERROR` on upstream failure.
+
+**Implementation note (caching, added once this was actually built):** reads `discover/recentMovies` (schema.md §1) instead of hitting TMDB live on every request — refreshed periodically by `backend/scripts/refreshRecentMovies.ts` (`pnpm --filter binj-backend run refresh-recent-movies`), run manually for now rather than on a real Cloud Scheduler trigger, same shortcut hld.md §5b already uses for taste matches. Falls back to a live TMDB call when the cache doc doesn't exist yet (before the script has ever run) or Firestore isn't configured, so the endpoint still works either way. The same script also indexes each recent title for §7's search (`titleSearchTerms`), so a just-released movie is searchable immediately, not only listed here.
+
 ## 2. Watchlist & Watched (§3, §5a) 🔒
 
 ```
@@ -62,6 +75,12 @@ GET  /users/me/movies/:movieId 🔒           → 200 { watchlisted, watched, li
                                               // NOT in the original sketch above — added so Movie Detail's action
                                               // bar and "write vs. edit review" can render in one request instead
                                               // of four (backend/src/routes/userMovies.ts)
+
+GET  /users/me/movies/status?ids=a,b,c 🔒   → 200 { items: { [movieId]: { watchlisted, watched, liked } } }
+                                              // batch form of the above (no review payload) — one request for a
+                                              // whole result set (search cards, the discover grid) instead of one
+                                              // per card. ids deduped, capped at 60/request; an id with no
+                                              // relationship is still present in the map, all-false.
 
 POST /movies/:movieId/reviews/:authorId/dispute 🔒
                                               body: { reason } → 201 { disputeId, status: "pending" }
@@ -122,12 +141,20 @@ GET /recommendations                       → 200 { items: [{ movieId, title, p
 
 **Implementation note:** `matchScore` (0-100, "Top picks for you"'s % badge) is a heuristic, not a learned model — 70% weight on how much of the caller's preferred-genre set a candidate covers, 30% weight on its own TMDB rating. It's `null` for the trending/cold-start fallback, which has no preference to score against — the frontend shows the rating alone in that case, no "% match" badge.
 
+```
+GET /movies/:movieId/similar                → 200 { items: [{ movieId, title, poster, year, voteAverage }] }
+                                              // movie-to-movie, not user-to-movie — no auth, no matchScore
+```
+
+**Implementation note (added once this was actually built, 2026-09-04):** "Similar taste picks for you" — movie detail's right rail (mockup-driven, no prior hld.md flow, same footing as §7b's Home additions). A sibling to `GET /recommendations` above, not a variant of it: same array-contains-any-on-genres query, just keyed off the movie being viewed rather than the caller's watch history, and with no `matchScore` since there's no user preference here to score against. Public, unauthenticated, same as `GET /movies/:movieId` itself. 404 `MOVIE_NOT_FOUND` for a nonexistent movie; `items: []` for a movie with no genres on record (nothing to match against — not treated as an error). Live in `backend/src/services/recommendations.service.ts` (`getSimilarMovies`), routed from `recommendations.route.ts` rather than `movies.route.ts` purely to avoid a concurrent-edit collision with that file during the session that built this (see git history around 2026-09-04) — grouped by feature either way, same reasoning §5's `watchedBy`/`tasteMatches` endpoints already use for living apart from their literal URL prefix.
+
 ## 7. Search (§18)
 
 ```
 GET /search/movies?q=:query                → 200 { items: [{ movieId, title, poster, year }], nextCursor }
-                                              // hits Vertex AI Search index only, never TMDB live
 ```
+
+**Implementation note (added once this was actually built — the original sketch above assumed Vertex AI Search, which was never built; see hld.md §18's own implementation note for the full picture, redesigned 2026-08-31):** the local Firestore search index — a `titleSearchTerms` field, computed once per movie at write time, unioning real title-word prefixes with precomputed single-typo variants (`backend/src/lib/searchIndex.ts`) — and live TMDB are now queried **together on every search**, not as a cascade where TMDB is only a last resort. Results are merged into one pool, deduplicated by `movieId` (TMDB's fresher data wins over a stale local doc for the same movie), and ranked as one set: `backend/src/lib/searchRanking.ts` classifies every candidate into a match-type tier (exact > alias > prefix > token > single-typo > deeper-fuzzy) and scores within that tier — exact/prefix matches always outrank fuzzy ones, and popularity only ever breaks a tie between equally-relevant results, never overrides a stronger textual match. A TMDB failure degrades to local-only results rather than failing the whole request, as long as the local index has a match. TMDB results still get written back into the local index either way, so the same query resolves more from the local side over time. `nextCursor` is always `null` — pagination was never built for this endpoint, the merged ranked result set is capped at 20 in one response.
 
 ## 7b. Home 🔒
 
@@ -135,9 +162,13 @@ GET /search/movies?q=:query                → 200 { items: [{ movieId, title, p
 GET /home/greeting                         → 200 { quote, attribution, source: "watched" | "random" }
 GET /home/activity                         → 200 { items: [{ activityId, uid, displayName, type, movieId,
                                                               movieTitle, moviePoster, createdAt }] }
+GET /home/friends-recommendations           → 200 { items: [{ movieId, title, poster, year, genres,
+                                                              voteAverage, watchedByCount }] }
 ```
 
 **Implementation note (mockup-driven, no prior hld.md flow):** `/home/greeting` is hld.md §6/§13's movie-dialogue greeting — a small curated quote set (`backend/src/data/movieQuotes.ts`, tagged by real TMDB movie id) prefers a match against the caller's watched list (`source: "watched"`) and falls back to a random pick otherwise (`source: "random"`), which is exactly the "first Home visit is already personalized" behavior §13 called for. `/home/activity` is "Friends are watching" — same fan-out shape as §5a (bounded by the caller's own `following` list, never a global feed), reading a new top-level `activity/{activityId}` collection (schema.md) that `watchlist`/`watched` writes append to (skipped for a `watched` entry marked `visibility: "private"`, respecting §5a's per-entry override). Types are currently `"watched"` and `"watchlist_added"` — `"rated"`/`"reviewed"` join once Reviews (§20) exists.
+
+**Implementation note (added once `/home/friends-recommendations` was actually built, 2026-09-04):** "Because your friends watched these" — HomeDesktop's right rail, under `PeopleYouMightVibeWith`. Unlike §6's Recommendations, this has **no trending/cold-start fallback**: a caller who follows no one gets `items: []`, full stop, and the frontend hides the section entirely rather than showing a generic feed — it only makes sense once there's an actual social signal, the same "gate, don't fabricate" choice §5b's taste matches made. Ranking source is followed people's complete `watched` history (not the `activity` log above, which is capped to the most recent entries and built for a feed, not a ranking corpus) — `watchedByCount` is how many of the caller's followed people watched a title, movies the caller has already watched or watchlisted excluded. Respects §5a's per-entry `visibility: "private"` override exactly like `/home/activity` does, even though nothing here is attributed to a name. Live in `backend/src/services/home.service.ts` (`getFriendsRecommendations`).
 
 ## 8. Events (§7, §9) 🔒 unless noted
 
@@ -149,10 +180,11 @@ POST   /events                             body: { movieId, title?, datetime, mo
                                               // host auto-joins; a rooms/{roomId} doc is created alongside so §16's
                                               // chat has something real to attach to later, even though the chat
                                               // UI itself isn't built yet
-GET    /events/upcoming                    query: { limit? } → 200 { items: [{ ...event fields, movieTitle, moviePoster }] }
+GET    /events/upcoming                    query: { limit?, movieId? } → 200 { items: [{ ...event fields, movieTitle, moviePoster }] }
                                               // public + future only, sorted by datetime asc — powers Home's
-                                              // "Upcoming watch events". Not yet personalized (invited/joined-only
-                                              // browsing, §9 nearby, and a movieId-scoped variant are still planned)
+                                              // "Upcoming watch events"; movieId narrows to one movie's events —
+                                              // movie detail's "Watch together" right rail (added 2026-09-04).
+                                              // Not yet personalized — invited/joined-only browsing is still planned
 
 PUT    /events/:eventId/join               → 200 { status: "joined" | "pending" }
                                               // branches on the event's own requiresApproval, re-checked server-side;

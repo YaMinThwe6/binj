@@ -1,0 +1,36 @@
+# Cloud Run image for the backend — build context is the repo root (a pnpm
+# workspace: the backend depends on packages/shared-types). Keep this in sync
+# with .gitignore's spirit: never bake node_modules, local env files, or dev
+# artifacts into the image — deps get installed fresh in the Docker build,
+# and Cloud Run env vars/secrets are injected at deploy time, not from a
+# committed or copied .env.
+
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+
+.env
+.env.local
+**/.env
+**/.env.local
+
+.git
+.github
+
+.firebase
+firebase-debug.log
+firestore-debug.log
+
+# Frontend isn't part of the backend's image at all (separate deploy target:
+# Firebase Hosting, see firebase.json) — excluding it keeps the build context
+# small and avoids invalidating Docker's layer cache on frontend-only changes.
+frontend
+
+# Design references, docs, QA notes — not needed to run the server.
+design-canvas
+docs
+
+.vscode
+*.log

@@ -14,8 +14,8 @@ describe('LanguageStep', () => {
     const onDone = vi.fn()
     render(<LanguageStep onDone={onDone} />)
 
-    fireEvent.click(screen.getByText('Korean'))
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    fireEvent.click(screen.getAllByText('Korean')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /continue/i })[0])
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith(['ko']))
     expect(updateMe).toHaveBeenCalledWith({ preferredLanguages: ['ko'] })
@@ -25,7 +25,7 @@ describe('LanguageStep', () => {
     const onDone = vi.fn()
     render(<LanguageStep onDone={onDone} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /skip/i })[0])
 
     expect(onDone).toHaveBeenCalledWith([])
     expect(updateMe).not.toHaveBeenCalled()

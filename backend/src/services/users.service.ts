@@ -1,8 +1,8 @@
-import type { UserProfile, PublicProfile } from "@binj/shared-types";
+import type { UserProfile, PublicProfile, ProfileGenreStat, ActivityItem } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { AppError } from "../utils/AppError.js";
 
-const USERNAME_RE = /^[a-z0-9._]{3,20}$/;
+const USERNAME_RE = /^[a-z0-9._]{3,30}$/;
 
 interface UserDoc {
   uid: string;
@@ -82,15 +82,22 @@ export async function getOrCreateUser(uid: string, claims: Claims): Promise<User
 // GET /users/username-available — api-contracts.md §11. Unauthenticated: needed
 // before an account necessarily exists to attach a reservation to (checked live
 // during onboarding step 3, before the PATCH that actually claims it).
-export async function isUsernameAvailable(rawUsername: string): Promise<boolean> {
+// `callerUid` mirrors the exclusion updateUser's own claim transaction
+// already applies (a reservation owned by the caller isn't "taken") — this
+// pre-submit check used to have no notion of the caller at all, so it wrongly
+// reported someone's own already-saved username as taken the moment they
+// revisited this step (Continue stayed disabled even though re-submitting
+// the same username would actually have succeeded).
+export async function isUsernameAvailable(rawUsername: string, callerUid?: string): Promise<boolean> {
   const username = rawUsername.trim().toLowerCase();
   if (!USERNAME_RE.test(username)) {
-    throw new AppError("INVALID_USERNAME", "Username must be 3-20 characters: lowercase letters, numbers, dots, underscores", 400);
+    throw new AppError("INVALID_USERNAME", "Username must be 3-30 characters: lowercase letters, numbers, dots, underscores", 400);
   }
 
   const db = requireDb();
   const snap = await db.collection("usernames").doc(username).get();
-  return !snap.exists;
+  if (!snap.exists) return true;
+  return callerUid !== undefined && snap.data()?.uid === callerUid;
 }
 
 const SIMPLE_PATCHABLE_FIELDS = [
@@ -101,7 +108,12 @@ const SIMPLE_PATCHABLE_FIELDS = [
   "preferredLanguages",
   "onboardingComplete",
   "themePreference",
-  "accentTheme"
+  "accentTheme",
+  // Settings' "Email me about activity" toggle (frontend/src/features/settings) —
+  // notificationPrefs existed on UserProfile/UserDoc since onboarding, but PATCH
+  // never accepted it. Same plain pass-through as every other field here; no
+  // sub-field validation, same as e.g. favoriteGenres/preferredLanguages above.
+  "notificationPrefs"
 ] as const;
 
 // PATCH /users/me — api-contracts.md §11. `username` is handled separately from
@@ -122,7 +134,7 @@ export async function updateUser(uid: string, claims: Claims, body: Record<strin
   if (wantsUsername) {
     newUsername = String(body.username ?? "").trim().toLowerCase();
     if (!USERNAME_RE.test(newUsername)) {
-      throw new AppError("INVALID_USERNAME", "Username must be 3-20 characters: lowercase letters, numbers, dots, underscores", 400);
+      throw new AppError("INVALID_USERNAME", "Username must be 3-30 characters: lowercase letters, numbers, dots, underscores", 400);
     }
   }
 
@@ -167,10 +179,94 @@ function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null 
 
 // Preview cap for the watched list shown on a public profile — not a
 // paginated list (that's GET /users/me/watched for the owner's own view),
-// just enough for a "recently watched" section. Fetched unlimited-then-
-// filtered-then-sliced (not a Firestore .limit()) so a mostly-private list
-// doesn't undercount the public entries that actually exist.
+// just enough for a "recently watched" section. Sliced client-side (not a
+// Firestore .limit()) so a mostly-private list doesn't undercount the public
+// entries that actually exist — the full unfiltered fetch is shared with the
+// aggregate stats below (watchedCount/topGenres), which need every entry
+// regardless of per-item visibility anyway.
 const PROFILE_WATCHED_PREVIEW = 12;
+const PROFILE_ACTIVITY_LIMIT = 6;
+const PROFILE_TOP_GENRES = 5;
+
+function toMillis(value: FirebaseFirestore.Timestamp | Date | null | undefined): number {
+  if (!value) return 0;
+  return value instanceof Date ? value.getTime() : value.toDate().getTime();
+}
+
+// Overview tab's "Favorite Genres" bars — % of the target's watched movies
+// that carry each genre (computed from the movie catalog, not the manually-
+// picked `favoriteGenres` onboarding list). A movie can carry more than one
+// genre, so percentages don't sum to 100. Ties broken alphabetically for a
+// deterministic order. Scales with the target's watched-list size (one read
+// per movie, same join pattern the existing preview above already used) —
+// fine at this app's current scale, worth revisiting with a denormalized
+// genre-count field on the user doc if watched lists get large.
+async function computeTopGenres(
+  db: FirebaseFirestore.Firestore,
+  watchedDocs: FirebaseFirestore.QueryDocumentSnapshot[]
+): Promise<ProfileGenreStat[]> {
+  if (watchedDocs.length === 0) return [];
+  const movieSnaps = await Promise.all(watchedDocs.map((d) => db.collection("movies").doc(d.id).get()));
+  const counts = new Map<string, number>();
+  for (const snap of movieSnaps) {
+    const genres = (snap.data()?.genres as string[] | undefined) ?? [];
+    for (const genre of genres) {
+      counts.set(genre, (counts.get(genre) ?? 0) + 1);
+    }
+  }
+  const total = watchedDocs.length;
+  return [...counts.entries()]
+    .map(([genre, count]) => ({ genre, percent: Math.round((count / total) * 100) }))
+    .sort((a, b) => b.percent - a.percent || a.genre.localeCompare(b.genre))
+    .slice(0, PROFILE_TOP_GENRES);
+}
+
+// Reviews have no per-user list of their own (they live at
+// movies/{movieId}/reviews/{uid} — reviews.service.ts), so counting a user's
+// reviews means scanning every "reviews" subcollection in the store via a
+// collectionGroup query and matching on doc id (== uid) client-side, since
+// review docs don't carry a separate authorId field to filter on server-side.
+// Bounded by the app's total review volume, not the target's own — fine at
+// this app's current scale, same tradeoff noted on computeTopGenres above.
+async function getReviewCount(db: FirebaseFirestore.Firestore, targetUid: string): Promise<number> {
+  const snap = await db.collectionGroup("reviews").get();
+  return snap.docs.filter((d) => d.id === targetUid && d.data().deleted !== true).length;
+}
+
+// Overview tab's "Recent Activity" — reuses home.service.ts's own `activity`
+// collection (written by userMovies.service.ts's watched/watchlist writes),
+// just scoped to one uid instead of home's `following`-list fan-out. Gated
+// by the same watchedListVisible flag as the `watched` preview above (the
+// mockup's "private" scenario hides this section but not the stat counts).
+async function getRecentActivity(db: FirebaseFirestore.Firestore, targetUid: string, displayName: string): Promise<ActivityItem[]> {
+  const snap = await db.collection("activity").where("uid", "==", targetUid).orderBy("createdAt", "desc").limit(PROFILE_ACTIVITY_LIMIT).get();
+  return Promise.all(
+    snap.docs.map(async (d): Promise<ActivityItem> => {
+      const data = d.data();
+      const movieSnap = await db.collection("movies").doc(data.movieId).get();
+      return {
+        activityId: d.id,
+        uid: targetUid,
+        displayName,
+        type: data.type,
+        movieId: data.movieId,
+        movieTitle: movieSnap.data()?.title ?? null,
+        moviePoster: movieSnap.data()?.poster ?? null,
+        createdAt: toIso(data.createdAt ?? null)
+      };
+    })
+  );
+}
+
+// "Taste Match with you" card — reads the caller's own precomputed match
+// score for this target, the same users/{uid}/tasteMatches/{otherUid} docs
+// GET /users/me/tasteMatches (people.service.ts) reads; not recomputed here.
+// null on your own profile, or when this pair hasn't been scored yet.
+async function getTasteMatchScore(db: FirebaseFirestore.Firestore, callerUid: string, targetUid: string): Promise<number | null> {
+  if (callerUid === targetUid) return null;
+  const snap = await db.collection("users").doc(callerUid).collection("tasteMatches").doc(targetUid).get();
+  return snap.exists ? ((snap.data()?.score as number) ?? null) : null;
+}
 
 // GET /users/:uid — api-contracts.md §11b, hld.md §5a/§8. The public-facing
 // counterpart to GET /users/me: same privacy rules as getMovieWatchedBy
@@ -185,9 +281,11 @@ export async function getPublicProfile(callerUid: string, targetUid: string): Pr
   }
   const target = targetSnap.data() as UserDoc;
 
-  const [followersSnap, followingSnap] = await Promise.all([
+  const [followersSnap, followingSnap, allWatchedSnap, watchlistSnap] = await Promise.all([
     targetRef.collection("followers").get(),
-    targetRef.collection("following").get()
+    targetRef.collection("following").get(),
+    targetRef.collection("watched").get(),
+    targetRef.collection("watchlist").get()
   ]);
 
   let relationship: PublicProfile["relationship"];
@@ -201,25 +299,42 @@ export async function getPublicProfile(callerUid: string, targetUid: string): Pr
     relationship = followingCallerSnap.exists ? "following" : requestSnap.exists ? "pending" : "none";
   }
 
+  // watchedListVisible reports the setting as-is (whether OTHERS can see this
+  // list) — it stays false when the owner has turned it off, since that's a
+  // real fact the frontend may want to show them (e.g. "this is currently
+  // hidden from others"). It's just not what gates the actual data below:
+  // the owner viewing their own profile always sees their own watched list
+  // regardless (QA docs/qa/settings-bugs.md #2 — this toggle hides your list
+  // from other visitors, not from you).
   const watchedListVisible = target.listVisible === true;
+  const isSelf = targetUid === callerUid;
+  const watchedDocsByRecency = [...allWatchedSnap.docs].sort((a, b) => toMillis(b.data().watchedAt) - toMillis(a.data().watchedAt));
+
   let watched: PublicProfile["watched"] = [];
-  if (watchedListVisible) {
-    const watchedSnap = await targetRef.collection("watched").orderBy("watchedAt", "desc").get();
-    const publicEntries = watchedSnap.docs
-      .filter((d) => d.data().visibility !== "private")
-      .slice(0, PROFILE_WATCHED_PREVIEW);
-    watched = await Promise.all(
-      publicEntries.map(async (d) => {
-        const movieSnap = await db.collection("movies").doc(d.id).get();
-        return {
-          movieId: d.id,
-          title: movieSnap.data()?.title ?? null,
-          poster: movieSnap.data()?.poster ?? null,
-          watchedAt: toIso(d.data().watchedAt ?? null)
-        };
-      })
-    );
+  let recentActivity: ActivityItem[] = [];
+  if (watchedListVisible || isSelf) {
+    const publicEntries = watchedDocsByRecency.filter((d) => d.data().visibility !== "private").slice(0, PROFILE_WATCHED_PREVIEW);
+    [watched, recentActivity] = await Promise.all([
+      Promise.all(
+        publicEntries.map(async (d) => {
+          const movieSnap = await db.collection("movies").doc(d.id).get();
+          return {
+            movieId: d.id,
+            title: movieSnap.data()?.title ?? null,
+            poster: movieSnap.data()?.poster ?? null,
+            watchedAt: toIso(d.data().watchedAt ?? null)
+          };
+        })
+      ),
+      getRecentActivity(db, targetUid, target.displayName)
+    ]);
   }
+
+  const [topGenres, reviewCount, tasteMatchScore] = await Promise.all([
+    computeTopGenres(db, allWatchedSnap.docs),
+    getReviewCount(db, targetUid),
+    getTasteMatchScore(db, callerUid, targetUid)
+  ]);
 
   return {
     uid: targetUid,
@@ -232,6 +347,13 @@ export async function getPublicProfile(callerUid: string, targetUid: string): Pr
     followingCount: followingSnap.docs.length,
     relationship,
     watchedListVisible,
-    watched
+    watched,
+    joinedAt: toIso(target.createdAt ?? null),
+    watchedCount: allWatchedSnap.docs.length,
+    watchlistCount: watchlistSnap.docs.length,
+    reviewCount,
+    topGenres,
+    recentActivity,
+    tasteMatchScore
   };
 }

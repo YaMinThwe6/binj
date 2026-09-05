@@ -18,7 +18,7 @@ describe('generateUsernameSuggestions', () => {
   it('lowercases and strips characters outside the allowed set', () => {
     const result = generateUsernameSuggestions("O'Brien Smith", 'obrien+test@example.com')
     for (const candidate of result) {
-      expect(candidate).toMatch(/^[a-z0-9._]{3,20}$/)
+      expect(candidate).toMatch(/^[a-z0-9._]{3,30}$/)
     }
   })
 

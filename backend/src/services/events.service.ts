@@ -42,7 +42,23 @@ function isValidLatLng(location: unknown): location is { lat: number; lng: numbe
   return typeof lat === "number" && typeof lng === "number" && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
-function toEventSummary(id: string, data: FirebaseFirestore.DocumentData): EventSummary {
+// A host provides area + city (always shown) and exact coordinates (shown
+// only once someone's joined, see toEventSummary) as one location input —
+// all four required together for an in-person event.
+function isValidLocationInput(location: unknown): location is { area: string; city: string; lat: number; lng: number } {
+  if (typeof location !== "object" || location === null) return false;
+  const { area, city } = location as { area?: unknown; city?: unknown };
+  return typeof area === "string" && area.trim().length > 0 && typeof city === "string" && city.trim().length > 0 && isValidLatLng(location);
+}
+
+// `canSeePrecise` gates `preciseLocation` (exact lat/lng) separately from
+// `location` (area/city) — area/city is always safe to show a stranger
+// browsing events; the exact meeting spot is only revealed to the host or
+// someone who has actually joined. Callers decide `canSeePrecise` per
+// endpoint (see each call site below) — never trust a client-supplied flag.
+function toEventSummary(id: string, data: FirebaseFirestore.DocumentData, canSeePrecise: boolean): EventSummary {
+  const rawLocation = data.location as { area?: unknown; city?: unknown; lat?: unknown; lng?: unknown } | null | undefined;
+  const hasLocation = typeof rawLocation === "object" && rawLocation !== null;
   return {
     eventId: id,
     hostId: data.hostId,
@@ -50,7 +66,8 @@ function toEventSummary(id: string, data: FirebaseFirestore.DocumentData): Event
     title: data.title ?? null,
     datetime: toIso(data.datetime),
     mode: data.mode,
-    location: data.location ?? null,
+    location: hasLocation ? { area: rawLocation.area as string, city: rawLocation.city as string } : null,
+    preciseLocation: hasLocation && canSeePrecise && isValidLatLng(rawLocation) ? { lat: (rawLocation as { lat: number }).lat, lng: (rawLocation as { lng: number }).lng } : null,
     visibility: data.visibility,
     joinCode: data.joinCode ?? null, // private events only — the host needs this back to share it (hld.md §7)
     participantLimit: data.participantLimit,
@@ -104,11 +121,24 @@ export async function createEvent(hostId: string, body: CreateEventInput, option
     throw new AppError("INVALID_EVENT", "datetime must be a valid date", 400);
   }
 
+  // In-person events need somewhere to meet; online events have nowhere to
+  // put one (and any location sent for one is just ignored below).
+  if (mode === "in-person" && !isValidLocationInput(body.location)) {
+    throw new AppError("INVALID_EVENT", "location with area, city, lat, lng is required for in-person events", 400);
+  }
+
   const db = requireDb();
   const movieSnap = await db.collection("movies").doc(movieId).get();
   if (!movieSnap.exists) {
     throw new AppError("MOVIE_NOT_FOUND", "No such movie", 404);
   }
+
+  // Validated above for in-person; online events store no location at all,
+  // regardless of what a client sent — there's nowhere for it to point.
+  const location =
+    mode === "in-person" && isValidLocationInput(body.location)
+      ? { area: body.location.area.trim(), city: body.location.city.trim(), lat: body.location.lat, lng: body.location.lng }
+      : null;
 
   const eventRef = db.collection("events").doc();
   const roomRef = options.existingRoomId ? db.collection("rooms").doc(options.existingRoomId) : db.collection("rooms").doc();
@@ -121,13 +151,12 @@ export async function createEvent(hostId: string, body: CreateEventInput, option
     title: typeof body.title === "string" && body.title.trim() ? body.title.trim() : null,
     datetime: parsedDatetime,
     mode,
-    location: body.location ?? null,
+    location,
     // hld.md §9 — geohash powers /events/nearby's prefix-range query. Only
-    // meaningful for in-person events with a real lat/lng; online events (and
-    // in-person events without a resolved location yet) simply aren't
-    // discoverable by location, same as they're already absent from any
-    // radius search a client might run.
-    geohash: isValidLatLng(body.location) ? encodeGeohash(body.location.lat, body.location.lng, GEOHASH_STORAGE_PRECISION) : null,
+    // meaningful for in-person events with a real lat/lng; online events
+    // simply aren't discoverable by location, same as they're already
+    // absent from any radius search a client might run.
+    geohash: location ? encodeGeohash(location.lat, location.lng, GEOHASH_STORAGE_PRECISION) : null,
     visibility,
     participantLimit,
     participantCount: 1, // host auto-joins
@@ -156,24 +185,27 @@ export async function createEvent(hostId: string, body: CreateEventInput, option
   }
   await batch.commit();
 
-  return toEventSummary(eventRef.id, eventDoc);
+  return toEventSummary(eventRef.id, eventDoc, true); // the host just created it — always a participant
 }
 
 // GET /events/upcoming — public events browse/upcoming list (schema.md §6's
 // documented-but-not-yet-flowed index: visibility asc + datetime asc). Powers
-// Home's "Upcoming watch events" section.
-export async function listUpcomingEvents(rawLimit: unknown): Promise<{ items: UpcomingEvent[] }> {
+// Home's "Upcoming watch events" section, and — with `movieId` given — movie
+// detail's "Watch together" right-rail section (api-contracts.md §8): same
+// query, narrowed to one movie rather than a whole extra endpoint.
+export async function listUpcomingEvents(rawLimit: unknown, rawMovieId?: unknown): Promise<{ items: UpcomingEvent[] }> {
   const db = requireDb();
   const parsedLimit = Number(rawLimit);
   const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, MAX_UPCOMING_LIMIT) : DEFAULT_UPCOMING_LIMIT;
+  const movieId = typeof rawMovieId === "string" && rawMovieId.trim() ? rawMovieId.trim() : null;
 
-  const snap = await db
+  let query = db
     .collection("events")
     .where("visibility", "==", "public")
-    .where("datetime", ">=", new Date())
-    .orderBy("datetime", "asc")
-    .limit(limit)
-    .get();
+    .where("datetime", ">=", new Date());
+  if (movieId) query = query.where("movieId", "==", movieId);
+
+  const snap = await query.orderBy("datetime", "asc").limit(limit).get();
 
   // §21's soft-delete filtered in application code, not a third Firestore
   // range/inequality filter alongside the two already on this query
@@ -186,7 +218,9 @@ export async function listUpcomingEvents(rawLimit: unknown): Promise<{ items: Up
         const data = d.data();
         const movieSnap = await db.collection("movies").doc(data.movieId).get();
         return {
-          ...toEventSummary(d.id, data),
+          // Browse-list — never the exact spot, joined or not (hld.md §9's
+          // pre-join privacy rule): area/city is enough to judge interest.
+          ...toEventSummary(d.id, data, false),
           movieTitle: movieSnap.data()?.title ?? null,
           moviePoster: movieSnap.data()?.poster ?? null
         };
@@ -370,9 +404,22 @@ export async function listNearbyEvents(callerUid: string, rawLat: unknown, rawLn
 
   const snap = await db.collection("events").where("geohash", ">=", start).where("geohash", "<", end).get();
 
+  const now = Date.now();
   const candidates = snap.docs
     .map((d) => ({ id: d.id, data: d.data() }))
     .filter(({ data }) => data.deleted !== true)
+    // Real bug, no test ever covered it: unlike /events/upcoming (which
+    // filters datetime >= now in the Firestore query itself), this endpoint
+    // never excluded past events at all — a watch party from last week still
+    // showed up on the nearby map as if it were still happening. Can't add a
+    // second Firestore range filter here (geohash already claims the query's
+    // one allowed range field), so this stays an in-app filter like the
+    // visibility/deleted checks around it.
+    .filter(({ data }) => {
+      const dt = data.datetime;
+      const millis = dt instanceof Date ? dt.getTime() : dt?.toDate?.().getTime();
+      return typeof millis === "number" && millis >= now;
+    })
     .filter(({ data }) => {
       if (data.visibility === "public") return true;
       return data.hostId === callerUid || (Array.isArray(data.invitedUserIds) && data.invitedUserIds.includes(callerUid));
@@ -390,7 +437,10 @@ export async function listNearbyEvents(callerUid: string, rawLat: unknown, rawLn
     candidates.map(async ({ id, data, distanceKm }) => {
       const movieSnap = await db.collection("movies").doc(data.movieId).get();
       return {
-        ...toEventSummary(id, data),
+        // The nearby map (NearbyEventsMap.tsx) needs a real pin for every
+        // candidate it plots — left as-is, out of scope for the pre-join
+        // area/city-only rule (a separate, larger design question).
+        ...toEventSummary(id, data, true),
         movieTitle: movieSnap.data()?.title ?? null,
         moviePoster: movieSnap.data()?.poster ?? null,
         distanceKm: Math.round(distanceKm * 10) / 10
@@ -410,7 +460,7 @@ export async function listNearbyEvents(callerUid: string, rawLat: unknown, rawLn
 // Firestore doc ID. Same reasoning as a join-code holder already being able
 // to open a private event directly by ID today. A soft-deleted event 404s,
 // same as a nonexistent one — indistinguishable from the outside.
-export async function getEvent(eventId: string): Promise<EventDetail> {
+export async function getEvent(eventId: string, callerUid: string): Promise<EventDetail> {
   const db = requireDb();
   const eventSnap = await db.collection("events").doc(eventId).get();
   if (!eventSnap.exists || eventSnap.data()?.deleted === true) {
@@ -418,8 +468,14 @@ export async function getEvent(eventId: string): Promise<EventDetail> {
   }
   const data = eventSnap.data()!;
   const movieSnap = await db.collection("movies").doc(data.movieId).get();
+  // The exact meeting spot is only for the host or someone who's actually
+  // joined — a signed-in caller who's merely looking at a public event's
+  // detail page doesn't get more than the area/city everyone else sees.
+  const isHost = data.hostId === callerUid;
+  const participantSnap = isHost ? null : await db.collection("events").doc(eventId).collection("participants").doc(callerUid).get();
+  const canSeePrecise = isHost || (participantSnap?.exists ?? false);
   return {
-    ...toEventSummary(eventSnap.id, data),
+    ...toEventSummary(eventSnap.id, data, canSeePrecise),
     movieTitle: movieSnap.data()?.title ?? null,
     moviePoster: movieSnap.data()?.poster ?? null
   };

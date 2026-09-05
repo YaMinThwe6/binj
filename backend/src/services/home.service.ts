@@ -1,9 +1,10 @@
-import type { Greeting, ActivityItem } from "@binj/shared-types";
+import type { Greeting, ActivityItem, FriendsRecommendationItem } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { pickQuoteForMovieIds, pickRandomQuote } from "../data/movieQuotes.js";
 
-const MAX_FOLLOWING_FOR_FEED = 30; // Firestore "in" query cap
+const MAX_FOLLOWING_FOR_FEED = 30; // Firestore "in" query cap, also our fan-out bound below
 const DEFAULT_ACTIVITY_LIMIT = 12;
+const FRIENDS_RECOMMENDATION_LIMIT = 10;
 
 function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null {
   if (!value) return null;
@@ -68,6 +69,66 @@ export async function getActivity(uid: string): Promise<{ items: ActivityItem[] 
       };
     })
   );
+
+  return { items };
+}
+
+// GET /home/friends-recommendations — "Because your friends watched these" (hld.md
+// §6 implementation note, mockup-driven like greeting/activity above). Deliberately
+// has no trending/cold-start fallback: an empty `following` list returns no items
+// rather than a global feed, and the frontend hides the whole section in that case
+// (same "gate, don't fabricate" choice §5b's taste matches made) — this only makes
+// sense once the caller actually has connections.
+//
+// Signal is followed people's full `watched` history, not just the `activity` log
+// (that's capped to the most recent DEFAULT_ACTIVITY_LIMIT events and exists for a
+// different purpose — a feed, not a ranking source). Ranked by how many followed
+// people watched each title, excluding anything the caller has already watched or
+// already has on their watchlist. Respects §5a's per-entry privacy override, same
+// as `getActivity` above: a followed person's `watched` entry marked
+// `visibility: "private"` never counts here either, even though nothing here is
+// attributed to a name.
+export async function getFriendsRecommendations(uid: string): Promise<{ items: FriendsRecommendationItem[] }> {
+  const db = requireDb();
+  const userRef = db.collection("users").doc(uid);
+  const [followingSnap, watchedSnap, watchlistSnap] = await Promise.all([
+    userRef.collection("following").get(),
+    userRef.collection("watched").get(),
+    userRef.collection("watchlist").get()
+  ]);
+  const followingIds = followingSnap.docs.map((d) => d.id).slice(0, MAX_FOLLOWING_FOR_FEED);
+  if (followingIds.length === 0) return { items: [] };
+
+  const excludeIds = new Set<string>([...watchedSnap.docs.map((d) => d.id), ...watchlistSnap.docs.map((d) => d.id)]);
+
+  const friendsWatchedSnaps = await Promise.all(
+    followingIds.map((followedUid) => db.collection("users").doc(followedUid).collection("watched").get())
+  );
+
+  const watchedByCount = new Map<string, number>();
+  for (const snap of friendsWatchedSnaps) {
+    for (const doc of snap.docs) {
+      if (excludeIds.has(doc.id)) continue;
+      if (doc.data()?.visibility === "private") continue;
+      watchedByCount.set(doc.id, (watchedByCount.get(doc.id) ?? 0) + 1);
+    }
+  }
+
+  const ranked = [...watchedByCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, FRIENDS_RECOMMENDATION_LIMIT);
+  const movieSnaps = await Promise.all(ranked.map(([movieId]) => db.collection("movies").doc(movieId).get()));
+
+  const items: FriendsRecommendationItem[] = ranked.map(([movieId, watchedByCount], i) => {
+    const data = movieSnaps[i].data() ?? {};
+    return {
+      movieId,
+      title: data.title ?? "",
+      poster: data.poster ?? null,
+      year: data.year ?? null,
+      genres: data.genres ?? [],
+      voteAverage: data.voteAverage ?? 0,
+      watchedByCount
+    };
+  });
 
   return { items };
 }

@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../lib/api'
-export type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent } from '@binj/shared-types'
-import type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent } from '@binj/shared-types'
+export type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent, FriendsRecommendationItem, CreateEventInput, EventSummary } from '@binj/shared-types'
+import type { RecommendationItem, TasteMatch, UpcomingEvent, ActivityItem, Greeting, NotificationItem, NearbyEvent, FriendsRecommendationItem, CreateEventInput, EventSummary } from '@binj/shared-types'
 
 export function getHomeGreeting(): Promise<Greeting> {
   return apiFetch('/home/greeting', { auth: true })
@@ -8,6 +8,10 @@ export function getHomeGreeting(): Promise<Greeting> {
 
 export function getHomeActivity(): Promise<{ items: ActivityItem[] }> {
   return apiFetch('/home/activity', { auth: true })
+}
+
+export function getFriendsRecommendations(): Promise<{ items: FriendsRecommendationItem[] }> {
+  return apiFetch('/home/friends-recommendations', { auth: true })
 }
 
 export function getRecommendations(): Promise<{ items: RecommendationItem[] }> {
@@ -26,8 +30,17 @@ export function unfollowUser(uid: string): Promise<void> {
   return apiFetch(`/users/${encodeURIComponent(uid)}/follow`, { method: 'DELETE', auth: true })
 }
 
-export function getUpcomingEvents(): Promise<{ items: UpcomingEvent[] }> {
-  return apiFetch('/events/upcoming', { auth: true })
+// No auth — public, reachable by a signed-out guest too (MovieSearch.tsx's
+// Discover teaser). The response never carries exact coordinates either way
+// (backend's listUpcomingEvents), so there's nothing sensitive to gate here.
+// `movieId` narrows to one movie's events — MovieDetail's "Watch together"
+// right rail; omitted, this is Home's broader "Upcoming watch events".
+export function getUpcomingEvents(movieId?: string): Promise<{ items: UpcomingEvent[] }> {
+  return apiFetch(`/events/upcoming${movieId ? `?movieId=${encodeURIComponent(movieId)}` : ''}`)
+}
+
+export function createEvent(input: CreateEventInput): Promise<EventSummary> {
+  return apiFetch('/events', { method: 'POST', body: input, auth: true })
 }
 
 export function getNearbyEvents(lat: number, lng: number, radiusKm: number): Promise<{ items: NearbyEvent[] }> {

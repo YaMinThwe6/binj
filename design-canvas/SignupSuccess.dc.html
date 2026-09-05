@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600;6..96,700&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</helmet>
+
+<div style="width:390px; height:844px; background:#0E0D10; font-family:'Manrope',sans-serif; color:#F3F1ED; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+
+  <div style="position:absolute; inset:0; background:
+    radial-gradient(60% 50% at 50% 38%, rgba({{accentRgb}},0.16), transparent 65%);
+  "></div>
+
+  <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center; position:relative;">
+    <div style="width:96px; height:96px; border-radius:50%; border:2.5px solid {{accentHex}}; box-shadow:0 0 32px rgba({{accentRgb}},0.4); display:flex; align-items:center; justify-content:center; margin-bottom:28px;">
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="{{accentHex}}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+    </div>
+    <div style="font-family:'Bodoni Moda',serif; font-size:25px; font-weight:600; color:#FFFFFF;">Welcome to BINJ, Arjun!</div>
+    <p style="font-size:14px; color:#8B8794; margin:10px 0 0;">Your account is ready.</p>
+  </div>
+
+  <div style="flex:0 0 auto; padding:0 28px 44px; position:relative;">
+    <div style="display:flex; align-items:center; justify-content:center; padding:15px; border-radius:12px; background:{{accentHex}}; box-shadow:0 0 24px rgba({{accentRgb}},0.35);">
+      <span style="font-size:14.5px; font-weight:700; color:#0E0D10;">Explore BINJ</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"enum","default":"emerald","options":["emerald","cyan","purple","pink","amber","red"],"section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      emerald: { hex: '#00C896', rgb: '0,200,150' },
+      cyan:    { hex: '#00E5FF', rgb: '0,229,255' },
+      purple:  { hex: '#A855F7', rgb: '168,85,247' },
+      pink:    { hex: '#FF7AC2', rgb: '255,122,194' },
+      amber:   { hex: '#FFB020', rgb: '255,176,32' },
+      red:     { hex: '#FF385C', rgb: '255,56,92' }
+    };
+    const t = themes[this.props.accent] || themes.emerald;
+    return { accentHex: t.hex, accentRgb: t.rgb };
+  }
+}
+</script>
+</body>
+</html>

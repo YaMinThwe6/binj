@@ -1,7 +1,18 @@
 // Wire shapes for Events (hld.md §7, api-contracts.md §8).
 
+// Coarse, always-visible location — collected from the host separately from
+// the exact coordinates, and shown to anyone browsing (guest or signed-in,
+// joined or not). Never precise enough to pinpoint the actual meeting spot.
 export interface EventLocation {
-  address: string
+  area: string
+  city: string
+}
+
+// The exact coordinates. Only ever populated in a response for the host or
+// an already-joined participant — everyone else gets `preciseLocation: null`
+// even though the event itself has a location. See events.service.ts's
+// toEventSummary for the gating.
+export interface EventPreciseLocation {
   lat: number
   lng: number
 }
@@ -14,6 +25,7 @@ export interface EventSummary {
   datetime: string | null
   mode: 'online' | 'in-person'
   location: EventLocation | null
+  preciseLocation: EventPreciseLocation | null
   visibility: 'public' | 'private'
   joinCode: string | null // set only when visibility is "private"
   participantLimit: number
@@ -33,4 +45,18 @@ export interface UpcomingEvent extends EventSummary {
 // caller-relative distance the geohash-range query was filtered/sorted by.
 export interface NearbyEvent extends UpcomingEvent {
   distanceKm: number
+}
+
+// POST /events request body — hld.md §7 "Create Event", api-contracts.md §8.
+// `location` is required only for mode: 'in-person' (events.service.ts's
+// createEvent rejects an in-person event without one); ignored for 'online'.
+export interface CreateEventInput {
+  movieId: string
+  datetime: string // ISO
+  mode: 'online' | 'in-person'
+  visibility: 'public' | 'private'
+  participantLimit: number
+  requiresApproval: boolean
+  title?: string | null
+  location?: { area: string; city: string; lat: number; lng: number } | null
 }

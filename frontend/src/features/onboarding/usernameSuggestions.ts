@@ -1,4 +1,4 @@
-const USERNAME_RE = /^[a-z0-9._]{3,20}$/
+const USERNAME_RE = /^[a-z0-9._]{3,30}$/
 
 function sanitize(raw: string): string {
   return raw

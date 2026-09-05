@@ -156,3 +156,30 @@ describe("GET /recommendations", () => {
     expect(ids).not.toContain("whiplash");
   });
 });
+
+describe("GET /movies/:movieId/similar", () => {
+  it("is reachable without a token — movie detail's right rail is public like the movie page itself", async () => {
+    const res = await request(createApp()).get("/movies/dune/similar");
+    expect(res.status).toBe(200);
+  });
+
+  it("404s for a nonexistent movie", async () => {
+    const res = await request(createApp()).get("/movies/nope/similar");
+    expect(res.status).toBe(404);
+  });
+
+  it("returns other movies sharing at least one genre, sorted by rating, excluding itself", async () => {
+    const res = await request(createApp()).get("/movies/dune/similar"); // Sci-Fi, Adventure
+    expect(res.status).toBe(200);
+    const ids = res.body.data.items.map((m: { movieId: string }) => m.movieId);
+    expect(ids).not.toContain("dune");
+    expect(ids).toEqual(["interstellar", "inception"]); // both Sci-Fi, sorted by voteAverage desc; notebook/whiplash share no genre with dune
+  });
+
+  it("returns an empty list for a movie with no genres on record", async () => {
+    store.set("movies/no-genres", { title: "Mystery Movie", genres: [], voteAverage: 5 });
+    const res = await request(createApp()).get("/movies/no-genres/similar");
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+});

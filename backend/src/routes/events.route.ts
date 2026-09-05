@@ -17,7 +17,9 @@ import {
 export const eventsRouter = Router();
 
 eventsRouter.post("/events", requireAuth, asyncHandler(postEvent));
-eventsRouter.get("/events/upcoming", requireAuth, asyncHandler(getUpcomingEvents));
+// Public — guest Discover's event teaser needs this too (never returns
+// precise location either way, see events.service.ts's listUpcomingEvents).
+eventsRouter.get("/events/upcoming", asyncHandler(getUpcomingEvents));
 eventsRouter.get("/events/nearby", requireAuth, asyncHandler(getNearbyEvents));
 eventsRouter.put("/events/:eventId/join", requireAuth, asyncHandler(putJoinEvent));
 eventsRouter.delete("/events/:eventId/join", requireAuth, asyncHandler(deleteJoinEvent));

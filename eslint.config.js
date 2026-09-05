@@ -10,7 +10,11 @@ import globals from 'globals'
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/.firebase/**']
+    // .claude/worktrees/** holds separate git worktrees Claude Code creates for
+    // isolated background/subagent tasks — each is its own checkout with its
+    // own tsconfig, so scanning them from the root config hits ambiguous
+    // tsconfigRootDir parsing errors whenever one is active alongside `eslint .`.
+    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/.firebase/**', '.claude/worktrees/**']
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

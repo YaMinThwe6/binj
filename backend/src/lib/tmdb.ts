@@ -121,12 +121,136 @@ export async function fetchMovieDetails(tmdbId: string): Promise<TmdbMovie> {
   };
 }
 
-export async function searchMovies(query: string): Promise<MovieSummary[]> {
-  const data = await tmdbFetch(`/search/movie?query=${encodeURIComponent(query)}`);
+// GET /movies/recent — TMDB's "now playing" list (theatrical releases
+// currently in cinemas), region-scoped to match STREAMING_REGION's existing
+// hardcoded-India convention (hld.md §8). Same MovieSummary shape as search
+// results — the frontend's Discover page renders both with the same card.
+export async function getRecentMovies(): Promise<MovieSummary[]> {
+  const data = await tmdbFetch(`/movie/now_playing?region=${STREAMING_REGION}`);
   return (data.results ?? []).map((r: any) => ({
     movieId: String(r.id),
     title: r.title,
     poster: r.poster_path || null,
     year: r.release_date ? Number(r.release_date.slice(0, 4)) : null
   }));
+}
+
+// scripts/seedSearchCatalog.ts — bulk-seeds the local search index (hld.md
+// §18) with a broad slice of well-known titles, not just whatever's been
+// incidentally viewed or searched. TMDB's `/movie/popular`, paginated (20
+// movies/page); `pages` is the caller's choice of how much catalog breadth
+// to pull in one run.
+export async function getPopularMovies(pages: number): Promise<MovieSummary[]> {
+  const results: MovieSummary[] = [];
+  for (let page = 1; page <= pages; page++) {
+    const data = await tmdbFetch(`/movie/popular?region=${STREAMING_REGION}&page=${page}`);
+    for (const r of data.results ?? []) {
+      results.push({
+        movieId: String(r.id),
+        title: r.title,
+        poster: r.poster_path || null,
+        year: r.release_date ? Number(r.release_date.slice(0, 4)) : null
+      });
+    }
+  }
+  return results;
+}
+
+// hld.md §18 — the local index + live TMDB are merged and ranked together
+// on every search (movies.service.ts's searchMoviesService), so TMDB's
+// results need a popularity signal for that shared ranking to break ties
+// with, not just the bare MovieSummary shape the frontend renders.
+export interface TmdbSearchResult extends MovieSummary {
+  voteCount: number;
+}
+
+export async function searchMovies(query: string): Promise<TmdbSearchResult[]> {
+  const data = await tmdbFetch(`/search/movie?query=${encodeURIComponent(query)}`);
+  return (data.results ?? []).map((r: any) => ({
+    movieId: String(r.id),
+    title: r.title,
+    poster: r.poster_path || null,
+    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null,
+    voteCount: r.vote_count ?? 0
+  }));
+}
+
+// TMDB's fixed movie-genre table (/genre/movie/list) — hardcoded rather than
+// fetched, since it practically never changes and every other place in this
+// codebase already stores genres by name (movies.genres, GENRE_OPTIONS), not
+// TMDB's internal ids — discover is the one endpoint that needs ids, so the
+// translation happens right here at the boundary.
+const GENRE_NAME_TO_ID: Record<string, number> = {
+  Action: 28,
+  Adventure: 12,
+  Animation: 16,
+  Comedy: 35,
+  Crime: 80,
+  Documentary: 99,
+  Drama: 18,
+  Family: 10751,
+  Fantasy: 14,
+  History: 36,
+  Horror: 27,
+  Music: 10402,
+  Mystery: 9648,
+  Romance: 10749,
+  "Science Fiction": 878,
+  Thriller: 53,
+  War: 10752,
+  Western: 37
+};
+
+const GENRE_ID_TO_NAME: Record<number, string> = Object.fromEntries(
+  Object.entries(GENRE_NAME_TO_ID).map(([name, id]) => [id, name])
+);
+
+// Everything MovieCandidate actually needs (movie.ts) is already sitting in
+// TMDB's own /discover/movie response — genre_ids, vote_average,
+// original_language — no separate detail fetch required. Only cast/crew
+// needs a real getMovieDetail() call (Discover doesn't return credits at
+// all); callers that need that pay for it themselves per movie, not here.
+export interface TmdbDiscoverResult extends MovieSummary {
+  genres: string[];
+  originalLanguage: string;
+  voteAverage: number;
+}
+
+// onboarding.service.ts's genre/language-filtered candidate & celebrity-suggestion
+// paging (hld.md §13, redesigned for infinite scroll) — /discover/movie is the one
+// TMDB endpoint that's natively paginated by genre+language, so it's the source
+// that actually keeps growing as the user scrolls, unlike the local Firestore
+// index (only ever populated by movies someone has individually opened).
+export async function discoverMovies(genres: string[], languages: string[], page: number): Promise<{ items: TmdbDiscoverResult[]; totalPages: number }> {
+  const params = new URLSearchParams({ sort_by: "popularity.desc", page: String(page), include_adult: "false" });
+
+  // TMDB's with_genres treats a comma-separated list as AND (must match
+  // every genre listed) and pipe-separated as OR (match any) — confirmed
+  // directly against TMDB's own docs. A comma here (the natural-looking
+  // choice, and the original bug) makes the filter *stricter* the more
+  // genres someone picks — with enough genres selected, almost nothing
+  // satisfies "belongs to all of these at once", so Discover legitimately
+  // runs out of pages almost immediately. Since a user picking several
+  // genres means "any of these", not "all of these", pipe is correct here.
+  const genreIds = genres.map((g) => GENRE_NAME_TO_ID[g]).filter((id): id is number => id !== undefined);
+  if (genreIds.length > 0) params.set("with_genres", genreIds.join("|"));
+
+  // TMDB's discover only accepts a single original_language (no equivalent
+  // OR syntax the way with_genres has). With more than one language chosen,
+  // this is left unfiltered here and cross-checked in-app instead — same
+  // "genre query, language filtered in-app" convention onboarding.service.ts's
+  // local candidate query already uses.
+  if (languages.length === 1) params.set("with_original_language", languages[0]);
+
+  const data = await tmdbFetch(`/discover/movie?${params.toString()}`);
+  const items: TmdbDiscoverResult[] = (data.results ?? []).map((r: any) => ({
+    movieId: String(r.id),
+    title: r.title,
+    poster: r.poster_path || null,
+    year: r.release_date ? Number(r.release_date.slice(0, 4)) : null,
+    genres: ((r.genre_ids ?? []) as number[]).map((id) => GENRE_ID_TO_NAME[id]).filter((g): g is string => g !== undefined),
+    originalLanguage: r.original_language ?? "en",
+    voteAverage: r.vote_average ?? 0
+  }));
+  return { items, totalPages: data.total_pages ?? 1 };
 }

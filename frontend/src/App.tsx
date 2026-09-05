@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { getMe, type Me } from './lib/api'
 import { useAuth } from './lib/AuthContext'
-import { Login } from './features/auth/components/Login'
+import { applyAccentTheme } from './lib/theme'
+import { Welcome } from './features/auth/components/Welcome'
 import { OnboardingWizard } from './features/onboarding/components/OnboardingWizard'
 import { Home } from './features/home/components/Home'
 import { MovieSearch } from './features/movie/components/MovieSearch'
+import { MovieDetail } from './features/movie/components/MovieDetail'
+import { Profile } from './features/profile/components/Profile'
+import { Settings } from './features/settings/components/Settings'
+import { RoomChat } from './features/chat/components/RoomChat'
+import { About } from './features/about/components/About'
 import './App.css'
 
 function App() {
   const { user, loading: authLoading, signOutUser } = useAuth()
   const [me, setMe] = useState<Me | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
-  const [view, setView] = useState<'home' | 'search'>('home')
 
   useEffect(() => {
     if (!user) {
@@ -23,6 +29,10 @@ function App() {
       .catch((err) => setErrorMessage(err instanceof Error ? err.message : 'Failed to load profile'))
   }, [user])
 
+  useEffect(() => {
+    applyAccentTheme(me?.accentTheme)
+  }, [me?.accentTheme])
+
   if (authLoading) {
     return (
       <main className="app">
@@ -31,8 +41,21 @@ function App() {
     )
   }
 
+  // Root "/" for a signed-out visitor is public movie discovery, not an auth
+  // wall — Welcome (/get-started) only opens once they actually choose to
+  // sign in (Get Started, Log in, or an auth-gated action on a movie's page).
   if (!user) {
-    return <Login />
+    return (
+      <Routes>
+        <Route path="/get-started" element={<Welcome />} />
+        <Route path="/get-started/signup" element={<Welcome />} />
+        <Route path="/get-started/login" element={<Welcome />} />
+        <Route path="/get-started/verify" element={<Welcome />} />
+        <Route path="/movie/:movieId" element={<MovieDetail />} />
+        <Route path="/story" element={<About />} />
+        <Route path="*" element={<MovieSearch />} />
+      </Routes>
+    )
   }
 
   if (me && (me.isNewUser || !me.onboardingComplete)) {
@@ -61,11 +84,18 @@ function App() {
     )
   }
 
-  if (view === 'search') {
-    return <MovieSearch onBack={() => setView('home')} />
-  }
-
-  return <Home me={me} onSignOut={() => void signOutUser()} onNavigateSearch={() => setView('search')} />
+  return (
+    <Routes>
+      <Route path="/" element={<Home me={me} onSignOut={() => void signOutUser()} />} />
+      <Route path="/search" element={<MovieSearch />} />
+      <Route path="/movie/:movieId" element={<MovieDetail />} />
+      <Route path="/profile/:uid" element={<Profile />} />
+      <Route path="/settings" element={<Settings me={me} onUpdateMe={setMe} />} />
+      <Route path="/rooms/:roomId" element={<RoomChat />} />
+      <Route path="/story" element={<About />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
 }
 
 export default App

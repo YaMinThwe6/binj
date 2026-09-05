@@ -1,4 +1,4 @@
-import type { MovieStatus } from "@binj/shared-types";
+import type { MovieStatus, MovieStatusLite } from "@binj/shared-types";
 import { requireDb } from "../lib/firebaseAdmin.js";
 import { AppError } from "../utils/AppError.js";
 
@@ -162,6 +162,41 @@ export async function unlikeMovie(uid: string, movieId: string): Promise<void> {
 // across watchlist/watched/likes/reviews to render its action bar; one
 // request here instead of four.
 // ---------------------------------------------------------------------------
+
+// GET /users/me/movies/status?ids=a,b,c — the batch counterpart to
+// getMovieStatus below, for a whole result set at once (search cards, the
+// discover grid). Each id costs three subcollection point-reads; capped so a
+// crafted `ids` list can't fan a single request out into thousands of reads.
+// Reviews are deliberately not joined — the surfaces this feeds only badge
+// watchlist/watched/liked, never render review text.
+const MAX_STATUS_IDS = 60;
+
+export async function getMovieStatuses(uid: string, rawIds: unknown): Promise<{ items: Record<string, MovieStatusLite> }> {
+  const ids = [
+    ...new Set(
+      String(rawIds ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )
+  ].slice(0, MAX_STATUS_IDS);
+  if (ids.length === 0) return { items: {} };
+
+  const db = requireDb();
+  const userRef = db.collection("users").doc(uid);
+  const entries = await Promise.all(
+    ids.map(async (movieId): Promise<[string, MovieStatusLite]> => {
+      const [watchlistSnap, watchedSnap, likeSnap] = await Promise.all([
+        userRef.collection("watchlist").doc(movieId).get(),
+        userRef.collection("watched").doc(movieId).get(),
+        userRef.collection("likes").doc(movieId).get()
+      ]);
+      return [movieId, { watchlisted: watchlistSnap.exists, watched: watchedSnap.exists, liked: likeSnap.exists }];
+    })
+  );
+
+  return { items: Object.fromEntries(entries) };
+}
 
 export async function getMovieStatus(uid: string, movieId: string): Promise<MovieStatus> {
   const db = requireDb();
