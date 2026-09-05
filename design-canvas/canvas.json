@@ -1,0 +1,423 @@
+{
+  "artboards": [
+    {
+      "file": "Home.dc.html",
+      "x": -470,
+      "y": 0,
+      "w": 390,
+      "h": 2020,
+      "title": "Home feed (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "HomeDesktop.dc.html",
+      "x": -1960,
+      "y": 0,
+      "w": 1440,
+      "h": 960,
+      "title": "Home feed (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "DiscoverDesktop.dc.html",
+      "x": -1960,
+      "y": 1080,
+      "w": 1440,
+      "h": 960,
+      "title": "Discover (desktop, guest) — right rail teases People & Events, gated — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 2600,
+      "title": "Movie Detail (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "RateReview.dc.html",
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Rate & Review sheet — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "Desktop.dc.html",
+      "x": 470,
+      "y": 940,
+      "w": 1440,
+      "h": 960,
+      "title": "Movie Detail (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "MyProfile.dc.html",
+      "x": 1990,
+      "y": 0,
+      "w": 390,
+      "h": 1650,
+      "title": "My Profile — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "OtherUserProfile.dc.html",
+      "x": 2460,
+      "y": 0,
+      "w": 390,
+      "h": 1720,
+      "title": "Other User's Profile — try Theme + Privacy scenario chips",
+      "page": "current"
+    },
+    {
+      "file": "MyProfileDesktop.dc.html",
+      "x": 1990,
+      "y": 1780,
+      "w": 1440,
+      "h": 960,
+      "title": "My Profile (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "OtherUserProfileDesktop.dc.html",
+      "x": 3480,
+      "y": 1780,
+      "w": 1440,
+      "h": 960,
+      "title": "Other User's Profile (desktop) — try Theme + Privacy scenario chips",
+      "page": "current"
+    },
+    {
+      "file": "Welcome.dc.html",
+      "x": 0,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Auth 0: Welcome / splash",
+      "page": "current"
+    },
+    {
+      "file": "Login.dc.html",
+      "x": 470,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Auth: Log in",
+      "page": "current"
+    },
+    {
+      "file": "SignupMethod.dc.html",
+      "x": 940,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Sign up — Step 1 of 6: choose method",
+      "page": "current"
+    },
+    {
+      "file": "SignupEmailOTP.dc.html",
+      "x": 1410,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Sign up — Step 2 of 6: email OTP — try the Flow stage chip",
+      "page": "current"
+    },
+    {
+      "file": "SignupDetails.dc.html",
+      "x": 1880,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Sign up — Step 3 of 6: name & username",
+      "page": "current"
+    },
+    {
+      "file": "SignupGenres.dc.html",
+      "x": 2350,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Sign up — Step 4 of 6: genres",
+      "page": "current"
+    },
+    {
+      "file": "SignupWatched.dc.html",
+      "x": 2820,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Sign up — Step 5 of 6: movies watched",
+      "page": "current"
+    },
+    {
+      "file": "SignupWatchlist.dc.html",
+      "x": 3290,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Sign up — Step 6 of 6: watchlist",
+      "page": "current"
+    },
+    {
+      "file": "SignupSuccess.dc.html",
+      "x": 3760,
+      "y": 2820,
+      "w": 390,
+      "h": 844,
+      "title": "Sign up — success",
+      "page": "current"
+    },
+    {
+      "file": "WelcomeDesktop.dc.html",
+      "x": 0,
+      "y": 3720,
+      "w": 1440,
+      "h": 960,
+      "title": "Auth (desktop) — Welcome / splash",
+      "page": "current"
+    },
+    {
+      "file": "LoginDesktop.dc.html",
+      "x": 1490,
+      "y": 3720,
+      "w": 1440,
+      "h": 960,
+      "title": "Auth (desktop) — Log in",
+      "page": "current"
+    },
+    {
+      "file": "SignupMethodDesktop.dc.html",
+      "x": 2980,
+      "y": 3720,
+      "w": 1440,
+      "h": 960,
+      "title": "Sign up (desktop) — Step 1 of 6: choose method",
+      "page": "current"
+    },
+    {
+      "file": "SignupEmailOTPDesktop.dc.html",
+      "x": 4470,
+      "y": 3720,
+      "w": 1440,
+      "h": 960,
+      "title": "Sign up (desktop) — Step 2 of 6: email OTP — try the Flow stage chip",
+      "page": "current"
+    },
+    {
+      "file": "SignupDetailsDesktop.dc.html",
+      "x": 0,
+      "y": 4740,
+      "w": 1440,
+      "h": 960,
+      "title": "Sign up (desktop) — Step 3 of 6: name & username",
+      "page": "current"
+    },
+    {
+      "file": "SignupGenresDesktop.dc.html",
+      "x": 1490,
+      "y": 4740,
+      "w": 1440,
+      "h": 960,
+      "title": "Sign up (desktop) — Step 4 of 6: genres",
+      "page": "current"
+    },
+    {
+      "file": "SignupWatchedDesktop.dc.html",
+      "x": 2980,
+      "y": 4740,
+      "w": 1440,
+      "h": 960,
+      "title": "Sign up (desktop) — Step 5 of 6: movies watched",
+      "page": "current"
+    },
+    {
+      "file": "SignupWatchlistDesktop.dc.html",
+      "x": 4470,
+      "y": 4740,
+      "w": 1440,
+      "h": 960,
+      "title": "Sign up (desktop) — Step 6 of 6: watchlist",
+      "page": "current"
+    },
+    {
+      "file": "SignupSuccessDesktop.dc.html",
+      "x": 0,
+      "y": 5760,
+      "w": 1440,
+      "h": 960,
+      "title": "Sign up (desktop) — success",
+      "page": "current"
+    },
+    {
+      "file": "Watchlist.dc.html",
+      "x": 0,
+      "y": 7000,
+      "w": 390,
+      "h": 1540,
+      "title": "My Movies — Watchlist / Watched / Reviews (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "People.dc.html",
+      "x": 470,
+      "y": 7000,
+      "w": 390,
+      "h": 1600,
+      "title": "People discovery (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "Events.dc.html",
+      "x": 940,
+      "y": 7000,
+      "w": 390,
+      "h": 1560,
+      "title": "Events — watch parties list + map peek (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "EventDetail.dc.html",
+      "x": 1410,
+      "y": 7000,
+      "w": 390,
+      "h": 1720,
+      "title": "Event detail — join + discussion room (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "Room.dc.html",
+      "x": 1880,
+      "y": 7000,
+      "w": 390,
+      "h": 844,
+      "title": "Movie room chat — discuss afterwards (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "Rooms.dc.html",
+      "x": 2350,
+      "y": 7000,
+      "w": 390,
+      "h": 1240,
+      "title": "Inbox — your active rooms (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "WatchlistDesktop.dc.html",
+      "x": 0,
+      "y": 8800,
+      "w": 1440,
+      "h": 960,
+      "title": "My Movies (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "PeopleDesktop.dc.html",
+      "x": 1520,
+      "y": 8800,
+      "w": 1440,
+      "h": 960,
+      "title": "People discovery (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "EventsDesktop.dc.html",
+      "x": 3040,
+      "y": 8800,
+      "w": 1440,
+      "h": 960,
+      "title": "Events — list + map (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "RoomDesktop.dc.html",
+      "x": 4560,
+      "y": 8800,
+      "w": 1440,
+      "h": 960,
+      "title": "Movie rooms — list + chat + members (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "Settings.dc.html",
+      "x": 2820,
+      "y": 7000,
+      "w": 390,
+      "h": 1380,
+      "title": "Settings — profile, accent, privacy, notifications (mobile) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "SettingsDesktop.dc.html",
+      "x": 6080,
+      "y": 8800,
+      "w": 1440,
+      "h": 960,
+      "title": "Settings (desktop) — try the Theme chip",
+      "page": "current"
+    },
+    {
+      "file": "AccentOptions.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 560,
+      "title": "Round 1: flat colors (rejected)",
+      "page": "history"
+    },
+    {
+      "file": "AccentOptionsRound2.dc.html",
+      "x": 0,
+      "y": 620,
+      "w": 1080,
+      "h": 560,
+      "title": "Round 2: jewel/copper/gradient (rejected)",
+      "page": "history"
+    },
+    {
+      "file": "NeonMarqueeAlt.dc.html",
+      "x": 0,
+      "y": 1240,
+      "w": 1080,
+      "h": 420,
+      "title": "Round 3: neon G vs alternates",
+      "page": "history"
+    },
+    {
+      "file": "NeonMarquee.dc.html",
+      "x": 1160,
+      "y": 0,
+      "w": 440,
+      "h": 700,
+      "title": "G — pink, shown in context",
+      "page": "history"
+    },
+    {
+      "file": "BlackAndBlue.dc.html",
+      "x": 1160,
+      "y": 760,
+      "w": 440,
+      "h": 680,
+      "title": "K — Black & Blue (cyan primary)",
+      "page": "history"
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "current"
+  },
+  "pages": [
+    {
+      "id": "current",
+      "name": "Current Design"
+    },
+    {
+      "id": "history",
+      "name": "Color Exploration History"
+    }
+  ]
+}
