@@ -13,9 +13,12 @@ const envSchema = z.object({
 
 export const env = envSchema.parse(process.env);
 
-export const firebaseConfigured = Boolean(
-  env.FIREBASE_PROJECT_ID && env.GOOGLE_APPLICATION_CREDENTIALS
-);
+// GOOGLE_APPLICATION_CREDENTIALS (a service-account key file path) is only
+// required for local dev. On Cloud Run, the service's own attached service
+// account already provides Application Default Credentials with no key file
+// needed — firebaseAdmin.ts falls back to that when only FIREBASE_PROJECT_ID
+// is set, which is exactly why this doesn't require GOOGLE_APPLICATION_CREDENTIALS.
+export const firebaseConfigured = Boolean(env.FIREBASE_PROJECT_ID);
 
 export const smtpConfigured = Boolean(env.SMTP_USER && env.SMTP_PASS);
 
