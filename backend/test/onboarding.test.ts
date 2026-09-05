@@ -112,6 +112,10 @@ beforeEach(() => {
   store.set("movies/parasite", { title: "Parasite", genres: ["Thriller", "Drama"], originalLanguage: "ko", voteAverage: 8.5 });
   store.set("movies/oldboy", { title: "Oldboy", genres: ["Thriller"], originalLanguage: "ko", voteAverage: 8.1 });
   store.set("movies/notebook", { title: "The Notebook", genres: ["Romance"], originalLanguage: "en", voteAverage: 7.8 });
+  // Highest voteAverage of all fixtures on purpose — if the not-yet-released
+  // filter isn't applied, it sorts to the very top of every unfiltered query
+  // below and breaks their expected ordering, not just the dedicated test.
+  store.set("movies/upcoming", { title: "Future Blockbuster", genres: ["Sci-Fi"], originalLanguage: "en", voteAverage: 9.9, releaseDate: "2099-01-01" });
 });
 
 function req(app: ReturnType<typeof createApp>, qs = "") {
@@ -158,6 +162,13 @@ describe("GET /onboarding/watched-candidates", () => {
     expect(res.status).toBe(200);
     // Drama movies are interstellar(en) and parasite(ko) — only parasite matches both
     expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).toEqual(["parasite"]);
+  });
+
+  it("excludes locally-cached movies whose releaseDate is still in the future, even though it has the top voteAverage", async () => {
+    const app = createApp();
+    const res = await req(app);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.map((m: { movieId: string }) => m.movieId)).not.toContain("upcoming");
   });
 
   it("page 1 (no cursor) always offers a next page for scrolling further", async () => {

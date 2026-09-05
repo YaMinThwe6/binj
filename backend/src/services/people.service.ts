@@ -6,34 +6,74 @@ import { rankCandidate } from "../lib/searchRanking.js";
 
 const MAX_QUERY_WORDS = 30; // Firestore's array-contains-any cap — same as movies.service.ts's search
 const RESULTS_TOP_N = 20;
+const MAX_ARRAY_CONTAINS_ANY = 10; // Firestore's cap, same convention as onboarding.service.ts
+const COLD_START_MATCH_LIMIT = 10;
 
 function toIso(value: FirebaseFirestore.Timestamp | Date | null): string | null {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : value.toDate().toISOString();
 }
 
+async function getRelationship(db: FirebaseFirestore.Firestore, callerUid: string, targetUid: string): Promise<TasteMatch["relationship"]> {
+  const [followingSnap, requestSnap] = await Promise.all([
+    db.collection("users").doc(callerUid).collection("following").doc(targetUid).get(),
+    db.collection("users").doc(targetUid).collection("followRequests").doc(callerUid).get()
+  ]);
+  return followingSnap.exists ? "following" : requestSnap.exists ? "pending" : "none";
+}
+
+// Cold start for GET /users/me/tasteMatches below: scripts/computeTasteMatches.ts
+// only ever scores a pair of users after both have enough watch history for a
+// real comparison, so a brand-new (or otherwise thin-history) user has no
+// precomputed docs at all — without this, the section has nothing to show and
+// disappears completely rather than genuinely having no matches. Onboarding's
+// favoriteGenres pick is the one signal guaranteed to exist immediately, so
+// this stands in with a live genre-overlap score until real matches land.
+async function getGenreOverlapMatches(db: FirebaseFirestore.Firestore, uid: string): Promise<TasteMatch[]> {
+  const callerSnap = await db.collection("users").doc(uid).get();
+  const callerGenres = ((callerSnap.data()?.favoriteGenres as string[] | null) ?? []).slice(0, MAX_ARRAY_CONTAINS_ANY);
+  if (callerGenres.length === 0) return [];
+
+  const candidatesSnap = await db.collection("users").where("favoriteGenres", "array-contains-any", callerGenres).get();
+
+  const items = await Promise.all(
+    candidatesSnap.docs
+      .filter((d) => d.id !== uid)
+      .map(async (d): Promise<TasteMatch> => {
+        const data = d.data();
+        const genres = (data.favoriteGenres as string[] | null) ?? [];
+        const overlap = genres.filter((g) => callerGenres.includes(g)).length;
+        return {
+          uid: d.id,
+          displayName: data.displayName ?? "Unknown",
+          score: Math.round((overlap / callerGenres.length) * 100),
+          relationship: await getRelationship(db, uid, d.id)
+        };
+      })
+  );
+
+  return items.sort((a, b) => b.score - a.score).slice(0, COLD_START_MATCH_LIMIT);
+}
+
 // GET /users/me/tasteMatches — api-contracts.md §5, hld.md §5b.
-// Read-only: precomputed by scripts/computeTasteMatches.ts (or the future
-// cron+BigQuery pipeline it stands in for) — no write endpoint here.
+// Precomputed by scripts/computeTasteMatches.ts (or the future cron+BigQuery
+// pipeline it stands in for) when available; falls back to a live signal
+// (getGenreOverlapMatches) when it isn't — no write endpoint here either way.
 export async function getTasteMatches(uid: string): Promise<{ items: TasteMatch[] }> {
   const db = requireDb();
   const snap = await db.collection("users").doc(uid).collection("tasteMatches").orderBy("score", "desc").get();
 
+  if (snap.docs.length === 0) {
+    return { items: await getGenreOverlapMatches(db, uid) };
+  }
+
   const items = await Promise.all(
-    snap.docs.map(async (matchDoc): Promise<TasteMatch> => {
-      const [userSnap, followingSnap, requestSnap] = await Promise.all([
-        db.collection("users").doc(matchDoc.id).get(),
-        db.collection("users").doc(uid).collection("following").doc(matchDoc.id).get(),
-        db.collection("users").doc(matchDoc.id).collection("followRequests").doc(uid).get()
-      ]);
-      const relationship = followingSnap.exists ? "following" : requestSnap.exists ? "pending" : "none";
-      return {
-        uid: matchDoc.id,
-        displayName: userSnap.data()?.displayName ?? "Unknown",
-        score: matchDoc.data().score,
-        relationship
-      };
-    })
+    snap.docs.map(async (matchDoc): Promise<TasteMatch> => ({
+      uid: matchDoc.id,
+      displayName: (await db.collection("users").doc(matchDoc.id).get()).data()?.displayName ?? "Unknown",
+      score: matchDoc.data().score,
+      relationship: await getRelationship(db, uid, matchDoc.id)
+    }))
   );
 
   return { items };

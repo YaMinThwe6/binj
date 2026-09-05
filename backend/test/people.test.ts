@@ -120,10 +120,35 @@ describe("GET /users/me/tasteMatches", () => {
     ]);
   });
 
-  it("returns an empty list when there are no matches yet", async () => {
+  it("returns an empty list when there are no matches yet and the caller picked no favorite genres", async () => {
     const app = createApp();
     const res = await request(app).get("/users/me/tasteMatches").set("Authorization", "Bearer good");
     expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
+  it("falls back to a live genre-overlap match when scripts/computeTasteMatches.ts hasn't scored this user yet — a brand-new signed-up user otherwise sees this section vanish entirely", async () => {
+    store.set("users/uid-1", { displayName: "Me", favoriteGenres: ["Science Fiction", "Drama"] });
+    store.set("users/uid-2", { displayName: "Rohan", favoriteGenres: ["Science Fiction", "Comedy"] }); // 1/2 genres shared = 50%
+    store.set("users/uid-3", { displayName: "Meera", favoriteGenres: ["Science Fiction", "Drama", "Horror"] }); // 2/2 shared = 100%
+    store.set("users/uid-4", { displayName: "NoOverlap", favoriteGenres: ["Romance"] }); // shares nothing — TMDB's own array-contains-any excludes this from the query entirely
+
+    const app = createApp();
+    const res = await request(app).get("/users/me/tasteMatches").set("Authorization", "Bearer good");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([
+      { uid: "uid-3", displayName: "Meera", score: 100, relationship: "none" },
+      { uid: "uid-2", displayName: "Rohan", score: 50, relationship: "none" }
+    ]);
+  });
+
+  it("never includes the caller themself in the genre-overlap fallback", async () => {
+    store.set("users/uid-1", { displayName: "Me", favoriteGenres: ["Science Fiction"] });
+
+    const app = createApp();
+    const res = await request(app).get("/users/me/tasteMatches").set("Authorization", "Bearer good");
+
     expect(res.body.data.items).toEqual([]);
   });
 });

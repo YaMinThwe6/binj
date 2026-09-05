@@ -26,6 +26,7 @@ export interface TmdbMovie {
   isAdult: boolean;
   voteAverage: number;
   voteCount: number;
+  releaseDate: string | null; // TMDB's raw ISO date — movies.service.ts stores this so onboarding's local candidate query can exclude not-yet-released movies
   trailerKey: string | null; // YouTube video id, e.g. https://www.youtube.com/watch?v={trailerKey}
   streamingProviders: { name: string; type: "subscription" | "rent" | "buy"; logo: string }[];
   credits: TmdbPersonCredit[]; // full person-doc-shape data for everyone in cast/crew above, for upserting people/{personId} (schema.md)
@@ -115,6 +116,7 @@ export async function fetchMovieDetails(tmdbId: string): Promise<TmdbMovie> {
     isAdult: Boolean(data.adult),
     voteAverage: data.vote_average ?? 0,
     voteCount: data.vote_count ?? 0,
+    releaseDate: data.release_date || null,
     trailerKey: pickTrailer(data.videos),
     streamingProviders: mapProviders(data["watch/providers"]),
     credits: [...creditsById.values()]
@@ -223,6 +225,12 @@ export interface TmdbDiscoverResult extends MovieSummary {
 // index (only ever populated by movies someone has individually opened).
 export async function discoverMovies(genres: string[], languages: string[], page: number): Promise<{ items: TmdbDiscoverResult[]; totalPages: number }> {
   const params = new URLSearchParams({ sort_by: "popularity.desc", page: String(page), include_adult: "false" });
+
+  // Onboarding's "movies you've watched" is meant to offer things someone
+  // could plausibly have already seen — a not-yet-released title showing up
+  // there is a real bug users hit, not just noise. TMDB's own primary_release_date
+  // filter does this server-side so it's exact, not a same-year approximation.
+  params.set("primary_release_date.lte", new Date().toISOString().slice(0, 10));
 
   // TMDB's with_genres treats a comma-separated list as AND (must match
   // every genre listed) and pipe-separated as OR (match any) — confirmed

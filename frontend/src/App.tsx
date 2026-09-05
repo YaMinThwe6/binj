@@ -63,7 +63,12 @@ function App() {
       <OnboardingWizard
         initialDisplayName={me.displayName || user.displayName || ''}
         email={me.email || user.email || ''}
-        onComplete={() => setMe({ ...me, onboardingComplete: true })}
+        // isNewUser is server-computed true only on the one bootstrap GET
+        // /users/me right after account creation (see users.service.ts) —
+        // nothing ever naturally resets it to false client-side afterward,
+        // so without setting it here too, the gate above (isNewUser ||
+        // !onboardingComplete) never releases even once onboarding finishes.
+        onComplete={() => setMe({ ...me, onboardingComplete: true, isNewUser: false })}
       />
     )
   }

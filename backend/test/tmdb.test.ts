@@ -107,4 +107,53 @@ describe("tmdb.discoverMovies", () => {
 
     expect(result).toEqual({ items: [], totalPages: 1 });
   });
+
+  it("filters out unreleased movies via primary_release_date.lte, so onboarding's watched-candidates never offers something not out yet", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-05T12:00:00.000Z"));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ results: [], total_pages: 1 }) });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
+      const { discoverMovies } = await import("../src/lib/tmdb.js");
+      await discoverMovies([], [], 1);
+      expect(fetchMock.mock.calls[0][0]).toContain("primary_release_date.lte=2026-09-05");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("tmdb.fetchMovieDetails", () => {
+  it("captures releaseDate from TMDB's raw release_date, for local release-date filtering", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 27205,
+        title: "Inception",
+        release_date: "2010-07-15",
+        genres: [],
+        credits: { cast: [], crew: [] }
+      })
+    }) as unknown as typeof fetch;
+
+    const { fetchMovieDetails } = await import("../src/lib/tmdb.js");
+    const movie = await fetchMovieDetails("27205");
+
+    expect(movie.releaseDate).toBe("2010-07-15");
+  });
+
+  it("defaults releaseDate to null when TMDB omits it", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 1, title: "Untitled", genres: [], credits: { cast: [], crew: [] } })
+    }) as unknown as typeof fetch;
+
+    const { fetchMovieDetails } = await import("../src/lib/tmdb.js");
+    const movie = await fetchMovieDetails("1");
+
+    expect(movie.releaseDate).toBeNull();
+  });
 });

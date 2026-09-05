@@ -144,18 +144,34 @@ export async function getWatchedCandidates(
     candidates = await db.collection("movies").orderBy("voteAverage", "desc").limit(CANDIDATE_LIMIT).get();
   }
 
-  let items: MovieCandidate[] = candidates.docs.map((d) => {
-    const data = d.data();
-    return {
-      movieId: d.id,
-      title: data.title,
-      poster: data.poster ?? null,
-      year: data.year ?? null,
-      genres: data.genres ?? [],
-      originalLanguage: data.originalLanguage ?? null,
-      voteAverage: data.voteAverage ?? 0
-    };
-  });
+  // Discover-backed cursor pages above filter unreleased movies out via
+  // primary_release_date.lte (tmdb.ts) — this local index has no live TMDB
+  // call to lean on, so it needs its own check against the releaseDate
+  // movies.service.ts stores on every full-detail fetch. A doc with no
+  // releaseDate at all is one only ever seeded by the lightweight search-index
+  // path (never full-detail-fetched) rather than actually unreleased, so it's
+  // let through rather than excluded on missing data.
+  const now = Date.now();
+  function isReleased(data: FirebaseFirestore.DocumentData): boolean {
+    if (typeof data.releaseDate !== "string") return true;
+    const parsed = Date.parse(data.releaseDate);
+    return Number.isNaN(parsed) || parsed <= now;
+  }
+
+  let items: MovieCandidate[] = candidates.docs
+    .filter((d) => isReleased(d.data()))
+    .map((d) => {
+      const data = d.data();
+      return {
+        movieId: d.id,
+        title: data.title,
+        poster: data.poster ?? null,
+        year: data.year ?? null,
+        genres: data.genres ?? [],
+        originalLanguage: data.originalLanguage ?? null,
+        voteAverage: data.voteAverage ?? 0
+      };
+    });
 
   // When both genres and languages were given, the language filter is applied
   // in-app on top of the genre query — Firestore can't combine array-contains-any
