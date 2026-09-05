@@ -404,9 +404,22 @@ export async function listNearbyEvents(callerUid: string, rawLat: unknown, rawLn
 
   const snap = await db.collection("events").where("geohash", ">=", start).where("geohash", "<", end).get();
 
+  const now = Date.now();
   const candidates = snap.docs
     .map((d) => ({ id: d.id, data: d.data() }))
     .filter(({ data }) => data.deleted !== true)
+    // Real bug, no test ever covered it: unlike /events/upcoming (which
+    // filters datetime >= now in the Firestore query itself), this endpoint
+    // never excluded past events at all — a watch party from last week still
+    // showed up on the nearby map as if it were still happening. Can't add a
+    // second Firestore range filter here (geohash already claims the query's
+    // one allowed range field), so this stays an in-app filter like the
+    // visibility/deleted checks around it.
+    .filter(({ data }) => {
+      const dt = data.datetime;
+      const millis = dt instanceof Date ? dt.getTime() : dt?.toDate?.().getTime();
+      return typeof millis === "number" && millis >= now;
+    })
     .filter(({ data }) => {
       if (data.visibility === "public") return true;
       return data.hostId === callerUid || (Array.isArray(data.invitedUserIds) && data.invitedUserIds.includes(callerUid));

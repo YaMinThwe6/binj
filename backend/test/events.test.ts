@@ -499,6 +499,20 @@ describe("GET /events/nearby", () => {
     expect(res.body.data.items[0].preciseLocation).toEqual(bangaloreNearby);
   });
 
+  // Real bug: unlike /events/upcoming (which filters datetime >= now),
+  // /events/nearby never filtered by datetime at all, so a past watch party
+  // still showed up on the map as if it were still happening.
+  it("excludes an in-person event whose datetime has already passed", async () => {
+    const app = createApp();
+    await authed(app, "post", "/events").send(
+      inPersonBody({ location: { area: "Near MG Road", city: "Bangalore", ...bangaloreNearby }, datetime: "2020-01-01T20:00:00.000Z" })
+    );
+
+    const res = await authed(app, "get", `/events/nearby?lat=${bangalore.lat}&lng=${bangalore.lng}&radiusKm=5`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toEqual([]);
+  });
+
   it("excludes an event outside the search radius", async () => {
     const app = createApp();
     await authed(app, "post", "/events").send(inPersonBody({ location: { area: "Mysore Palace", city: "Mysore", ...mysore } }));
